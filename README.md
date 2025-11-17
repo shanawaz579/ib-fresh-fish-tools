@@ -34,3 +34,22 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## IB Fresh Fish tools — layout
+
+This project now includes a base layout and placeholder tools to build on for the IB Fresh Fish platform. Files of interest:
+
+- `components/Topbar.tsx` — top navigation and company brand
+- `components/Sidebar.tsx` — left navigation for sections and tools
+- `components/Footer.tsx` — footer with company copyright
+- `app/layout.tsx` — root layout wiring the components into the app
+- `app/tools/*` — placeholder tool views (Price Manager, Route Planner, Inventory)
+
+To run the app locally:
+
+```bash
+npm install
+npm run dev
+```
+
+I'll add more views and tool logic as you instruct — tell me which tool you'd like to implement next.
