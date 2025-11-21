@@ -1,10 +1,14 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getFishVarieties, getPurchasesByDate, getSalesByDate, addSale, deleteSale, updateSale, getCustomers } from '@/app/actions/stock';
 import type { FishVariety, Customer } from '@/app/actions/stock';
 import MultiSelect from '@/components/MultiSelect';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+
+// Hardcoded order for fish varieties
+const VARIETY_ORDER = ['Pangasius', 'Roopchand', 'Rohu', 'Katla', 'Tilapia', 'Silver Carp', 'Grass Carp', 'Common Carp'];
+const SIZE_ORDER = ['Big', 'Medium', 'Small'];
 
 interface SaleRow {
   id?: number;
@@ -25,6 +29,7 @@ export default function SalesSpreadsheetPage() {
   const [sales, setSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout>(null);
 
   // Spreadsheet state
   const [rows, setRows] = useState<SaleRow[]>([{ customerId: null, items: {} }]);
@@ -34,9 +39,58 @@ export default function SalesSpreadsheetPage() {
   // Selected varieties for display
   const [selectedVarietyIds, setSelectedVarietyIds] = useState<number[]>([]);
 
+  // Helper function to sort varieties by hardcoded order
+  const sortByHardcodedOrder = (ids: number[], allVarieties: FishVariety[]) => {
+    return ids.sort((a, b) => {
+      const varietyA = allVarieties.find((v: FishVariety) => v.id === a);
+      const varietyB = allVarieties.find((v: FishVariety) => v.id === b);
+      const nameA = varietyA?.name || '';
+      const nameB = varietyB?.name || '';
+      
+      // Create a lowercase version for case-insensitive matching
+      const lowerNameA = nameA.toLowerCase();
+      const lowerNameB = nameB.toLowerCase();
+      
+      // Find variety type order (e.g., Pangasius, Rohu, etc.)
+      const varietyOrderA = VARIETY_ORDER.findIndex(p => lowerNameA.includes(p.toLowerCase()));
+      const varietyOrderB = VARIETY_ORDER.findIndex(p => lowerNameB.includes(p.toLowerCase()));
+      
+      // Find size order (Big, Medium, Small)
+      const sizeOrderA = SIZE_ORDER.findIndex(s => nameA.includes(s));
+      const sizeOrderB = SIZE_ORDER.findIndex(s => nameB.includes(s));
+      
+      // If variety orders are different, sort by variety order first
+      if (varietyOrderA !== varietyOrderB) {
+        if (varietyOrderA === -1) return 1;
+        if (varietyOrderB === -1) return -1;
+        return varietyOrderA - varietyOrderB;
+      }
+      
+      // If same variety type, sort by size order
+      if (sizeOrderA !== sizeOrderB) {
+        if (sizeOrderA === -1 && sizeOrderB === -1) return a - b;
+        if (sizeOrderA === -1) return 1;
+        if (sizeOrderB === -1) return -1;
+        return sizeOrderA - sizeOrderB;
+      }
+      
+      // If same variety and size, sort by ID
+      return a - b;
+    });
+  };
+
   useEffect(() => {
     loadData();
   }, [date]);
+
+  // Sync columnOrder whenever selectedVarietyIds changes
+  useEffect(() => {
+    const newOrder = selectedVarietyIds.map(id => {
+      const v = varieties.find(vv => vv.id === id);
+      return { varietyId: id, varietyName: v?.name || '' };
+    });
+    setColumnOrder(newOrder);
+  }, [selectedVarietyIds, varieties]);
 
   const loadData = async () => {
     setLoading(true);
@@ -54,42 +108,19 @@ export default function SalesSpreadsheetPage() {
 
     // Get varieties that have purchases on this date
     let purchaseVarietyIds = [...new Set(purchasesData.map(p => p.fish_variety_id))];
-    
-    // Sort by preferred order
-    const preferredOrder = ['Pangasius', 'Ropchand', 'Rohu', 'Katla'];
-    purchaseVarietyIds = purchaseVarietyIds.sort((a, b) => {
-      const varietyA = varietiesData.find((v: FishVariety) => v.id === a);
-      const varietyB = varietiesData.find((v: FishVariety) => v.id === b);
-      const nameA = varietyA?.name || '';
-      const nameB = varietyB?.name || '';
-      
-      const orderA = preferredOrder.findIndex(p => nameA.includes(p));
-      const orderB = preferredOrder.findIndex(p => nameB.includes(p));
-      
-      if (orderA === -1 && orderB === -1) return 0;
-      if (orderA === -1) return 1;
-      if (orderB === -1) return -1;
-      return orderA - orderB;
-    });
+    purchaseVarietyIds = sortByHardcodedOrder(purchaseVarietyIds, varietiesData);
     
     // Set varieties with purchases for this date as default
     if (purchaseVarietyIds.length > 0) {
       setSelectedVarietyIds(purchaseVarietyIds);
-      setColumnOrder(purchaseVarietyIds.map((id: number) => {
-        const v = varietiesData.find((vv: FishVariety) => vv.id === id);
-        return { varietyId: id, varietyName: v?.name || '' };
-      }));
     } else {
       // If no purchases, use the default varieties in preferred order
       const defaultNames = ['Pangasius Big', 'Rohu Big/Medium', 'Katla Big/Medium', 'Tilapia Big/Medium'];
       const defaultIds = varietiesData
         .filter((v: FishVariety) => defaultNames.includes(v.name))
         .map((v: FishVariety) => v.id);
-      setSelectedVarietyIds(defaultIds);
-      setColumnOrder(defaultIds.map((id: number) => {
-        const v = varietiesData.find((vv: FishVariety) => vv.id === id);
-        return { varietyId: id, varietyName: v?.name || '' };
-      }));
+      const sortedDefaultIds = sortByHardcodedOrder(defaultIds, varietiesData);
+      setSelectedVarietyIds(sortedDefaultIds);
     }
 
     // Load existing sales
@@ -113,31 +144,48 @@ export default function SalesSpreadsheetPage() {
       grouped[sale.customer_id][sale.fish_variety_id].push(sale);
     });
 
-    const newRows: SaleRow[] = Object.entries(grouped).map(([customerId, items]) => ({
-      customerId: parseInt(customerId),
-      items: Object.entries(items).reduce(
-        (acc, [varietyId, sales]) => {
-          const total = sales.reduce(
-            (sum, s) => ({ crates: sum.crates + s.quantity_crates, kg: sum.kg + s.quantity_kg }),
-            { crates: 0, kg: 0 }
-          );
-          return {
-            ...acc,
-            [parseInt(varietyId)]: {
-              crates: total.crates,
-              kg: total.kg,
-              saleId: sales[0].id,
-            },
-          };
-        },
-        {}
-      ),
-    }));
+    // Maintain customer order in which they were added (by first appearance in sales data)
+    // Latest added should be on top
+    const sortedCustomerIds = Array.from(new Map(
+      salesData.map(sale => [sale.customer_id, sale.customer_id])
+    ).values()).reverse();
+
+    const newRows: SaleRow[] = sortedCustomerIds.map((customerId) => {
+      const items = grouped[customerId];
+      return {
+        customerId,
+        items: Object.entries(items).reduce(
+          (acc, [varietyId, sales]) => {
+            const total = sales.reduce(
+              (sum, s) => ({ crates: sum.crates + s.quantity_crates, kg: sum.kg + s.quantity_kg }),
+              { crates: 0, kg: 0 }
+            );
+            return {
+              ...acc,
+              [parseInt(varietyId)]: {
+                crates: total.crates,
+                kg: total.kg,
+                saleId: sales[0].id,
+              },
+            };
+          },
+          {}
+        ),
+      };
+    });
 
     setRows(newRows.length > 0 ? newRows : [{ customerId: null, items: {} }]);
   };
 
-  // Calculate available stock for a variety (using only purchases and sales for selected date)
+  // Calculate total purchases for a variety (for header display)
+  const getTotalPurchases = (varietyId: number) => {
+    return purchases.reduce(
+      (sum, p) => p.fish_variety_id === varietyId ? { crates: sum.crates + p.quantity_crates, kg: sum.kg + p.quantity_kg } : sum,
+      { crates: 0, kg: 0 }
+    );
+  };
+
+  // Calculate available stock for a variety (purchases - database sales, for footer)
   const getAvailableStock = (varietyId: number) => {
     // Sum purchases for this variety on selected date
     const totalPurchased = purchases.reduce(
@@ -145,15 +193,15 @@ export default function SalesSpreadsheetPage() {
       { crates: 0, kg: 0 }
     );
 
-    // Sum sales for this variety on selected date
-    const totalSold = sales.reduce(
+    // Sum sales for this variety on selected date (from database)
+    const totalSoldFromDB = sales.reduce(
       (sum, s) => s.fish_variety_id === varietyId ? { crates: sum.crates + s.quantity_crates, kg: sum.kg + s.quantity_kg } : sum,
       { crates: 0, kg: 0 }
     );
 
     return {
-      crates: totalPurchased.crates - totalSold.crates,
-      kg: totalPurchased.kg - totalSold.kg,
+      crates: totalPurchased.crates - totalSoldFromDB.crates,
+      kg: totalPurchased.kg - totalSoldFromDB.kg,
     };
   };
 
@@ -169,7 +217,7 @@ export default function SalesSpreadsheetPage() {
   };
 
   const handleCellChange = useCallback(
-    async (rowIndex: number, varietyId: number, field: 'crates' | 'kg', value: string) => {
+    (rowIndex: number, varietyId: number, field: 'crates' | 'kg', value: string) => {
       const numValue = parseFloat(value) || 0;
       const newRows = [...rows];
 
@@ -179,9 +227,14 @@ export default function SalesSpreadsheetPage() {
 
       newRows[rowIndex].items[varietyId][field] = numValue;
       setRows(newRows);
+    },
+    [rows]
+  );
 
-      // Auto-save
-      await saveCell(rowIndex, varietyId, newRows[rowIndex]);
+  const handleCellBlur = useCallback(
+    async (rowIndex: number, varietyId: number) => {
+      const row = rows[rowIndex];
+      await saveCell(rowIndex, varietyId, row);
     },
     [rows]
   );
@@ -193,7 +246,13 @@ export default function SalesSpreadsheetPage() {
     if (!item || (item.crates === 0 && item.kg === 0)) {
       if (item?.saleId) {
         await deleteSale(item.saleId);
-        await loadData();
+        // Reload sales data to update footer
+        const salesData = await getSalesByDate(date);
+        setSales(salesData);
+        // Update local state
+        const newRows = [...rows];
+        delete newRows[rowIndex].items[varietyId];
+        setRows(newRows);
       }
       return;
     }
@@ -206,8 +265,14 @@ export default function SalesSpreadsheetPage() {
         const result = await addSale(row.customerId, varietyId, item.crates, item.kg, date);
         if (result) {
           item.saleId = result.id;
+          const newRows = [...rows];
+          newRows[rowIndex].items[varietyId].saleId = result.id;
+          setRows(newRows);
         }
       }
+      // Reload sales data to update footer
+      const salesData = await getSalesByDate(date);
+      setSales(salesData);
     } catch (err) {
       console.error('Error saving sale:', err);
       alert('Failed to save sale');
@@ -260,21 +325,13 @@ export default function SalesSpreadsheetPage() {
 
   const handleVarietyToggle = (varietyId: number) => {
     setSelectedVarietyIds(prev => {
+      let updated: number[];
       if (prev.includes(varietyId)) {
-        return prev.filter(id => id !== varietyId);
+        updated = prev.filter(id => id !== varietyId);
       } else {
-        return [...prev, varietyId];
+        updated = [...prev, varietyId];
       }
-    });
-    
-    // Update column order
-    setColumnOrder(prev => {
-      const v = varieties.find(vv => vv.id === varietyId);
-      if (prev.some(col => col.varietyId === varietyId)) {
-        return prev.filter(col => col.varietyId !== varietyId);
-      } else {
-        return [...prev, { varietyId, varietyName: v?.name || '' }];
-      }
+      return sortByHardcodedOrder(updated, varieties);
     });
   };
 
@@ -292,7 +349,8 @@ export default function SalesSpreadsheetPage() {
 
   return (
     <ProtectedRoute>
-      <div className="p-8">
+      <div className="flex flex-col h-screen w-screen">
+      <div className="px-6 py-4 flex-shrink-0">
       <h1 className="text-3xl font-bold mb-6 text-primary">Sales Records (Spreadsheet)</h1>
 
       {/* Date Selector & Variety Filter */}
@@ -306,34 +364,43 @@ export default function SalesSpreadsheetPage() {
             className="px-4 py-2 border border-gray-300 rounded-lg"
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-2">Select Items</label>
-          <MultiSelect
-            options={varieties.map(v => ({ id: v.id, name: v.name }))}
-            value={selectedVarietyIds}
-            onChange={(selected) => {
-              setSelectedVarietyIds(selected);
-              setColumnOrder(selected.map(id => {
-                const v = varieties.find(vv => vv.id === id);
-                return { varietyId: id, varietyName: v?.name || '' };
-              }));
-            }}
-            placeholder="Select items..."
-          />
+        <div className="flex-1 max-w-md">
+          <label className="block text-xs font-medium mb-1">Selected Items</label>
+          <div className="flex flex-wrap gap-1 bg-white border border-gray-300 rounded p-2 min-h-[32px]">
+            {selectedVarietyIds.length === 0 ? (
+              <span className="text-xs text-gray-500">No items selected</span>
+            ) : (
+              selectedVarietyIds.map(id => {
+                const variety = varieties.find(v => v.id === id);
+                return (
+                  <button
+                    key={id}
+                    onClick={() => handleVarietyToggle(id)}
+                    className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition flex items-center gap-1 whitespace-nowrap"
+                  >
+                    {variety?.name}
+                    <span className="font-bold">×</span>
+                  </button>
+                );
+              })
+            )}
+          </div>
         </div>
         {saving && <span className="text-sm text-blue-600 font-medium">Auto-saving...</span>}
       </div>
+      </div>
 
       {/* Spreadsheet */}
-      <div className="bg-white rounded-lg shadow overflow-x-auto">
+      <div className="flex-1 overflow-y-auto w-full">
+      <div className="bg-white shadow w-full">
         <table className="w-full border-collapse">
           {/* Header - Available Stock */}
-          <thead>
+          <thead className="sticky top-0 z-30">
             <tr className="bg-blue-50 border-b-2 border-blue-200">
-              <th className="px-4 py-3 text-left font-semibold text-sm bg-blue-100 sticky left-0 z-20 min-w-[200px]">Customer</th>
-              <th className="px-4 py-3 text-center font-semibold text-sm bg-blue-100 sticky left-[200px] z-20 min-w-[120px]">Total Boxes</th>
+              <th className="px-4 py-3 text-left font-semibold text-sm bg-blue-100 sticky left-0 z-30 min-w-[200px]">Customer</th>
+              <th className="px-4 py-3 text-center font-semibold text-sm bg-blue-100 sticky left-[200px] z-30 min-w-[120px]">Total Boxes</th>
               {columnOrder.map((col, idx) => {
-                const available = getAvailableStock(col.varietyId);
+                const available = getTotalPurchases(col.varietyId);
                 return (
                   <th
                     key={col.varietyId}
@@ -386,6 +453,7 @@ export default function SalesSpreadsheetPage() {
                           placeholder="Cr"
                           value={item.crates || ''}
                           onChange={(e) => handleCellChange(rowIndex, col.varietyId, 'crates', e.target.value)}
+                          onBlur={() => handleCellBlur(rowIndex, col.varietyId)}
                           className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
                           min="0"
                           disabled={!row.customerId}
@@ -395,6 +463,7 @@ export default function SalesSpreadsheetPage() {
                           placeholder="Kg"
                           value={item.kg || ''}
                           onChange={(e) => handleCellChange(rowIndex, col.varietyId, 'kg', e.target.value)}
+                          onBlur={() => handleCellBlur(rowIndex, col.varietyId)}
                           className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
                           step="0.1"
                           min="0"
@@ -418,20 +487,21 @@ export default function SalesSpreadsheetPage() {
           </tbody>
 
           {/* Footer - Total Sold */}
-          <tfoot>
+          <tfoot className="sticky bottom-0 z-30">
             <tr className="bg-green-50 border-t-2 border-green-200 font-semibold">
-              <td className="px-4 py-3 bg-green-100 text-sm sticky left-0 z-10 min-w-[200px]">Total Sold</td>
-              <td className="px-4 py-3 bg-green-100 text-sm sticky left-[200px] z-10 min-w-[120px]"></td>
+              <td className="px-4 py-3 bg-green-100 text-sm sticky left-0 z-30 min-w-[200px]">Total Sold</td>
+              <td className="px-4 py-3 bg-green-100 text-sm sticky left-[200px] z-30 min-w-[120px]"></td>
               {columnOrder.map((col) => {
                 const total = getTotalSold(col.varietyId);
+                const available = getAvailableStock(col.varietyId);
+                const isNegative = available.crates < 0 || available.kg < 0;
                 return (
-                  <td key={col.varietyId} className="px-4 py-3 text-center text-sm border-r border-green-200 bg-green-50">
-                    <div className="text-green-700">
-                      {total.crates}cr / {total.kg.toFixed(2)}kg
+                  <td key={col.varietyId} className={`px-4 py-3 text-center text-sm border-r border-green-200 ${isNegative ? 'bg-red-50' : 'bg-green-50'}`}>
+                    <div className={`font-semibold text-base ${isNegative ? 'text-red-700' : 'text-green-700'}`}>
+                      {available.crates}cr / {available.kg.toFixed(2)}kg
                     </div>
-                    <div className="text-xs text-gray-600">
-                      Remaining: {(getAvailableStock(col.varietyId).crates - total.crates).toFixed(0)}cr /
-                      {(getAvailableStock(col.varietyId).kg - total.kg).toFixed(2)}kg
+                    <div className="text-xs text-gray-500">
+                      Sold: {total.crates}cr / {total.kg.toFixed(2)}kg
                     </div>
                   </td>
                 );
@@ -443,13 +513,14 @@ export default function SalesSpreadsheetPage() {
       </div>
 
       {/* Add Row Button */}
-      <div className="mt-6">
+      <div className="px-6 py-4 flex-shrink-0 bg-white border-t">
         <button
           onClick={handleAddRow}
           className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
         >
           + Add Row
         </button>
+      </div>
       </div>
     </div>
     </ProtectedRoute>
