@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { getFishVarieties, addFishVariety, deleteFishVariety } from '@/app/actions/stock';
+import { getFishVarieties, addFishVariety, updateFishVariety, deleteFishVariety } from '@/app/actions/stock';
 import type { FishVariety } from '@/app/actions/stock';
 
 export default function FishVarietiesPage() {
