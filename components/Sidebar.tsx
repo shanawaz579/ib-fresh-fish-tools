@@ -98,6 +98,18 @@ export default function Sidebar() {
           Fish Varieties
         </Link>
       </nav>
+
+      <div className="mt-8 text-xs font-semibold uppercase tracking-wide text-gray-500">Admin</div>
+      <nav className="flex flex-col gap-2">
+        <Link className="rounded px-4 py-2 flex items-center text-base font-medium text-gray-700 hover:bg-primary/10 hover:text-primary transition dark:text-gray-200 dark:hover:bg-primary/20" href="/admin/users">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" className="mr-2">
+            <circle cx="12" cy="8" r="4" strokeWidth="2" />
+            <path strokeWidth="2" d="M4 20c0-2.686 2.686-4 8-4s8 1.314 8 4" />
+            <path strokeWidth="2" d="M20 8l2 2m0 0l-2 2m2-2l-2-2m2 2l2 2" />
+          </svg>
+          Manage Users
+        </Link>
+      </nav>
     </aside>
   );
 }

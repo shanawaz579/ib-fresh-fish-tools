@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getFishVarieties, getPurchasesByDate, addPurchase, deletePurchase, updatePurchase, getFarmers } from '@/app/actions/stock';
 import SearchableSelect from '@/components/SearchableSelect';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 import type { Purchase, FishVariety, Farmer } from '@/app/actions/stock';
 
 type GroupedPurchase = {
@@ -192,7 +193,8 @@ export default function PurchasePage() {
   };
 
   return (
-    <div className="p-8">
+    <ProtectedRoute>
+      <div className="p-8">
       <h1 className="text-3xl font-bold mb-6 text-primary">Purchase Records</h1>
 
       {/* Date Selector */}
@@ -436,5 +438,6 @@ export default function PurchasePage() {
         </table>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }

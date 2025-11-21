@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getFishVarieties, getPurchasesByDate, getSalesByDate, addSale, deleteSale, updateSale, getCustomers } from '@/app/actions/stock';
 import type { FishVariety, Customer } from '@/app/actions/stock';
 import MultiSelect from '@/components/MultiSelect';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 interface SaleRow {
   id?: number;
@@ -290,7 +291,8 @@ export default function SalesSpreadsheetPage() {
   if (loading) return <div className="p-8 text-center">Loading...</div>;
 
   return (
-    <div className="p-8">
+    <ProtectedRoute>
+      <div className="p-8">
       <h1 className="text-3xl font-bold mb-6 text-primary">Sales Records (Spreadsheet)</h1>
 
       {/* Date Selector & Variety Filter */}
@@ -450,5 +452,6 @@ export default function SalesSpreadsheetPage() {
         </button>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }

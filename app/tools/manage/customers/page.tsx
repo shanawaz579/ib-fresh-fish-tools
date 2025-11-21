@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import CreatableSelect from '@/components/CreatableSelect';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { getCustomers, addCustomer, updateCustomer, deleteCustomer } from '@/app/actions/stock';
 import type { Customer } from '@/app/actions/stock';
 
@@ -178,8 +179,9 @@ export default function CustomersPage() {
   };
 
   return (
-    <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6 text-primary">Manage Customers</h1>
+    <ProtectedRoute>
+      <div className="p-8">
+        <h1 className="text-3xl font-bold mb-6 text-primary">Manage Customers</h1>
 
       {/* Add/Edit Customer Form */}
       {!editingId && (
@@ -475,5 +477,6 @@ export default function CustomersPage() {
         </div>
       )}
     </div>
+    </ProtectedRoute>
   );
 }

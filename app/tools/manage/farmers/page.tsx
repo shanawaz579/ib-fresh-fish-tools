@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import CreatableSelect from '@/components/CreatableSelect';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { getFarmers, addFarmer, updateFarmer, deleteFarmer } from '@/app/actions/stock';
 import type { Farmer } from '@/app/actions/stock';
 
@@ -178,7 +179,8 @@ export default function FarmersPage() {
   };
 
   return (
-    <div className="p-8">
+    <ProtectedRoute>
+      <div className="p-8">
       <h1 className="text-3xl font-bold mb-6 text-primary">Manage Farmers</h1>
 
       {/* Add/Edit Farmer Form */}
@@ -462,5 +464,6 @@ export default function FarmersPage() {
         </div>
       )}
     </div>
+    </ProtectedRoute>
   );
 }

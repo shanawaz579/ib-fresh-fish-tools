@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getFishVarieties, getSalesByDate, addSale, deleteSale, updateSale, getCustomers } from '@/app/actions/stock';
 import SearchableSelect from '@/components/SearchableSelect';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 import type { Sale, FishVariety, Customer } from '@/app/actions/stock';
 
 type GroupedSale = {
@@ -192,7 +193,8 @@ export default function SalesPage() {
   };
 
   return (
-    <div className="p-8">
+    <ProtectedRoute>
+      <div className="p-8">
       <h1 className="text-3xl font-bold mb-6 text-primary">Sales Records</h1>
 
       {/* Date Selector */}
@@ -436,5 +438,6 @@ export default function SalesPage() {
         </table>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }

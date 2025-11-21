@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getFishVarieties, addFishVariety, updateFishVariety, deleteFishVariety } from '@/app/actions/stock';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { getFishVarieties, addFishVariety, deleteFishVariety } from '@/app/actions/stock';
 import type { FishVariety } from '@/app/actions/stock';
 
 export default function FishVarietiesPage() {
@@ -82,7 +83,8 @@ export default function FishVarietiesPage() {
   };
 
   return (
-    <div className="p-8">
+    <ProtectedRoute>
+      <div className="p-8">
       <h1 className="text-3xl font-bold mb-6 text-primary">Manage Fish Varieties</h1>
 
       {/* Add Fish Variety Form */}
@@ -187,5 +189,6 @@ export default function FishVarietiesPage() {
         </table>
       </div>
     </div>
+    </ProtectedRoute>
   );
 }
