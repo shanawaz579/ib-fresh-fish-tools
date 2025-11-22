@@ -315,7 +315,7 @@ export async function addPurchase(
   }
 }
 
-// Add a new sale
+// Add or update a sale (upsert logic to prevent duplicates)
 export async function addSale(
   customerId: number,
   fishVarietyId: number,
@@ -324,6 +324,38 @@ export async function addSale(
   saleDate: string
 ): Promise<Sale | null> {
   try {
+    // First, check if a sale already exists for this customer+variety+date
+    const { data: existing } = await supabase
+      .from('sales')
+      .select('id')
+      .eq('customer_id', customerId)
+      .eq('fish_variety_id', fishVarietyId)
+      .eq('sale_date', saleDate)
+      .limit(1)
+      .single();
+
+    if (existing) {
+      // Update existing record instead of creating duplicate
+      const { data, error } = await supabase
+        .from('sales')
+        .update({
+          quantity_crates: quantityCrates,
+          quantity_kg: quantityKg,
+        })
+        .eq('id', existing.id)
+        .select('*, customers(name), fish_varieties(name)')
+        .single();
+
+      if (error) throw error;
+
+      return {
+        ...data,
+        customer_name: data.customers?.name,
+        fish_variety_name: data.fish_varieties?.name,
+      };
+    }
+
+    // No existing record, create new one
     const { data, error } = await supabase
       .from('sales')
       .insert({
@@ -346,6 +378,50 @@ export async function addSale(
   } catch (err) {
     console.error('Error adding sale:', err);
     return null;
+  }
+}
+
+// Clean up duplicate sales records (keeps only the latest one per customer+variety+date)
+export async function cleanupDuplicateSales(saleDate: string): Promise<{ deleted: number }> {
+  try {
+    // Get all sales for this date
+    const { data: allSales, error: fetchError } = await supabase
+      .from('sales')
+      .select('id, customer_id, fish_variety_id, created_at')
+      .eq('sale_date', saleDate)
+      .order('created_at', { ascending: false });
+
+    if (fetchError) throw fetchError;
+    if (!allSales || allSales.length === 0) return { deleted: 0 };
+
+    // Find duplicates - keep only the latest (first in sorted array) for each customer+variety
+    const seen = new Set<string>();
+    const idsToDelete: number[] = [];
+
+    for (const sale of allSales) {
+      const key = `${sale.customer_id}-${sale.fish_variety_id}`;
+      if (seen.has(key)) {
+        // This is a duplicate, mark for deletion
+        idsToDelete.push(sale.id);
+      } else {
+        seen.add(key);
+      }
+    }
+
+    // Delete duplicates
+    if (idsToDelete.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('sales')
+        .delete()
+        .in('id', idsToDelete);
+
+      if (deleteError) throw deleteError;
+    }
+
+    return { deleted: idsToDelete.length };
+  } catch (err) {
+    console.error('Error cleaning up duplicate sales:', err);
+    return { deleted: 0 };
   }
 }
 
