@@ -10,6 +10,25 @@ import { ProtectedRoute } from '@/components/ProtectedRoute';
 const VARIETY_ORDER = ['Pangasius', 'Roopchand', 'Rohu', 'Katla', 'Tilapia', 'Silver Carp', 'Grass Carp', 'Common Carp'];
 const SIZE_ORDER = ['Big', 'Medium', 'Small'];
 
+// Fixed colors for each variety (base colors)
+const VARIETY_COLORS: { [key: string]: string } = {
+  'Pangasius': '#3B82F6', // Blue
+  'Roopchand': '#EF4444', // Red
+  'Rohu': '#10B981', // Green
+  'Katla': '#F59E0B', // Amber
+  'Tilapia': '#8B5CF6', // Purple
+  'Silver Carp': '#06B6D4', // Cyan
+  'Grass Carp': '#EC4899', // Pink
+  'Common Carp': '#6366F1', // Indigo
+};
+
+// Size shade multipliers (lighter for Big, darker for Small)
+const SIZE_SHADES = {
+  'Big': 0.7,      // Lighter
+  'Medium': 1,     // Original
+  'Small': 1.3,    // Darker
+};
+
 interface SaleRow {
   id?: number;
   customerId: number | null;
@@ -38,6 +57,40 @@ export default function SalesSpreadsheetPage() {
   
   // Selected varieties for display
   const [selectedVarietyIds, setSelectedVarietyIds] = useState<number[]>([]);
+
+  // Helper function to get color for a variety
+  const getVarietyColor = (varietyName: string): string => {
+    for (const [variety, color] of Object.entries(VARIETY_COLORS)) {
+      if (varietyName.toLowerCase().includes(variety.toLowerCase())) {
+        return color;
+      }
+    }
+    return '#6B7280'; // Default gray
+  };
+
+  // Helper function to adjust color brightness based on size
+  const adjustColorBrightness = (hex: string, factor: number): string => {
+    const num = parseInt(hex.replace('#', ''), 16);
+    const r = Math.min(255, Math.floor((num >> 16) * factor));
+    const g = Math.min(255, Math.floor(((num >> 8) & 0x00FF) * factor));
+    const b = Math.min(255, Math.floor((num & 0x0000FF) * factor));
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+  };
+
+  // Get color based on variety and size
+  const getColumnColor = (varietyName: string): string => {
+    const baseColor = getVarietyColor(varietyName);
+    let sizeShade = 1;
+    
+    for (const [size, shade] of Object.entries(SIZE_SHADES)) {
+      if (varietyName.includes(size)) {
+        sizeShade = shade;
+        break;
+      }
+    }
+    
+    return adjustColorBrightness(baseColor, sizeShade);
+  };
 
   // Helper function to sort varieties by hardcoded order
   const sortByHardcodedOrder = (ids: number[], allVarieties: FishVariety[]) => {
@@ -349,7 +402,7 @@ export default function SalesSpreadsheetPage() {
 
   return (
     <ProtectedRoute>
-      <div className="flex flex-col h-screen w-screen">
+      <div className="flex flex-col h-screen w-full">
       <div className="px-6 py-4 flex-shrink-0">
       <h1 className="text-3xl font-bold mb-6 text-primary">Sales Records (Spreadsheet)</h1>
 
@@ -372,11 +425,13 @@ export default function SalesSpreadsheetPage() {
             ) : (
               selectedVarietyIds.map(id => {
                 const variety = varieties.find(v => v.id === id);
+                const columnColor = getColumnColor(variety?.name || '');
                 return (
                   <button
                     key={id}
                     onClick={() => handleVarietyToggle(id)}
-                    className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition flex items-center gap-1 whitespace-nowrap"
+                    style={{ backgroundColor: columnColor }}
+                    className="px-2 py-1 text-xs text-white rounded hover:opacity-80 transition flex items-center gap-1 whitespace-nowrap font-medium"
                   >
                     {variety?.name}
                     <span className="font-bold">×</span>
@@ -390,17 +445,19 @@ export default function SalesSpreadsheetPage() {
       </div>
       </div>
 
-      {/* Spreadsheet */}
+      {/* Spreadsheet Container */}
       <div className="flex-1 overflow-y-auto w-full">
-      <div className="bg-white shadow w-full">
+      <div className="bg-white shadow">
         <table className="w-full border-collapse">
           {/* Header - Available Stock */}
           <thead className="sticky top-0 z-30">
-            <tr className="bg-blue-50 border-b-2 border-blue-200">
-              <th className="px-4 py-3 text-left font-semibold text-sm bg-blue-100 sticky left-0 z-30 min-w-[200px]">Customer</th>
-              <th className="px-4 py-3 text-center font-semibold text-sm bg-blue-100 sticky left-[200px] z-30 min-w-[120px]">Total Boxes</th>
+            <tr className="bg-gradient-to-r from-slate-700 to-slate-600 border-b-4 border-blue-500">
+              <th className="px-4 py-2.5 text-left font-bold text-sm text-white bg-slate-700 sticky left-0 z-30 min-w-[200px] border-r-2 border-blue-400">Customer</th>
+              <th className="px-3 py-2.5 text-center font-bold text-sm text-white bg-slate-700 sticky left-[200px] z-30 min-w-[120px] border-r-2 border-blue-400">Total</th>
               {columnOrder.map((col, idx) => {
                 const available = getTotalPurchases(col.varietyId);
+                const columnColor = getColumnColor(col.varietyName);
+                console.log('col',col)
                 return (
                   <th
                     key={col.varietyId}
@@ -408,67 +465,76 @@ export default function SalesSpreadsheetPage() {
                     onDragStart={() => handleColumnDragStart(idx)}
                     onDragOver={handleColumnDragOver}
                     onDrop={() => handleColumnDrop(idx)}
-                    className="px-4 py-3 text-center font-semibold text-xs bg-blue-100 border-r border-blue-200 cursor-move hover:bg-blue-200 transition"
+                    style={{ backgroundColor: columnColor }}
+                    className="px-2 py-2.5 text-center font-bold text-sm text-white border-r-2 border-white cursor-move hover:opacity-90 hover:shadow-lg transition min-w-[120px] shadow-md"
                   >
-                    <div className="font-bold text-sm">{col.varietyName}</div>
-                    <div className="text-xs text-blue-700">
-                      Available: {available.crates}cr / {available.kg.toFixed(2)}kg
+                    <div className="font-bold text-sm leading-tight">{col.varietyName}</div>
+                    {/* <div className="text-xs opacity-95 mt-1 font-semibold">{col.sizeName}</div> */}
+                    <div className="text-xs opacity-85 mt-1 font-bold bg-black/20 rounded py-0.5 px-1">
+                      {available.crates}cr in stock
                     </div>
                   </th>
                 );
               })}
-              <th className="px-4 py-3 text-center font-semibold text-sm bg-blue-100">Action</th>
+              <th className="px-3 py-2.5 text-center font-bold text-sm bg-slate-700 text-white\">Action</th>
             </tr>
           </thead>
 
           {/* Data Rows */}
           <tbody>
             {rows.map((row, rowIndex) => (
-              <tr key={rowIndex} className="border-b hover:bg-gray-50">
-                <td className="px-4 py-3 bg-gray-50 sticky left-0 z-10 min-w-[200px]">
+              <tr key={rowIndex} className="border-b hover:bg-blue-50/30 transition">
+                <td className="px-4 py-2 bg-gradient-to-r from-blue-50 to-blue-100 sticky left-0 z-10 min-w-[200px] border-r-2 border-blue-200">
                   <select
                     value={row.customerId || ''}
                     onChange={(e) => handleCustomerChange(rowIndex, e.target.value ? parseInt(e.target.value) : null)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm"
+                    className="w-full px-3 py-2 border-2 border-blue-300 rounded-lg text-sm font-semibold bg-white text-gray-800 hover:border-blue-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-200 transition-all appearance-none cursor-pointer"
                   >
-                    <option value="">Select Customer</option>
+                    <option value="" className="text-gray-500">Select Customer</option>
                     {customers.map((c) => (
-                      <option key={c.id} value={c.id}>
+                      <option key={c.id} value={c.id} className="font-medium">
                         {c.name}
                       </option>
                     ))}
                   </select>
                 </td>
-                <td className="px-4 py-3 bg-gray-50 sticky left-[200px] z-10 min-w-[120px] text-center font-semibold text-blue-600">
-                  {row.customerId ? getTotalBoxesByCustomer(row.customerId) : '-'} boxes
+                <td className="px-3 py-2 bg-gradient-to-r from-blue-100 to-blue-50 sticky left-[200px] z-10 min-w-[120px] text-center border-r-2 border-blue-200">
+                  <div className="text-2xl font-bold text-blue-700">
+                    {row.customerId ? getTotalBoxesByCustomer(row.customerId) : '-'}
+                  </div>
+                  <div className="text-xs text-blue-600 font-medium">boxes</div>
                 </td>
 
                 {columnOrder.map((col) => {
                   const item = row.items[col.varietyId] || { crates: 0, kg: 0 };
                   return (
-                    <td key={col.varietyId} className="px-4 py-3 border-r border-gray-200">
-                      <div className="flex gap-2">
+                    <td key={col.varietyId} className="px-1.5 py-1.5 border-r border-gray-200">
+                      <div className="flex gap-0.5 items-center">
                         <input
                           type="number"
-                          placeholder="Cr"
+                          placeholder="0"
                           value={item.crates || ''}
                           onChange={(e) => handleCellChange(rowIndex, col.varietyId, 'crates', e.target.value)}
                           onBlur={() => handleCellBlur(rowIndex, col.varietyId)}
-                          className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                          className="w-14 px-1 py-1 border border-blue-200 rounded text-xs text-center font-semibold bg-blue-50 hover:border-blue-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-300"
                           min="0"
                           disabled={!row.customerId}
+                          title="Crates"
                         />
+                        <span className="text-xs text-gray-400 font-medium">cr</span>
                         <input
                           type="number"
-                          placeholder="Kg"
+                          placeholder="0"
                           value={item.kg || ''}
                           onChange={(e) => handleCellChange(rowIndex, col.varietyId, 'kg', e.target.value)}
                           onBlur={() => handleCellBlur(rowIndex, col.varietyId)}
-                          className="w-16 px-2 py-1 border border-gray-300 rounded text-sm text-center"
+                          className="w-11 px-1 py-1 border border-gray-200 rounded text-xs text-center text-gray-600 hover:border-gray-300 focus:border-gray-400 focus:outline-none focus:ring-1 focus:ring-gray-200"
                           step="0.1"
                           min="0"
                           disabled={!row.customerId}
+                          title="Kg"
                         />
+                        <span className="text-xs text-gray-400 font-medium">kg</span>
                       </div>
                     </td>
                   );
@@ -488,39 +554,40 @@ export default function SalesSpreadsheetPage() {
 
           {/* Footer - Total Sold */}
           <tfoot className="sticky bottom-0 z-30">
-            <tr className="bg-green-50 border-t-2 border-green-200 font-semibold">
-              <td className="px-4 py-3 bg-green-100 text-sm sticky left-0 z-30 min-w-[200px]">Total Sold</td>
-              <td className="px-4 py-3 bg-green-100 text-sm sticky left-[200px] z-30 min-w-[120px]"></td>
+            <tr className="bg-gradient-to-r from-emerald-50 to-green-50 border-t-4 border-green-400 font-semibold">
+              <td className="px-4 py-2 bg-gradient-to-r from-emerald-100 to-emerald-50 text-sm sticky left-0 z-30 min-w-[200px] font-bold text-emerald-900 border-r-2 border-emerald-200">Totals</td>
+              <td className="px-3 py-2 bg-gradient-to-r from-emerald-100 to-emerald-50 text-sm sticky left-[200px] z-30 min-w-[120px] border-r-2 border-emerald-200"></td>
               {columnOrder.map((col) => {
                 const total = getTotalSold(col.varietyId);
                 const available = getAvailableStock(col.varietyId);
                 const isNegative = available.crates < 0 || available.kg < 0;
                 return (
-                  <td key={col.varietyId} className={`px-4 py-3 text-center text-sm border-r border-green-200 ${isNegative ? 'bg-red-50' : 'bg-green-50'}`}>
-                    <div className={`font-semibold text-base ${isNegative ? 'text-red-700' : 'text-green-700'}`}>
-                      {available.crates}cr / {available.kg.toFixed(2)}kg
+                  <td key={col.varietyId} className={`px-1.5 py-2 text-center border-r font-semibold transition-all ${isNegative ? 'bg-red-100 border-red-200' : 'bg-emerald-100 border-emerald-200'}`}>
+                    <div className={`text-xs font-bold mb-0.5 ${isNegative ? 'text-red-600' : 'text-emerald-600'}`}>Available</div>
+                    <div className={`text-base font-bold ${isNegative ? 'text-red-700' : 'text-emerald-700'}`}>
+                      {available.crates}cr
                     </div>
-                    <div className="text-xs text-gray-500">
-                      Sold: {total.crates}cr / {total.kg.toFixed(2)}kg
-                    </div>
+                    <div className={`text-xs font-semibold mt-1 ${isNegative ? 'text-red-500' : 'text-emerald-600'}`}>Sold: {total.crates}cr</div>
                   </td>
                 );
               })}
-              <td className="px-4 py-3"></td>
+            
+              <td className="px-2 py-2"></td>
             </tr>
           </tfoot>
         </table>
       </div>
 
-      {/* Add Row Button */}
-      <div className="px-6 py-4 flex-shrink-0 bg-white border-t">
+
+      </div>
+            {/* Add Row Button - Fixed at bottom */}
+      <div className="flex-shrink-0 px-6 py-3 bg-white border-t border-gray-200 flex gap-3">
         <button
           onClick={handleAddRow}
-          className="px-6 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600"
+          className="px-4 py-2 bg-blue-500 text-white text-sm font-semibold rounded-lg hover:bg-blue-600 active:bg-blue-700 transition-colors shadow-sm"
         >
           + Add Row
         </button>
-      </div>
       </div>
     </div>
     </ProtectedRoute>
