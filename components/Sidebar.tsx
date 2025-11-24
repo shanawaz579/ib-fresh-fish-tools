@@ -112,21 +112,13 @@ function UsersIcon() {
   );
 }
 
-function ExpenseIcon() {
+function CashFlowIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="4" width="20" height="16" rx="2" />
-      <path d="M12 8v8" />
-      <path d="M8 12h8" />
-    </svg>
-  );
-}
-
-function PaymentIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-      <line x1="1" y1="10" x2="23" y2="10" />
+      <line x1="12" y1="1" x2="12" y2="23" />
+      <polyline points="17 5 12 1 7 5" />
+      <polyline points="17 19 12 23 7 19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   );
 }
@@ -173,8 +165,7 @@ const navigation: NavSection[] = [
       { href: '/tools/purchases', label: 'Purchases', icon: <PurchaseIcon /> },
       { href: '/tools/sales', label: 'Sales', icon: <SalesIcon /> },
       { href: '/tools/sales-spreadsheet', label: 'Sales Spreadsheet', icon: <SpreadsheetIcon /> },
-      { href: '/tools/expenses', label: 'Expenses', icon: <ExpenseIcon /> },
-      { href: '/tools/payments', label: 'Payments', icon: <PaymentIcon /> },
+      { href: '/tools/cash-flow', label: 'Cash Flow', icon: <CashFlowIcon /> },
     ],
   },
   {

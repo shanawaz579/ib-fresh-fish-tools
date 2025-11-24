@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { getFishVarieties, getPurchasesByDate, getSalesByDate, addSale, deleteSale, updateSale, getCustomers, cleanupDuplicateSales } from '@/app/actions/stock';
 import type { FishVariety, Customer } from '@/app/actions/stock';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { getLastRatesForVarieties, createBill, updateBill, getNextBillNumber, getCustomerPendingBalance, getBillForCustomerOnDate, type BillItem, type Bill } from '@/app/actions/bills';
 
 // Hardcoded order for fish varieties
 const VARIETY_ORDER = ['Pangasius', 'Roopchand', 'Rohu', 'Katla', 'Tilapia', 'Silver Carp', 'Grass Carp', 'Common Carp'];
@@ -55,6 +56,32 @@ export default function SalesSpreadsheetPage() {
   
   // Selected varieties for display
   const [selectedVarietyIds, setSelectedVarietyIds] = useState<number[]>([]);
+
+  // Bill modal state
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [billCustomerId, setBillCustomerId] = useState<number | null>(null);
+  const [billItems, setBillItems] = useState<{
+    varietyId: number;
+    varietyName: string;
+    crates: number;
+    kgPerCrate: number;
+    totalKg: number;
+    ratePerKg: number;
+  }[]>([]);
+  const [additionalCharges, setAdditionalCharges] = useState<{ label: string; amount: number }[]>([]);
+  const [billNotes, setBillNotes] = useState('');
+  const [billNumber, setBillNumber] = useState('');
+  const [generatingBill, setGeneratingBill] = useState(false);
+  const [showBillPreview, setShowBillPreview] = useState(false);
+  const [savedBill, setSavedBill] = useState<any>(null);
+  const [previousBalance, setPreviousBalance] = useState(0);
+  const [amountReceived, setAmountReceived] = useState(0);
+  const billPreviewRef = useRef<HTMLDivElement>(null);
+  const DEFAULT_KG_PER_CRATE = 35;
+
+  // Track existing bills for customers on this date
+  const [customerBills, setCustomerBills] = useState<{[customerId: number]: Bill}>({});
+  const [viewingExistingBill, setViewingExistingBill] = useState(false);
 
   // Helper function to get color for a variety
   const getVarietyColor = (varietyName: string): string => {
@@ -182,7 +209,30 @@ export default function SalesSpreadsheetPage() {
 
     // Load existing sales
     loadExistingSales(salesData);
+
+    // Load existing bills for customers on this date
+    await loadExistingBills(salesData);
+
     setLoading(false);
+  };
+
+  const loadExistingBills = async (salesData: any[]) => {
+    // Get unique customer IDs from sales
+    const customerIds = [...new Set(salesData.map(s => s.customer_id))];
+
+    // Check for existing bills for each customer
+    const bills: {[customerId: number]: Bill} = {};
+
+    await Promise.all(
+      customerIds.map(async (customerId) => {
+        const existingBill = await getBillForCustomerOnDate(customerId, date);
+        if (existingBill) {
+          bills[customerId] = existingBill;
+        }
+      })
+    );
+
+    setCustomerBills(bills);
   };
 
   const loadExistingSales = (salesData: any[]) => {
@@ -454,10 +504,422 @@ export default function SalesSpreadsheetPage() {
   const getTotalBoxesByCustomer = (customerId: number) => {
     const customerRow = rows.find(r => r.customerId === customerId);
     if (!customerRow) return 0;
-    
+
     return Object.values(customerRow.items).reduce((sum, item) => {
       return sum + (item.crates || 0);
     }, 0);
+  };
+
+  // Check if sales data differs from bill data
+  const hasSalesChangedSinceBill = (customerId: number): boolean => {
+    const bill = customerBills[customerId];
+    if (!bill) return false;
+
+    const row = rows.find(r => r.customerId === customerId);
+    if (!row) return true;
+
+    // Get current sales items
+    const currentItems = Object.entries(row.items)
+      .filter(([_, item]) => item.crates > 0 || item.kg > 0)
+      .map(([varietyId, item]) => ({
+        varietyId: parseInt(varietyId),
+        crates: item.crates,
+        kg: item.kg,
+      }));
+
+    // Compare with bill items
+    const billItems = bill.items || [];
+
+    // Different number of items
+    if (currentItems.length !== billItems.length) return true;
+
+    // Check each item
+    for (const current of currentItems) {
+      const billItem = billItems.find(bi => bi.fish_variety_id === current.varietyId);
+      if (!billItem) return true;
+
+      // Calculate total kg from current sales (crates * 35 + kg)
+      const currentTotalKg = (current.crates * DEFAULT_KG_PER_CRATE) + current.kg;
+
+      // Compare quantities (allow small floating point differences)
+      if (Math.abs(currentTotalKg - billItem.quantity_kg) > 0.1) return true;
+      if (current.crates !== billItem.quantity_crates) return true;
+    }
+
+    return false;
+  };
+
+  // Generate Bill handlers
+  const openBillModal = async (customerId: number) => {
+    const row = rows.find(r => r.customerId === customerId);
+    if (!row) return;
+
+    // Get items with quantity > 0
+    const itemsWithQuantity = Object.entries(row.items)
+      .filter(([_, item]) => item.crates > 0 || item.kg > 0)
+      .map(([varietyId, item]) => {
+        const variety = varieties.find(v => v.id === parseInt(varietyId));
+        const totalKg = (item.crates * DEFAULT_KG_PER_CRATE) + item.kg;
+        return {
+          varietyId: parseInt(varietyId),
+          varietyName: variety?.name || '',
+          crates: item.crates,
+          kgPerCrate: DEFAULT_KG_PER_CRATE,
+          totalKg: totalKg,
+          ratePerKg: 0,
+        };
+      });
+
+    if (itemsWithQuantity.length === 0) {
+      alert('No items to bill for this customer');
+      return;
+    }
+
+    // Get last rates for these varieties
+    const varietyIds = itemsWithQuantity.map(i => i.varietyId);
+    const lastRates = await getLastRatesForVarieties(varietyIds);
+
+    // Apply last rates
+    const itemsWithRates = itemsWithQuantity.map(item => ({
+      ...item,
+      ratePerKg: lastRates[item.varietyId]?.rate_per_kg || 0,
+    }));
+
+    // Get next bill number and previous balance
+    const [nextBillNumber, pendingBalance] = await Promise.all([
+      getNextBillNumber(),
+      getCustomerPendingBalance(customerId),
+    ]);
+
+    setBillCustomerId(customerId);
+    setBillItems(itemsWithRates);
+    setBillNumber(nextBillNumber);
+    setAdditionalCharges([]);
+    setBillNotes('');
+    setPreviousBalance(pendingBalance);
+    setAmountReceived(0);
+    setShowBillModal(true);
+    setShowBillPreview(false);
+    setSavedBill(null);
+    setViewingExistingBill(false);
+  };
+
+  // View existing bill
+  const viewExistingBill = (customerId: number) => {
+    const existingBill = customerBills[customerId];
+    if (!existingBill) return;
+
+    // Convert bill items to display format
+    const items = existingBill.items.map(item => ({
+      varietyId: item.fish_variety_id,
+      varietyName: item.fish_variety_name,
+      crates: item.quantity_crates,
+      kgPerCrate: item.quantity_kg > 0 && item.quantity_crates > 0
+        ? Math.round(item.quantity_kg / item.quantity_crates)
+        : DEFAULT_KG_PER_CRATE,
+      totalKg: item.quantity_kg,
+      ratePerKg: item.rate_per_kg,
+    }));
+
+    setBillCustomerId(customerId);
+    setBillItems(items);
+    setBillNumber(existingBill.bill_number);
+    setAdditionalCharges([]);
+    setBillNotes(existingBill.notes || '');
+    setPreviousBalance((existingBill as any).previous_balance || 0);
+    setAmountReceived((existingBill as any).amount_received || 0);
+    setSavedBill(existingBill);
+    setShowBillPreview(true);
+    setShowBillModal(true);
+    setViewingExistingBill(true);
+  };
+
+  // Edit existing bill - switch to edit mode
+  const handleEditBill = () => {
+    if (!billCustomerId || !customerBills[billCustomerId]) return;
+
+    // Get current sales data for this customer
+    const row = rows.find(r => r.customerId === billCustomerId);
+    if (!row) return;
+
+    // Rebuild items from current sales data
+    const itemsWithQuantity = Object.entries(row.items)
+      .filter(([_, item]) => item.crates > 0 || item.kg > 0)
+      .map(([varietyId, item]) => {
+        const variety = varieties.find(v => v.id === parseInt(varietyId));
+        // Keep existing rate from bill if available
+        const existingItem = billItems.find(bi => bi.varietyId === parseInt(varietyId));
+        const totalKg = (item.crates * DEFAULT_KG_PER_CRATE) + item.kg;
+        return {
+          varietyId: parseInt(varietyId),
+          varietyName: variety?.name || '',
+          crates: item.crates,
+          kgPerCrate: DEFAULT_KG_PER_CRATE,
+          totalKg: totalKg,
+          ratePerKg: existingItem?.ratePerKg || 0,
+        };
+      });
+
+    setBillItems(itemsWithQuantity);
+    setShowBillPreview(false);
+    setViewingExistingBill(true); // Keep this true so we know to update, not create
+  };
+
+  // Save updated bill
+  const handleUpdateBill = async () => {
+    if (!billCustomerId || !customerBills[billCustomerId]) return;
+
+    // Validate rates
+    const hasZeroRate = billItems.some(item => item.totalKg > 0 && item.ratePerKg === 0);
+    if (hasZeroRate) {
+      alert('Please enter rates for all items');
+      return;
+    }
+
+    setGeneratingBill(true);
+
+    const existingBill = customerBills[billCustomerId];
+
+    const itemsForBill: Omit<BillItem, 'amount'>[] = billItems.map(item => ({
+      fish_variety_id: item.varietyId,
+      fish_variety_name: item.varietyName,
+      quantity_crates: item.crates,
+      quantity_kg: item.totalKg,
+      rate_per_crate: 0,
+      rate_per_kg: item.ratePerKg,
+    }));
+
+    // Include additional charges in notes
+    let notesWithCharges = billNotes || '';
+    if (additionalCharges.length > 0) {
+      const chargesText = additionalCharges
+        .filter(c => c.label && c.amount)
+        .map(c => `${c.label}: ₹${c.amount}`)
+        .join(', ');
+      if (chargesText) {
+        notesWithCharges = notesWithCharges ? `${notesWithCharges} | Additional: ${chargesText}` : `Additional: ${chargesText}`;
+      }
+    }
+
+    const updatedBill = await updateBill(
+      existingBill.id,
+      itemsForBill,
+      0, // No discount
+      notesWithCharges || undefined,
+      previousBalance,
+      amountReceived
+    );
+
+    setGeneratingBill(false);
+
+    if (updatedBill) {
+      // Keep the original bill number
+      updatedBill.bill_number = existingBill.bill_number;
+      setSavedBill(updatedBill);
+      setShowBillPreview(true);
+      // Update tracked bills
+      setCustomerBills(prev => ({ ...prev, [billCustomerId]: updatedBill }));
+    } else {
+      alert('Failed to update bill');
+    }
+  };
+
+  const updateBillItemKgPerCrate = (index: number, value: number) => {
+    const newItems = [...billItems];
+    newItems[index].kgPerCrate = value;
+    newItems[index].totalKg = newItems[index].crates * value;
+    setBillItems(newItems);
+  };
+
+  const updateBillItemRate = (index: number, value: number) => {
+    const newItems = [...billItems];
+    newItems[index].ratePerKg = value;
+    setBillItems(newItems);
+  };
+
+  const addAdditionalCharge = () => {
+    setAdditionalCharges([...additionalCharges, { label: '', amount: 0 }]);
+  };
+
+  const updateAdditionalCharge = (index: number, field: 'label' | 'amount', value: string | number) => {
+    const newCharges = [...additionalCharges];
+    if (field === 'label') {
+      newCharges[index].label = value as string;
+    } else {
+      newCharges[index].amount = value as number;
+    }
+    setAdditionalCharges(newCharges);
+  };
+
+  const removeAdditionalCharge = (index: number) => {
+    setAdditionalCharges(additionalCharges.filter((_, i) => i !== index));
+  };
+
+  const getBillSubtotal = () => {
+    return billItems.reduce((sum, item) => {
+      return sum + (item.totalKg * item.ratePerKg);
+    }, 0);
+  };
+
+  const getAdditionalTotal = () => {
+    return additionalCharges.reduce((sum, charge) => sum + (charge.amount || 0), 0);
+  };
+
+  const getBillTotal = () => {
+    return getBillSubtotal() + getAdditionalTotal();
+  };
+
+  const getGrandTotal = () => {
+    return getBillTotal() + previousBalance;
+  };
+
+  const getBalanceDue = () => {
+    return getGrandTotal() - amountReceived;
+  };
+
+  const handleSaveBill = async () => {
+    if (!billCustomerId) return;
+
+    // Validate rates
+    const hasZeroRate = billItems.some(item => item.totalKg > 0 && item.ratePerKg === 0);
+
+    if (hasZeroRate) {
+      alert('Please enter rates for all items');
+      return;
+    }
+
+    setGeneratingBill(true);
+
+    const itemsForBill: Omit<BillItem, 'amount'>[] = billItems.map(item => ({
+      fish_variety_id: item.varietyId,
+      fish_variety_name: item.varietyName,
+      quantity_crates: item.crates,
+      quantity_kg: item.totalKg,
+      rate_per_crate: 0,
+      rate_per_kg: item.ratePerKg,
+    }));
+
+    // Include additional charges in notes for now
+    let notesWithCharges = billNotes || '';
+    if (additionalCharges.length > 0) {
+      const chargesText = additionalCharges
+        .filter(c => c.label && c.amount)
+        .map(c => `${c.label}: ₹${c.amount}`)
+        .join(', ');
+      if (chargesText) {
+        notesWithCharges = notesWithCharges ? `${notesWithCharges} | Additional: ${chargesText}` : `Additional: ${chargesText}`;
+      }
+    }
+
+    const bill = await createBill(
+      billCustomerId,
+      date,
+      itemsForBill,
+      0, // No discount
+      notesWithCharges || undefined,
+      previousBalance,
+      amountReceived
+    );
+
+    setGeneratingBill(false);
+
+    if (bill) {
+      setSavedBill(bill);
+      setShowBillPreview(true);
+      // Track this bill so the button changes to "View"
+      setCustomerBills(prev => ({ ...prev, [billCustomerId]: bill }));
+    } else {
+      alert('Failed to save bill');
+    }
+  };
+
+  const closeBillModal = () => {
+    setShowBillModal(false);
+    setBillCustomerId(null);
+    setBillItems([]);
+    setAdditionalCharges([]);
+    setPreviousBalance(0);
+    setAmountReceived(0);
+    setShowBillPreview(false);
+    setSavedBill(null);
+    setViewingExistingBill(false);
+  };
+
+  const printBill = () => {
+    if (billPreviewRef.current) {
+      const printContent = billPreviewRef.current.innerHTML;
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head>
+              <title>Bill ${savedBill?.bill_number || billNumber}</title>
+              <style>
+                body { font-family: Arial, sans-serif; padding: 20px; }
+                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background-color: #f5f5f5; }
+                .text-right { text-align: right; }
+                .text-center { text-align: center; }
+                .font-bold { font-weight: bold; }
+                .text-lg { font-size: 1.1em; }
+                .text-xl { font-size: 1.25em; }
+                .mb-2 { margin-bottom: 8px; }
+                .mb-4 { margin-bottom: 16px; }
+                .mt-4 { margin-top: 16px; }
+                .border-t { border-top: 2px solid #333; }
+                @media print { body { padding: 0; } }
+              </style>
+            </head>
+            <body>${printContent}</body>
+          </html>
+        `);
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
+
+  const shareWhatsApp = () => {
+    if (!savedBill) return;
+
+    const customer = customers.find(c => c.id === billCustomerId);
+    let message = `*S.K.S. Co.*\n`;
+    message += `Fish Trading & Prawn Commission Agent\n`;
+    message += `━━━━━━━━━━━━━━━\n`;
+    message += `Bill No: *${savedBill.bill_number}*\n`;
+    message += `Date: ${new Date(date).toLocaleDateString('en-IN')}\n`;
+    message += `Name: *${customer?.name || 'N/A'}*\n\n`;
+    message += `*Items:*\n`;
+
+    billItems.forEach(item => {
+      const amount = item.totalKg * item.ratePerKg;
+      message += `${item.varietyName}: ${item.crates}cr (${item.totalKg}kg) × ₹${item.ratePerKg}/kg = ₹${amount.toLocaleString()}\n`;
+    });
+
+    message += `\n*Subtotal:* ₹${getBillSubtotal().toLocaleString()}`;
+
+    if (additionalCharges.length > 0) {
+      additionalCharges.filter(c => c.label && c.amount).forEach(charge => {
+        message += `\n*${charge.label}:* ₹${charge.amount.toLocaleString()}`;
+      });
+    }
+
+    message += `\n*Current Bill:* ₹${getBillTotal().toLocaleString()}`;
+
+    if (previousBalance > 0) {
+      message += `\n*Previous Balance:* ₹${previousBalance.toLocaleString()}`;
+      message += `\n*Grand Total:* ₹${getGrandTotal().toLocaleString()}`;
+    }
+
+    if (amountReceived > 0) {
+      message += `\n*Amount Received:* ₹${amountReceived.toLocaleString()}`;
+    }
+
+    message += `\n\n*Balance Due:* ₹${getBalanceDue().toLocaleString()}`;
+
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
   };
 
   if (loading) return <div className="p-8 text-center">Loading...</div>;
@@ -683,13 +1145,57 @@ export default function SalesSpreadsheetPage() {
                   );
                 })}
 
-                <td className="px-4 py-3 text-center bg-white group-hover:bg-gray-50">
-                  <button
-                    onClick={() => handleDeleteRow(rowIndex)}
-                    className="px-3 py-1.5 text-sm bg-red-50 text-red-500 rounded-md hover:bg-red-100 hover:text-red-600 transition-colors font-medium"
-                  >
-                    Delete
-                  </button>
+                <td className="px-3 py-3 text-center bg-white group-hover:bg-gray-50">
+                  <div className="flex gap-2 justify-center">
+                    {row.customerId && Object.values(row.items).some(item => item.crates > 0 || item.kg > 0) && (
+                      customerBills[row.customerId] ? (
+                        (() => {
+                          const hasChanges = hasSalesChangedSinceBill(row.customerId!);
+                          return (
+                            <button
+                              onClick={() => hasChanges ? openBillModal(row.customerId!) : viewExistingBill(row.customerId!)}
+                              className={`px-3 py-1.5 text-sm rounded-md transition-colors font-medium flex items-center gap-1 ${
+                                hasChanges
+                                  ? 'bg-amber-50 text-amber-600 hover:bg-amber-100 hover:text-amber-700'
+                                  : 'bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700'
+                              }`}
+                              title={hasChanges ? 'Sales changed - click to update bill' : 'View existing bill'}
+                            >
+                              {hasChanges ? (
+                                <>
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                  </svg>
+                                  Update
+                                </>
+                              ) : (
+                                <>
+                                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                  </svg>
+                                  View
+                                </>
+                              )}
+                            </button>
+                          );
+                        })()
+                      ) : (
+                        <button
+                          onClick={() => openBillModal(row.customerId!)}
+                          className="px-3 py-1.5 text-sm bg-green-50 text-green-600 rounded-md hover:bg-green-100 hover:text-green-700 transition-colors font-medium"
+                        >
+                          Bill
+                        </button>
+                      )
+                    )}
+                    <button
+                      onClick={() => handleDeleteRow(rowIndex)}
+                      className="px-3 py-1.5 text-sm bg-red-50 text-red-500 rounded-md hover:bg-red-100 hover:text-red-600 transition-colors font-medium"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </td>
               </tr>
             )})}
@@ -733,6 +1239,353 @@ export default function SalesSpreadsheetPage() {
         </button>
       </div>
     </div>
+
+      {/* Bill Modal */}
+      {showBillModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between bg-gradient-to-r from-green-500 to-emerald-500">
+              <div>
+                <h2 className="text-xl font-bold text-white">
+                  {showBillPreview ? 'Bill Preview' : 'Generate Bill'}
+                </h2>
+                <p className="text-sm text-green-100">
+                  {customers.find(c => c.id === billCustomerId)?.name} • {new Date(date).toLocaleDateString('en-IN')}
+                </p>
+              </div>
+              <div className="text-right">
+                <div className="text-sm text-green-100">Bill No.</div>
+                <div className="text-lg font-bold text-white">{savedBill?.bill_number || billNumber}</div>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {!showBillPreview ? (
+                /* Rate Entry Form */
+                <div>
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="px-3 py-2 text-left text-sm font-semibold text-gray-700 border-b">Fish Variety</th>
+                        <th className="px-3 py-2 text-center text-sm font-semibold text-gray-700 border-b">Crates</th>
+                        <th className="px-3 py-2 text-center text-sm font-semibold text-gray-700 border-b">Kg/Crate</th>
+                        <th className="px-3 py-2 text-center text-sm font-semibold text-gray-700 border-b">Total Kg</th>
+                        <th className="px-3 py-2 text-center text-sm font-semibold text-gray-700 border-b">Rate/Kg</th>
+                        <th className="px-3 py-2 text-right text-sm font-semibold text-gray-700 border-b">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billItems.map((item, index) => {
+                        const amount = item.totalKg * item.ratePerKg;
+                        return (
+                          <tr key={item.varietyId} className="border-b hover:bg-gray-50">
+                            <td className="px-3 py-3 font-medium text-gray-800">{item.varietyName}</td>
+                            <td className="px-3 py-3 text-center text-gray-600 font-semibold">{item.crates}</td>
+                            <td className="px-3 py-3">
+                              <input
+                                type="number"
+                                value={item.kgPerCrate || ''}
+                                onChange={(e) => updateBillItemKgPerCrate(index, parseFloat(e.target.value) || 0)}
+                                className="w-16 px-2 py-1.5 border border-gray-300 rounded text-center text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none"
+                                min="0"
+                              />
+                            </td>
+                            <td className="px-3 py-3 text-center font-semibold text-gray-700">{item.totalKg}</td>
+                            <td className="px-3 py-3">
+                              <input
+                                type="number"
+                                value={item.ratePerKg || ''}
+                                onChange={(e) => updateBillItemRate(index, parseFloat(e.target.value) || 0)}
+                                placeholder="0"
+                                className="w-20 px-2 py-1.5 border border-gray-300 rounded text-center text-sm focus:border-green-500 focus:ring-1 focus:ring-green-500 focus:outline-none"
+                                min="0"
+                              />
+                            </td>
+                            <td className="px-3 py-3 text-right font-semibold text-gray-800">
+                              ₹{amount.toLocaleString()}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* Additional Charges */}
+                  <div className="mt-6 border-t pt-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-semibold text-gray-700">Additional Charges</span>
+                      <button
+                        onClick={addAdditionalCharge}
+                        className="text-sm text-green-600 hover:text-green-700 font-medium flex items-center gap-1"
+                      >
+                        <span>+</span> Add Charge
+                      </button>
+                    </div>
+                    {additionalCharges.map((charge, index) => (
+                      <div key={index} className="flex items-center gap-3 mb-2">
+                        <input
+                          type="text"
+                          value={charge.label}
+                          onChange={(e) => updateAdditionalCharge(index, 'label', e.target.value)}
+                          placeholder="e.g. Transport, Loading"
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded text-sm focus:border-green-500 focus:outline-none"
+                        />
+                        <input
+                          type="number"
+                          value={charge.amount || ''}
+                          onChange={(e) => updateAdditionalCharge(index, 'amount', parseFloat(e.target.value) || 0)}
+                          placeholder="₹0"
+                          className="w-28 px-3 py-2 border border-gray-300 rounded text-sm text-right focus:border-green-500 focus:outline-none"
+                          min="0"
+                        />
+                        <button
+                          onClick={() => removeAdditionalCharge(index)}
+                          className="text-red-500 hover:text-red-600 p-1"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Totals & Payment */}
+                  <div className="mt-6 flex justify-end">
+                    <div className="w-80 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Subtotal</span>
+                        <span className="font-semibold">₹{getBillSubtotal().toLocaleString()}</span>
+                      </div>
+                      {additionalCharges.filter(c => c.amount > 0).map((charge, index) => (
+                        <div key={index} className="flex justify-between text-sm">
+                          <span className="text-gray-600">{charge.label || 'Additional'}</span>
+                          <span className="font-semibold">₹{charge.amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-sm font-semibold pt-2 border-t border-gray-200">
+                        <span>Current Bill</span>
+                        <span>₹{getBillTotal().toLocaleString()}</span>
+                      </div>
+
+                      {/* Previous Balance */}
+                      <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200">
+                        <span className="text-gray-600">Previous Balance</span>
+                        <input
+                          type="number"
+                          value={previousBalance || ''}
+                          onChange={(e) => setPreviousBalance(parseFloat(e.target.value) || 0)}
+                          className="w-28 px-2 py-1 border border-gray-300 rounded text-right text-sm focus:border-green-500 focus:outline-none"
+                          min="0"
+                        />
+                      </div>
+
+                      <div className="flex justify-between text-sm font-bold bg-gray-100 px-2 py-1.5 rounded">
+                        <span>Grand Total</span>
+                        <span>₹{getGrandTotal().toLocaleString()}</span>
+                      </div>
+
+                      {/* Amount Received */}
+                      <div className="flex items-center justify-between text-sm pt-2 border-t border-gray-200">
+                        <span className="text-green-700 font-medium">Amount Received</span>
+                        <input
+                          type="number"
+                          value={amountReceived || ''}
+                          onChange={(e) => setAmountReceived(parseFloat(e.target.value) || 0)}
+                          placeholder="0"
+                          className="w-28 px-2 py-1 border-2 border-green-400 rounded text-right text-sm focus:border-green-500 focus:outline-none bg-green-50"
+                          min="0"
+                        />
+                      </div>
+
+                      <div className={`flex justify-between text-lg font-bold pt-2 border-t-2 ${getBalanceDue() > 0 ? 'border-red-400' : 'border-green-400'}`}>
+                        <span>Balance Due</span>
+                        <span className={getBalanceDue() > 0 ? 'text-red-600' : 'text-green-600'}>
+                          ₹{getBalanceDue().toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="mt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes (optional)</label>
+                    <input
+                      type="text"
+                      value={billNotes}
+                      onChange={(e) => setBillNotes(e.target.value)}
+                      placeholder="Add any notes..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:border-green-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              ) : (
+                /* Bill Preview */
+                <div ref={billPreviewRef} className="bg-white">
+                  {/* Header */}
+                  <div className="text-center mb-4 border-b-2 border-blue-800 pb-4">
+                    <div className="flex justify-between items-start text-xs text-gray-600 mb-1">
+                      <span><strong>Ibrahim</strong> - Proprietor</span>
+                      <span>Cell: 99087 04047</span>
+                    </div>
+                    <h1 className="text-2xl font-bold text-blue-800 tracking-wide">S.K.S. Co.</h1>
+                    <p className="text-sm font-semibold text-gray-700 mt-1">FISH TRADING & PRAWN COMMISSION AGENT</p>
+                    <p className="text-xs text-gray-500 mt-1">Sri Raghavendra Ice Factory, Near Indian Petrol Bunk, Muttukur Road, Nellore</p>
+                  </div>
+
+                  {/* Bill Info */}
+                  <div className="flex justify-between mb-4 text-sm">
+                    <div>
+                      <p className="text-gray-600">Name:</p>
+                      <p className="text-gray-800 font-semibold text-lg">{customers.find(c => c.id === billCustomerId)?.name}</p>
+                    </div>
+                    <div className="text-right">
+                      <p><span className="text-gray-600">Bill No:</span> <span className="font-bold text-blue-800">{savedBill?.bill_number}</span></p>
+                      <p><span className="text-gray-600">Date:</span> <span className="font-semibold">{new Date(date).toLocaleDateString('en-IN')}</span></p>
+                    </div>
+                  </div>
+
+                  <table className="w-full border-collapse border border-gray-300 mb-4">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="px-3 py-2 text-left text-sm font-semibold border border-gray-300">Item</th>
+                        <th className="px-3 py-2 text-center text-sm font-semibold border border-gray-300">Qty (Kg)</th>
+                        <th className="px-3 py-2 text-center text-sm font-semibold border border-gray-300">Rate/Kg</th>
+                        <th className="px-3 py-2 text-right text-sm font-semibold border border-gray-300">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billItems.map((item) => {
+                        const amount = item.totalKg * item.ratePerKg;
+                        return (
+                          <tr key={item.varietyId}>
+                            <td className="px-3 py-2 border border-gray-300 font-medium">{item.varietyName}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-center">
+                              {item.crates} cr × {item.kgPerCrate}kg = {item.totalKg} kg
+                            </td>
+                            <td className="px-3 py-2 border border-gray-300 text-center">₹{item.ratePerKg}</td>
+                            <td className="px-3 py-2 border border-gray-300 text-right font-semibold">₹{amount.toLocaleString()}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+
+                  <div className="flex justify-end">
+                    <div className="w-80">
+                      <div className="flex justify-between py-1 text-sm">
+                        <span className="text-gray-600">Subtotal</span>
+                        <span>₹{getBillSubtotal().toLocaleString()}</span>
+                      </div>
+                      {additionalCharges.filter(c => c.amount > 0).map((charge, index) => (
+                        <div key={index} className="flex justify-between py-1 text-sm">
+                          <span className="text-gray-600">{charge.label || 'Additional'}</span>
+                          <span>₹{charge.amount.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between py-1 text-sm font-semibold border-t border-gray-300 mt-1">
+                        <span>Current Bill</span>
+                        <span>₹{getBillTotal().toLocaleString()}</span>
+                      </div>
+                      {previousBalance > 0 && (
+                        <div className="flex justify-between py-1 text-sm">
+                          <span className="text-gray-600">Previous Balance</span>
+                          <span>₹{previousBalance.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between py-1 text-sm font-bold bg-gray-100 px-2 rounded">
+                        <span>Grand Total</span>
+                        <span>₹{getGrandTotal().toLocaleString()}</span>
+                      </div>
+                      {amountReceived > 0 && (
+                        <div className="flex justify-between py-1 text-sm text-green-700">
+                          <span>Amount Received</span>
+                          <span>-₹{amountReceived.toLocaleString()}</span>
+                        </div>
+                      )}
+                      <div className={`flex justify-between py-2 text-lg font-bold border-t-2 mt-2 ${getBalanceDue() > 0 ? 'border-red-500' : 'border-green-500'}`}>
+                        <span>Balance Due</span>
+                        <span className={getBalanceDue() > 0 ? 'text-red-600' : 'text-green-600'}>
+                          ₹{getBalanceDue().toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {billNotes && (
+                    <div className="mt-4 text-sm text-gray-600">
+                      <span className="font-medium">Notes:</span> {billNotes}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex gap-3 justify-between">
+              <div>
+                {viewingExistingBill && showBillPreview && (
+                  <button
+                    onClick={handleEditBill}
+                    className="px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-semibold flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                    Edit Bill
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-3">
+              {!showBillPreview ? (
+                <>
+                  <button
+                    onClick={closeBillModal}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={viewingExistingBill ? handleUpdateBill : handleSaveBill}
+                    disabled={generatingBill}
+                    className="px-6 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {generatingBill ? 'Saving...' : (viewingExistingBill ? 'Update Bill' : 'Generate Bill')}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    onClick={closeBillModal}
+                    className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={shareWhatsApp}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 font-semibold flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                    </svg>
+                    WhatsApp
+                  </button>
+                  <button
+                    onClick={printBill}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 font-semibold flex items-center gap-2"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    Print
+                  </button>
+                </>
+              )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </ProtectedRoute>
   );
 }
