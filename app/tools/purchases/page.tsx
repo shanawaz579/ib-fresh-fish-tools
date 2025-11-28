@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { getFishVarieties, getPurchasesByDate, addPurchase, deletePurchase, updatePurchase, getFarmers } from '@/app/actions/stock';
 import SearchableSelect from '@/components/SearchableSelect';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import PurchaseBillModal from '@/components/PurchaseBillModal';
 import type { Purchase, FishVariety, Farmer } from '@/app/actions/stock';
 
 type GroupedPurchase = {
@@ -15,12 +17,18 @@ type GroupedPurchase = {
 };
 
 export default function PurchasePage() {
+  const router = useRouter();
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [groupedPurchases, setGroupedPurchases] = useState<GroupedPurchase[]>([]);
   const [varieties, setVarieties] = useState<FishVariety[]>([]);
   const [farmers, setFarmers] = useState<Farmer[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Bill modal state
+  const [showBillModal, setShowBillModal] = useState(false);
+  const [selectedFarmer, setSelectedFarmer] = useState<{ id: number; name: string } | null>(null);
+  const [farmerPurchases, setFarmerPurchases] = useState<any[]>([]);
 
   // Form state
   const [farmerId, setFarmerId] = useState('');
@@ -224,6 +232,15 @@ export default function PurchasePage() {
     setFishVarietyId('');
     setQuantityCrates('');
     setQuantityKg('');
+  };
+
+  const handleCreateBillForFarmer = (farmerId: number, farmerName: string) => {
+    const farmerGroup = groupedPurchases.find(g => g.farmerId === farmerId);
+    if (!farmerGroup) return;
+
+    setSelectedFarmer({ id: farmerId, name: farmerName });
+    setFarmerPurchases(farmerGroup.items);
+    setShowBillModal(true);
   };
 
   return (
@@ -522,6 +539,16 @@ export default function PurchasePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleCreateBillForFarmer(group.farmerId, group.farmerName)}
+                      className="px-4 py-2 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 transition-colors shadow-sm flex items-center gap-2"
+                      title="Create purchase bill for this farmer"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Create Bill
+                    </button>
                     <div className="text-right">
                       <div className="text-lg font-bold text-green-600">{group.totalCrates} cr</div>
                       {group.totalKg > 0 && (
@@ -571,6 +598,18 @@ export default function PurchasePage() {
       </div>
         </div>
       </div>
+
+      {/* Purchase Bill Modal */}
+      <PurchaseBillModal
+        isOpen={showBillModal}
+        onClose={() => setShowBillModal(false)}
+        farmer={selectedFarmer}
+        purchases={farmerPurchases}
+        date={date}
+        onBillCreated={() => {
+          loadData(); // Refresh purchases
+        }}
+      />
     </ProtectedRoute>
   );
 }

@@ -83,6 +83,32 @@ export default function SalesSpreadsheetPage() {
   const [customerBills, setCustomerBills] = useState<{[customerId: number]: Bill}>({});
   const [viewingExistingBill, setViewingExistingBill] = useState(false);
 
+  // Helper function to parse additional charges from notes
+  const parseAdditionalChargesFromNotes = (notes: string | undefined): { label: string; amount: number }[] => {
+    if (!notes) return [];
+
+    // Look for "Additional: " pattern
+    const additionalMatch = notes.match(/Additional:\s*(.+?)(?:\||$)/);
+    if (!additionalMatch) return [];
+
+    const chargesText = additionalMatch[1].trim();
+    const charges: { label: string; amount: number }[] = [];
+
+    // Split by comma and parse each charge
+    const chargeParts = chargesText.split(',');
+    for (const part of chargeParts) {
+      const match = part.trim().match(/^(.+?):\s*₹?(\d+)$/);
+      if (match) {
+        charges.push({
+          label: match[1].trim(),
+          amount: parseInt(match[2])
+        });
+      }
+    }
+
+    return charges;
+  };
+
   // Helper function to get color for a variety
   const getVarietyColor = (varietyName: string): string => {
     for (const [variety, color] of Object.entries(VARIETY_COLORS)) {
@@ -554,19 +580,25 @@ export default function SalesSpreadsheetPage() {
     const row = rows.find(r => r.customerId === customerId);
     if (!row) return;
 
+    // Check if bill already exists for this customer on this date
+    const existingBill = customerBills[customerId];
+    const isUpdating = !!existingBill;
+
     // Get items with quantity > 0
     const itemsWithQuantity = Object.entries(row.items)
       .filter(([_, item]) => item.crates > 0 || item.kg > 0)
       .map(([varietyId, item]) => {
         const variety = varieties.find(v => v.id === parseInt(varietyId));
         const totalKg = (item.crates * DEFAULT_KG_PER_CRATE) + item.kg;
+        // If updating, try to keep existing rates from the bill
+        const existingBillItem = existingBill?.items?.find(bi => bi.fish_variety_id === parseInt(varietyId));
         return {
           varietyId: parseInt(varietyId),
           varietyName: variety?.name || '',
           crates: item.crates,
           kgPerCrate: DEFAULT_KG_PER_CRATE,
           totalKg: totalKg,
-          ratePerKg: 0,
+          ratePerKg: existingBillItem?.rate_per_kg || 0,
         };
       });
 
@@ -575,33 +607,44 @@ export default function SalesSpreadsheetPage() {
       return;
     }
 
-    // Get last rates for these varieties
-    const varietyIds = itemsWithQuantity.map(i => i.varietyId);
-    const lastRates = await getLastRatesForVarieties(varietyIds);
+    // Get last rates for varieties that don't have rates yet
+    const varietyIds = itemsWithQuantity.filter(i => i.ratePerKg === 0).map(i => i.varietyId);
+    if (varietyIds.length > 0) {
+      const lastRates = await getLastRatesForVarieties(varietyIds);
+      itemsWithQuantity.forEach(item => {
+        if (item.ratePerKg === 0 && lastRates[item.varietyId]) {
+          item.ratePerKg = lastRates[item.varietyId].rate_per_kg || 0;
+        }
+      });
+    }
 
-    // Apply last rates
-    const itemsWithRates = itemsWithQuantity.map(item => ({
-      ...item,
-      ratePerKg: lastRates[item.varietyId]?.rate_per_kg || 0,
-    }));
+    // Get bill number and previous balance
+    let billNum: string;
+    let pendingBalance: number;
 
-    // Get next bill number and previous balance
-    const [nextBillNumber, pendingBalance] = await Promise.all([
-      getNextBillNumber(),
-      getCustomerPendingBalance(customerId),
-    ]);
+    if (isUpdating) {
+      // Keep existing bill number, calculate balance EXCLUDING current bill
+      billNum = existingBill.bill_number;
+      pendingBalance = await getCustomerPendingBalance(customerId, existingBill.id);
+    } else {
+      // New bill - calculate from all unpaid bills
+      [billNum, pendingBalance] = await Promise.all([
+        getNextBillNumber(),
+        getCustomerPendingBalance(customerId),
+      ]);
+    }
 
     setBillCustomerId(customerId);
-    setBillItems(itemsWithRates);
-    setBillNumber(nextBillNumber);
-    setAdditionalCharges([]);
-    setBillNotes('');
+    setBillItems(itemsWithQuantity);
+    setBillNumber(billNum);
+    setAdditionalCharges(isUpdating ? parseAdditionalChargesFromNotes(existingBill?.notes) : []);
+    setBillNotes(existingBill?.notes || '');
     setPreviousBalance(pendingBalance);
-    setAmountReceived(0);
+    setAmountReceived(isUpdating ? ((existingBill as any).amount_received || 0) : 0);
     setShowBillModal(true);
     setShowBillPreview(false);
-    setSavedBill(null);
-    setViewingExistingBill(false);
+    setSavedBill(isUpdating ? existingBill : null);
+    setViewingExistingBill(isUpdating);
   };
 
   // View existing bill
@@ -624,7 +667,7 @@ export default function SalesSpreadsheetPage() {
     setBillCustomerId(customerId);
     setBillItems(items);
     setBillNumber(existingBill.bill_number);
-    setAdditionalCharges([]);
+    setAdditionalCharges(parseAdditionalChargesFromNotes(existingBill.notes));
     setBillNotes(existingBill.notes || '');
     setPreviousBalance((existingBill as any).previous_balance || 0);
     setAmountReceived((existingBill as any).amount_received || 0);
@@ -635,8 +678,10 @@ export default function SalesSpreadsheetPage() {
   };
 
   // Edit existing bill - switch to edit mode
-  const handleEditBill = () => {
+  const handleEditBill = async () => {
     if (!billCustomerId || !customerBills[billCustomerId]) return;
+
+    const existingBill = customerBills[billCustomerId];
 
     // Get current sales data for this customer
     const row = rows.find(r => r.customerId === billCustomerId);
@@ -660,7 +705,11 @@ export default function SalesSpreadsheetPage() {
         };
       });
 
+    // Calculate previous balance from other unpaid bills, EXCLUDING current bill
+    const pendingBalance = await getCustomerPendingBalance(billCustomerId, existingBill.id);
+
     setBillItems(itemsWithQuantity);
+    setPreviousBalance(pendingBalance);
     setShowBillPreview(false);
     setViewingExistingBill(true); // Keep this true so we know to update, not create
   };
@@ -789,6 +838,56 @@ export default function SalesSpreadsheetPage() {
     }
 
     setGeneratingBill(true);
+
+    // IMPORTANT: Check again if bill already exists to prevent duplicates
+    const existingBill = await getBillForCustomerOnDate(billCustomerId, date);
+    if (existingBill) {
+      // Bill already exists - update instead of create
+      setViewingExistingBill(true);
+      setCustomerBills(prev => ({ ...prev, [billCustomerId]: existingBill }));
+      setBillNumber(existingBill.bill_number);
+
+      const itemsForBill: Omit<BillItem, 'amount'>[] = billItems.map(item => ({
+        fish_variety_id: item.varietyId,
+        fish_variety_name: item.varietyName,
+        quantity_crates: item.crates,
+        quantity_kg: item.totalKg,
+        rate_per_crate: 0,
+        rate_per_kg: item.ratePerKg,
+      }));
+
+      let notesWithCharges = billNotes || '';
+      if (additionalCharges.length > 0) {
+        const chargesText = additionalCharges
+          .filter(c => c.label && c.amount)
+          .map(c => `${c.label}: ₹${c.amount}`)
+          .join(', ');
+        if (chargesText) {
+          notesWithCharges = notesWithCharges ? `${notesWithCharges} | Additional: ${chargesText}` : `Additional: ${chargesText}`;
+        }
+      }
+
+      const updatedBill = await updateBill(
+        existingBill.id,
+        itemsForBill,
+        0,
+        notesWithCharges || undefined,
+        previousBalance,
+        amountReceived
+      );
+
+      setGeneratingBill(false);
+
+      if (updatedBill) {
+        updatedBill.bill_number = existingBill.bill_number;
+        setSavedBill(updatedBill);
+        setShowBillPreview(true);
+        setCustomerBills(prev => ({ ...prev, [billCustomerId]: updatedBill }));
+      } else {
+        alert('Failed to update bill');
+      }
+      return;
+    }
 
     const itemsForBill: Omit<BillItem, 'amount'>[] = billItems.map(item => ({
       fish_variety_id: item.varietyId,
@@ -1032,16 +1131,14 @@ export default function SalesSpreadsheetPage() {
       </div>
 
       {/* Spreadsheet Container */}
-      <div ref={tableContainerRef} className="flex-1 overflow-auto w-full relative">
-        {/* Right scroll shadow indicator */}
-        <div className="pointer-events-none absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-black/10 to-transparent z-40" />
-      <div className="bg-white shadow min-w-max">
+      <div ref={tableContainerRef} className="flex-1 overflow-auto w-full">
+      <div className="bg-white min-w-max">
         <table className="w-full border-collapse">
           {/* Header - Available Stock */}
           <thead className="sticky top-0 z-30">
             <tr className="bg-gradient-to-r from-slate-700 to-slate-600 border-b-4 border-blue-500">
-              <th className="px-4 py-2.5 text-left font-bold text-sm text-white bg-slate-700 sticky left-0 z-30 min-w-[200px] border-r-2 border-blue-400">Customer</th>
-              <th className="px-3 py-2.5 text-center font-bold text-sm text-white bg-slate-700 sticky left-[200px] z-30 min-w-[120px] border-r-2 border-blue-400">Total</th>
+              <th className="px-4 py-2.5 text-left font-bold text-sm text-white bg-slate-700 sticky left-0 z-40 min-w-[180px] shadow-[2px_0_4px_rgba(0,0,0,0.1)]">Customer</th>
+              <th className="px-3 py-2.5 text-center font-bold text-sm text-white bg-slate-700 sticky left-[180px] z-40 min-w-[80px] shadow-[2px_0_4px_rgba(0,0,0,0.1)]">Total</th>
               {columnOrder.map((col, idx) => {
                 const purchased = getTotalPurchases(col.varietyId);
                 const columnColor = getColumnColor(col.varietyName);
@@ -1053,11 +1150,11 @@ export default function SalesSpreadsheetPage() {
                     onDragOver={handleColumnDragOver}
                     onDrop={() => handleColumnDrop(idx)}
                     style={{ backgroundColor: columnColor }}
-                    className="px-2 py-2.5 text-center font-bold text-sm text-white border-r-2 border-white cursor-move hover:opacity-90 hover:shadow-lg transition min-w-[120px] shadow-md"
+                    className="px-1 py-2.5 text-center font-bold text-sm text-white border-r border-white/30 cursor-move hover:opacity-90 transition min-w-[200px]"
                   >
                     <div className="font-bold text-sm leading-tight">{col.varietyName}</div>
                     <div className="text-xs opacity-85 mt-1 font-bold bg-black/20 rounded py-0.5 px-1">
-                      {purchased.crates}cr in stock
+                      {purchased.crates > 0 ? `${purchased.crates}cr` : ''}{purchased.crates > 0 && purchased.kg > 0 ? ' + ' : ''}{purchased.kg > 0 ? `${purchased.kg}kg` : ''}{purchased.crates === 0 && purchased.kg === 0 ? '0' : ''} in stock
                     </div>
                   </th>
                 );
@@ -1072,13 +1169,13 @@ export default function SalesSpreadsheetPage() {
               const isEmptyRow = !row.customerId;
               return (
               <tr key={rowIndex} className={`border-b transition-all duration-150 group ${isEmptyRow ? 'bg-amber-50/50' : 'hover:bg-blue-50/50'}`}>
-                <td className={`px-4 py-2 sticky left-0 z-10 min-w-[200px] border-r-2 transition-colors ${isEmptyRow ? 'bg-gradient-to-r from-amber-100 to-amber-50 border-amber-300' : 'bg-gradient-to-r from-blue-50 to-blue-100 border-blue-200 group-hover:from-blue-100 group-hover:to-blue-50'}`}>
+                <td className={`px-3 py-2 sticky left-0 z-20 min-w-[180px] transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.05)] ${isEmptyRow ? 'bg-amber-50' : 'bg-blue-50 group-hover:bg-blue-100'}`}>
                   <select
                     value={row.customerId || ''}
                     onChange={(e) => handleCustomerChange(rowIndex, e.target.value ? parseInt(e.target.value) : null)}
-                    className={`w-full px-3 py-2 border-2 rounded-lg text-sm font-semibold bg-white transition-all appearance-none cursor-pointer ${isEmptyRow ? 'border-amber-400 text-amber-700 hover:border-amber-500 focus:border-amber-500 focus:ring-amber-200' : 'border-blue-300 text-gray-800 hover:border-blue-400 focus:border-blue-500 focus:ring-blue-200'} focus:outline-none focus:ring-2`}
+                    className={`w-full px-2 py-1.5 border rounded-lg text-sm font-semibold bg-white transition-all appearance-none cursor-pointer ${isEmptyRow ? 'border-amber-300 text-amber-700' : 'border-blue-200 text-gray-800'} focus:outline-none focus:ring-1 focus:ring-blue-400`}
                   >
-                    <option value="" className="text-gray-500">{isEmptyRow ? '+ Select Customer to Add Row' : 'Select Customer'}</option>
+                    <option value="" className="text-gray-500">{isEmptyRow ? '+ Add Customer' : 'Select'}</option>
                     {customers.map((c) => {
                       const isUsedInOtherRow = rows.some((r, idx) => idx !== rowIndex && r.customerId === c.id);
                       return (
@@ -1088,13 +1185,13 @@ export default function SalesSpreadsheetPage() {
                           className="font-medium"
                           disabled={isUsedInOtherRow}
                         >
-                          {c.name}{isUsedInOtherRow ? ' (already selected)' : ''}
+                          {c.name}{isUsedInOtherRow ? ' (used)' : ''}
                         </option>
                       );
                     })}
                   </select>
                 </td>
-                <td className={`px-3 py-2 sticky left-[200px] z-10 min-w-[120px] text-center border-r-2 transition-colors ${isEmptyRow ? 'bg-gradient-to-r from-amber-50 to-amber-100/50 border-amber-300' : 'bg-gradient-to-r from-blue-100 to-blue-50 border-blue-200 group-hover:from-blue-50 group-hover:to-blue-100'}`}>
+                <td className={`px-2 py-2 sticky left-[180px] z-20 min-w-[80px] text-center transition-colors shadow-[2px_0_4px_rgba(0,0,0,0.05)] ${isEmptyRow ? 'bg-amber-50' : 'bg-blue-50 group-hover:bg-blue-100'}`}>
                   {row.customerId ? (
                     <>
                       <div className="text-2xl font-bold text-blue-700">
@@ -1109,37 +1206,43 @@ export default function SalesSpreadsheetPage() {
 
                 {columnOrder.map((col) => {
                   const item = row.items[col.varietyId] || { crates: 0, kg: 0 };
-                  const hasValue = item.crates > 0 || item.kg > 0;
+                  const hasCrates = item.crates > 0;
+                  const hasKg = item.kg > 0;
                   const columnColor = getColumnColor(col.varietyName);
                   return (
-                    <td key={col.varietyId} className={`px-2 py-2 border-r border-gray-200 transition-colors ${!row.customerId ? 'bg-gray-50/50' : hasValue ? 'bg-white' : 'bg-gray-50/30'}`}>
-                      <div className="flex gap-1 items-center justify-center">
-                        <input
-                          type="number"
-                          placeholder="0"
-                          value={item.crates || ''}
-                          onChange={(e) => handleCellChange(rowIndex, col.varietyId, 'crates', e.target.value)}
-                          onBlur={() => handleCellBlur(rowIndex, col.varietyId)}
-                          style={hasValue ? { borderColor: columnColor, backgroundColor: `${columnColor}10` } : {}}
-                          className={`w-16 px-2 py-1.5 border-2 rounded-md text-sm text-center font-semibold transition-all ${hasValue ? 'text-gray-900' : 'border-gray-200 bg-gray-50 text-gray-400'} hover:border-blue-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-40 disabled:cursor-not-allowed`}
-                          min="0"
-                          disabled={!row.customerId}
-                          title="Crates"
-                        />
-                        <span className={`text-xs font-medium min-w-[16px] ${hasValue ? 'text-gray-600' : 'text-gray-400'}`}>cr</span>
-                        <input
-                          type="number"
-                          placeholder="0"
-                          value={item.kg || ''}
-                          onChange={(e) => handleCellChange(rowIndex, col.varietyId, 'kg', e.target.value)}
-                          onBlur={() => handleCellBlur(rowIndex, col.varietyId)}
-                          className={`w-14 px-2 py-1.5 border rounded-md text-sm text-center transition-all ${item.kg > 0 ? 'border-gray-400 text-gray-700' : 'border-gray-200 text-gray-400'} hover:border-gray-400 focus:border-gray-500 focus:outline-none focus:ring-1 focus:ring-gray-300 disabled:opacity-40 disabled:cursor-not-allowed`}
-                          step="0.1"
-                          min="0"
-                          disabled={!row.customerId}
-                          title="Kg"
-                        />
-                        <span className={`text-xs font-medium min-w-[16px] ${item.kg > 0 ? 'text-gray-600' : 'text-gray-400'}`}>kg</span>
+                    <td key={col.varietyId} className={`px-1 py-1.5 border-r border-gray-200 transition-colors min-w-[200px] ${!row.customerId ? 'bg-gray-50/50' : (hasCrates || hasKg) ? 'bg-white' : 'bg-gray-50/30'}`}>
+                      <div className="flex items-center justify-center gap-2">
+                        {/* Crates input */}
+                        <div className="flex items-center gap-0.5">
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={item.crates || ''}
+                            onChange={(e) => handleCellChange(rowIndex, col.varietyId, 'crates', e.target.value)}
+                            onBlur={() => handleCellBlur(rowIndex, col.varietyId)}
+                            style={hasCrates ? { borderColor: columnColor, backgroundColor: `${columnColor}15` } : {}}
+                            className={`w-14 px-1 py-1 border-2 rounded text-sm text-center font-semibold ${hasCrates ? 'text-gray-900' : 'border-gray-200 bg-gray-50 text-gray-400'} focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-40`}
+                            min="0"
+                            disabled={!row.customerId}
+                          />
+                          <span className={`text-xs font-medium ${hasCrates ? 'text-gray-700' : 'text-gray-400'}`}>cr</span>
+                        </div>
+                        {/* Kg input */}
+                        <div className="flex items-center gap-0.5">
+                          <input
+                            type="number"
+                            placeholder="0"
+                            value={item.kg || ''}
+                            onChange={(e) => handleCellChange(rowIndex, col.varietyId, 'kg', e.target.value)}
+                            onBlur={() => handleCellBlur(rowIndex, col.varietyId)}
+                            style={hasKg ? { borderColor: '#6b7280', backgroundColor: '#f9fafb' } : {}}
+                            className={`w-14 px-1 py-1 border rounded text-sm text-center ${hasKg ? 'border-gray-500 text-gray-700 font-semibold' : 'border-gray-200 text-gray-400'} focus:outline-none focus:ring-1 focus:ring-gray-400 disabled:opacity-40`}
+                            step="0.1"
+                            min="0"
+                            disabled={!row.customerId}
+                          />
+                          <span className={`text-xs font-medium ${hasKg ? 'text-gray-700' : 'text-gray-400'}`}>kg</span>
+                        </div>
                       </div>
                     </td>
                   );
@@ -1203,20 +1306,22 @@ export default function SalesSpreadsheetPage() {
 
           {/* Footer - Total Sold */}
           <tfoot className="sticky bottom-0 z-30">
-            <tr className="bg-gradient-to-r from-emerald-50 to-green-50 border-t-4 border-green-400 font-semibold">
-              <td className="px-4 py-2 bg-gradient-to-r from-emerald-100 to-emerald-50 text-sm sticky left-0 z-30 min-w-[200px] font-bold text-emerald-900 border-r-2 border-emerald-200">Totals</td>
-              <td className="px-3 py-2 bg-gradient-to-r from-emerald-100 to-emerald-50 text-sm sticky left-[200px] z-30 min-w-[120px] border-r-2 border-emerald-200"></td>
+            <tr className="bg-emerald-50 border-t-2 border-green-400 font-semibold">
+              <td className="px-3 py-2 bg-emerald-100 text-sm sticky left-0 z-40 min-w-[180px] font-bold text-emerald-900 shadow-[2px_0_4px_rgba(0,0,0,0.1)]">Totals</td>
+              <td className="px-2 py-2 bg-emerald-100 text-sm sticky left-[180px] z-40 min-w-[80px] shadow-[2px_0_4px_rgba(0,0,0,0.1)]"></td>
               {columnOrder.map((col) => {
                 const total = getTotalSold(col.varietyId);
                 const available = getAvailableStock(col.varietyId);
                 const isNegative = available.crates < 0 || available.kg < 0;
                 return (
-                  <td key={col.varietyId} className={`px-1.5 py-2 text-center border-r font-semibold transition-all ${isNegative ? 'bg-red-100 border-red-200' : 'bg-emerald-100 border-emerald-200'}`}>
+                  <td key={col.varietyId} className={`px-1.5 py-2 text-center border-r font-semibold transition-all min-w-[200px] ${isNegative ? 'bg-red-100 border-red-200' : 'bg-emerald-100 border-emerald-200'}`}>
                     <div className={`text-xs font-bold mb-0.5 ${isNegative ? 'text-red-600' : 'text-emerald-600'}`}>Available</div>
                     <div className={`text-base font-bold ${isNegative ? 'text-red-700' : 'text-emerald-700'}`}>
-                      {available.crates}cr
+                      {available.crates > 0 ? `${available.crates}cr` : ''}{available.crates !== 0 && available.kg !== 0 ? ' + ' : ''}{available.kg !== 0 ? `${available.kg}kg` : ''}{available.crates === 0 && available.kg === 0 ? '0' : ''}
                     </div>
-                    <div className={`text-xs font-semibold mt-1 ${isNegative ? 'text-red-500' : 'text-emerald-600'}`}>Sold: {total.crates}cr</div>
+                    <div className={`text-xs font-semibold mt-1 ${isNegative ? 'text-red-500' : 'text-emerald-600'}`}>
+                      Sold: {total.crates > 0 ? `${total.crates}cr` : ''}{total.crates > 0 && total.kg > 0 ? ' + ' : ''}{total.kg > 0 ? `${total.kg}kg` : ''}{total.crates === 0 && total.kg === 0 ? '0' : ''}
+                    </div>
                   </td>
                 );
               })}

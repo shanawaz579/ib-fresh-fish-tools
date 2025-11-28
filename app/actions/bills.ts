@@ -422,20 +422,24 @@ export async function getBillForCustomerOnDate(customerId: number, date: string)
 }
 
 // Get customer's pending balance (total of all unpaid bills)
-export async function getCustomerPendingBalance(customerId: number): Promise<number> {
+// excludeBillId: exclude a specific bill from calculation (useful when editing)
+export async function getCustomerPendingBalance(customerId: number, excludeBillId?: number): Promise<number> {
   try {
-    const { data, error } = await supabase
+    let query = supabase
       .from('bills')
-      .select('total, amount_received')
+      .select('id, balance_due')
       .eq('customer_id', customerId)
       .in('payment_status', ['pending', 'partial']);
 
+    const { data, error } = await query;
+
     if (error) throw error;
 
-    // Calculate total pending: sum of (total - amount_received) for all unpaid bills
+    // Calculate total pending: sum of balance_due for all unpaid bills
+    // Exclude the bill being edited if provided
     const pending = (data || []).reduce((sum, bill) => {
-      const billBalance = (bill.total || 0) - (bill.amount_received || 0);
-      return sum + billBalance;
+      if (excludeBillId && bill.id === excludeBillId) return sum;
+      return sum + (bill.balance_due || 0);
     }, 0);
 
     return pending;
