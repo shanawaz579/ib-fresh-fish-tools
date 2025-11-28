@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { getFarmers, getFishVarieties, getPurchasesByDate } from '@/app/actions/stock';
 import {
@@ -22,10 +22,11 @@ type BillItemForm = {
   quantity_crates: number;
   quantity_kg: number;
   actual_weight: number;
+  billable_weight: number;
   rate_per_kg: number;
 };
 
-export default function PurchaseBillsPage() {
+function PurchaseBillsContent() {
   const searchParams = useSearchParams();
   const urlDate = searchParams.get('date');
   const urlFarmerId = searchParams.get('farmerId');
@@ -64,6 +65,16 @@ export default function PurchaseBillsPage() {
     loadData();
   }, [date]);
 
+  // Update billable weights when weight deduction changes
+  useEffect(() => {
+    if (billItems.length > 0) {
+      setBillItems(billItems.map(item => ({
+        ...item,
+        billable_weight: calculateBillableWeight(item.actual_weight),
+      })));
+    }
+  }, [weightDeductionPercentage, applyWeightDeduction]);
+
   // Auto-load purchases when URL parameters are present
   useEffect(() => {
     const autoLoadPurchases = async () => {
@@ -90,6 +101,7 @@ export default function PurchaseBillsPage() {
               quantity_crates: 0,
               quantity_kg: 0,
               actual_weight: 0,
+              billable_weight: 0,
               rate_per_kg: lastRate || 0,
             };
           }
@@ -99,7 +111,13 @@ export default function PurchaseBillsPage() {
           grouped[varietyId].actual_weight += purchase.quantity_kg;
         }
 
-        setBillItems(Object.values(grouped));
+        // Calculate billable weight for each item (apply weight deduction)
+        const itemsWithBillableWeight = Object.values(grouped).map(item => ({
+          ...item,
+          billable_weight: calculateBillableWeight(item.actual_weight),
+        }));
+
+        setBillItems(itemsWithBillableWeight);
       }
     };
 
@@ -144,6 +162,7 @@ export default function PurchaseBillsPage() {
           quantity_crates: 0,
           quantity_kg: 0,
           actual_weight: 0,
+          billable_weight: 0,
           rate_per_kg: lastRate || 0,
         };
       }
@@ -153,7 +172,13 @@ export default function PurchaseBillsPage() {
       grouped[varietyId].actual_weight += purchase.quantity_kg;
     }
 
-    setBillItems(Object.values(grouped));
+    // Calculate billable weight for each item (apply weight deduction)
+    const itemsWithBillableWeight = Object.values(grouped).map(item => ({
+      ...item,
+      billable_weight: calculateBillableWeight(item.actual_weight),
+    }));
+
+    setBillItems(itemsWithBillableWeight);
   };
 
   const handleAddItem = async () => {
@@ -202,6 +227,7 @@ export default function PurchaseBillsPage() {
       quantity_crates: crates,
       quantity_kg: remainingKg,
       actual_weight: kg,
+      billable_weight: calculateBillableWeight(kg),
       rate_per_kg: rate,
     };
 
@@ -288,6 +314,7 @@ export default function PurchaseBillsPage() {
 
     setSubmitting(true);
     const deduction = applyWeightDeduction ? parseFloat(weightDeductionPercentage) : 0;
+    const paid = parseFloat(amountPaid) || 0;
 
     const result = await createPurchaseBill(
       parseInt(selectedFarmerId),
@@ -297,7 +324,7 @@ export default function PurchaseBillsPage() {
       deduction,
       otherDeductions,
       notes || undefined,
-      parseFloat(amountPaid) || 0
+      paid > 0 ? { amount: paid, payment_date: date, payment_mode: 'cash' } : undefined
     );
 
     if (result) {
@@ -343,14 +370,6 @@ export default function PurchaseBillsPage() {
       default:
         return 'bg-red-100 text-red-700';
     }
-  };
-
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-    });
   };
 
   return (
@@ -865,7 +884,7 @@ export default function PurchaseBillsPage() {
                             </div>
                             {bill.commission_amount > 0 && (
                               <div className="flex justify-between text-red-600">
-                                <span>Commission ({bill.commission_percentage}%):</span>
+                                <span>Commission (₹{bill.commission_per_kg}/kg):</span>
                                 <span>-₹{bill.commission_amount.toFixed(2)}</span>
                               </div>
                             )}
@@ -917,5 +936,13 @@ export default function PurchaseBillsPage() {
         </div>
       </div>
     </ProtectedRoute>
+  );
+}
+
+export default function PurchaseBillsPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-br from-slate-50 to-orange-50 p-6 flex items-center justify-center"><div className="text-gray-500">Loading...</div></div>}>
+      <PurchaseBillsContent />
+    </Suspense>
   );
 }
