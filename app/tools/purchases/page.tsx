@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { getFishVarieties, getPurchasesByDate, addPurchase, deletePurchase, updatePurchase, getFarmers } from '@/app/actions/stock';
 import SearchableSelect from '@/components/SearchableSelect';
@@ -47,15 +47,7 @@ export default function PurchasePage() {
     items: purchases.length,
   };
 
-  useEffect(() => {
-    loadData();
-  }, [date]);
-
-  useEffect(() => {
-    groupPurchases();
-  }, [purchases]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     const [purchasesData, varietiesData, farmersData] = await Promise.all([
       getPurchasesByDate(date),
@@ -66,7 +58,26 @@ export default function PurchasePage() {
     setVarieties(varietiesData);
     setFarmers(farmersData);
     setLoading(false);
-  };
+  }, [date]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchData = async () => {
+      await loadData();
+      if (cancelled) return;
+    };
+
+    fetchData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadData]);
+
+  useEffect(() => {
+    groupPurchases();
+  }, [purchases]);
 
   const groupPurchases = () => {
     const grouped: { [key: string]: GroupedPurchase } = {};

@@ -183,85 +183,7 @@ export default function SalesSpreadsheetPage() {
     });
   };
 
-  useEffect(() => {
-    loadData();
-  }, [date]);
-
-  // Sync columnOrder whenever selectedVarietyIds changes
-  useEffect(() => {
-    const newOrder = selectedVarietyIds.map(id => {
-      const v = varieties.find(vv => vv.id === id);
-      return { varietyId: id, varietyName: v?.name || '' };
-    });
-    setColumnOrder(newOrder);
-  }, [selectedVarietyIds, varieties]);
-
-  const loadData = async () => {
-    setLoading(true);
-
-    // First, cleanup any duplicate sales for this date
-    const cleanup = await cleanupDuplicateSales(date);
-    if (cleanup.deleted > 0) {
-      console.log(`Cleaned up ${cleanup.deleted} duplicate sales records`);
-    }
-
-    const [varietiesData, customersData, purchasesData, salesData] = await Promise.all([
-      getFishVarieties(),
-      getCustomers(),
-      getPurchasesByDate(date),
-      getSalesByDate(date),
-    ]);
-
-    setVarieties(varietiesData);
-    setCustomers(customersData);
-    setPurchases(purchasesData);
-
-    // Get varieties that have purchases on this date
-    let purchaseVarietyIds = [...new Set(purchasesData.map(p => p.fish_variety_id))];
-    purchaseVarietyIds = sortByHardcodedOrder(purchaseVarietyIds, varietiesData);
-
-    // Set varieties with purchases for this date as default
-    if (purchaseVarietyIds.length > 0) {
-      setSelectedVarietyIds(purchaseVarietyIds);
-    } else {
-      // If no purchases, use the default varieties in preferred order
-      const defaultNames = ['Pangasius Big', 'Rohu Big/Medium', 'Katla Big/Medium', 'Tilapia Big/Medium'];
-      const defaultIds = varietiesData
-        .filter((v: FishVariety) => defaultNames.includes(v.name))
-        .map((v: FishVariety) => v.id);
-      const sortedDefaultIds = sortByHardcodedOrder(defaultIds, varietiesData);
-      setSelectedVarietyIds(sortedDefaultIds);
-    }
-
-    // Load existing sales
-    loadExistingSales(salesData);
-
-    // Load existing bills for customers on this date
-    await loadExistingBills(salesData);
-
-    setLoading(false);
-  };
-
-  const loadExistingBills = async (salesData: any[]) => {
-    // Get unique customer IDs from sales
-    const customerIds = [...new Set(salesData.map(s => s.customer_id))];
-
-    // Check for existing bills for each customer
-    const bills: {[customerId: number]: Bill} = {};
-
-    await Promise.all(
-      customerIds.map(async (customerId) => {
-        const existingBill = await getBillForCustomerOnDate(customerId, date);
-        if (existingBill) {
-          bills[customerId] = existingBill;
-        }
-      })
-    );
-
-    setCustomerBills(bills);
-  };
-
-  const loadExistingSales = (salesData: any[]) => {
+  const loadExistingSales = useCallback((salesData: any[]) => {
     if (salesData.length === 0) {
       setRows([{ customerId: null, items: {} }]);
       return;
@@ -309,7 +231,96 @@ export default function SalesSpreadsheetPage() {
     });
 
     setRows(newRows.length > 0 ? newRows : [{ customerId: null, items: {} }]);
-  };
+  }, []);
+
+  const loadExistingBills = useCallback(async (salesData: any[]) => {
+    // Get unique customer IDs from sales
+    const customerIds = [...new Set(salesData.map(s => s.customer_id))];
+
+    // Check for existing bills for each customer
+    const bills: {[customerId: number]: Bill} = {};
+
+    await Promise.all(
+      customerIds.map(async (customerId) => {
+        const existingBill = await getBillForCustomerOnDate(customerId, date);
+        if (existingBill) {
+          bills[customerId] = existingBill;
+        }
+      })
+    );
+
+    setCustomerBills(bills);
+  }, [date]);
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+
+    // First, cleanup any duplicate sales for this date
+    const cleanup = await cleanupDuplicateSales(date);
+    if (cleanup.deleted > 0) {
+      console.log(`Cleaned up ${cleanup.deleted} duplicate sales records`);
+    }
+
+    const [varietiesData, customersData, purchasesData, salesData] = await Promise.all([
+      getFishVarieties(),
+      getCustomers(),
+      getPurchasesByDate(date),
+      getSalesByDate(date),
+    ]);
+
+    setVarieties(varietiesData);
+    setCustomers(customersData);
+    setPurchases(purchasesData);
+
+    // Get varieties that have purchases on this date
+    let purchaseVarietyIds = [...new Set(purchasesData.map(p => p.fish_variety_id))];
+    purchaseVarietyIds = sortByHardcodedOrder(purchaseVarietyIds, varietiesData);
+
+    // Set varieties with purchases for this date as default
+    if (purchaseVarietyIds.length > 0) {
+      setSelectedVarietyIds(purchaseVarietyIds);
+    } else {
+      // If no purchases, use the default varieties in preferred order
+      const defaultNames = ['Pangasius Big', 'Rohu Big/Medium', 'Katla Big/Medium', 'Tilapia Big/Medium'];
+      const defaultIds = varietiesData
+        .filter((v: FishVariety) => defaultNames.includes(v.name))
+        .map((v: FishVariety) => v.id);
+      const sortedDefaultIds = sortByHardcodedOrder(defaultIds, varietiesData);
+      setSelectedVarietyIds(sortedDefaultIds);
+    }
+
+    // Load existing sales
+    loadExistingSales(salesData);
+
+    // Load existing bills for customers on this date
+    await loadExistingBills(salesData);
+
+    setLoading(false);
+  }, [date, loadExistingSales, loadExistingBills]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchData = async () => {
+      await loadData();
+      if (cancelled) return;
+    };
+
+    fetchData();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [loadData]);
+
+  // Sync columnOrder whenever selectedVarietyIds changes
+  useEffect(() => {
+    const newOrder = selectedVarietyIds.map(id => {
+      const v = varieties.find(vv => vv.id === id);
+      return { varietyId: id, varietyName: v?.name || '' };
+    });
+    setColumnOrder(newOrder);
+  }, [selectedVarietyIds, varieties]);
 
   // Calculate total purchases for a variety (for header display)
   const getTotalPurchases = (varietyId: number) => {

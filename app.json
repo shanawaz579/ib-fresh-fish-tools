@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "cda009c6-0985-4e20-861a-e11553c63ad9"
+      }
+    },
+    "android": {
+      "package": "com.shanawaz579.ibfreshfishtools"
+    }
+  }
+}
