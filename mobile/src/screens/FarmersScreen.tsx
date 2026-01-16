@@ -247,68 +247,86 @@ export default function FarmersScreen() {
             <ScrollView>
               <Text style={styles.modalTitle}>Add New Farmer</Text>
 
+              <Text style={styles.label}>Farmer Name *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Farmer Name *"
+                placeholder="Enter farmer name"
+                placeholderTextColor="#9CA3AF"
                 value={formData.name}
                 onChangeText={(text) => setFormData({ ...formData, name: text })}
               />
 
+              <Text style={styles.label}>Phone</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Phone"
+                placeholder="Enter phone number"
+                placeholderTextColor="#9CA3AF"
                 value={formData.phone}
                 keyboardType="phone-pad"
                 onChangeText={(text) => setFormData({ ...formData, phone: text })}
               />
 
+              <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Email"
+                placeholder="Enter email address"
+                placeholderTextColor="#9CA3AF"
                 value={formData.email}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 onChangeText={(text) => setFormData({ ...formData, email: text })}
               />
 
+              <Text style={styles.label}>Address</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Address"
+                placeholder="Enter address"
+                placeholderTextColor="#9CA3AF"
                 value={formData.address}
                 onChangeText={(text) => setFormData({ ...formData, address: text })}
               />
 
+              <Text style={styles.label}>City</Text>
               <TextInput
                 style={styles.input}
-                placeholder="City"
+                placeholder="Enter city"
+                placeholderTextColor="#9CA3AF"
                 value={formData.city}
                 onChangeText={(text) => setFormData({ ...formData, city: text })}
               />
 
+              <Text style={styles.label}>State</Text>
               <TextInput
                 style={styles.input}
-                placeholder="State"
+                placeholder="Enter state"
+                placeholderTextColor="#9CA3AF"
                 value={formData.state}
                 onChangeText={(text) => setFormData({ ...formData, state: text })}
               />
 
+              <Text style={styles.label}>Bank Account</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Bank Account"
+                placeholder="Enter bank account number"
+                placeholderTextColor="#9CA3AF"
                 value={formData.bank_account}
                 onChangeText={(text) => setFormData({ ...formData, bank_account: text })}
               />
 
+              <Text style={styles.label}>Bank Name</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Bank Name"
+                placeholder="Enter bank name"
+                placeholderTextColor="#9CA3AF"
                 value={formData.bank_name}
                 onChangeText={(text) => setFormData({ ...formData, bank_name: text })}
               />
 
+              <Text style={styles.label}>Notes</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Notes"
+                placeholder="Enter notes (optional)"
+                placeholderTextColor="#9CA3AF"
                 value={formData.notes}
                 multiline
                 numberOfLines={3}
@@ -355,68 +373,86 @@ export default function FarmersScreen() {
             <ScrollView>
               <Text style={styles.modalTitle}>Edit Farmer</Text>
 
+              <Text style={styles.label}>Farmer Name *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Farmer Name *"
+                placeholder="Enter farmer name"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.name}
                 onChangeText={(text) => setEditingData({ ...editingData, name: text })}
               />
 
+              <Text style={styles.label}>Phone</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Phone"
+                placeholder="Enter phone number"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.phone}
                 keyboardType="phone-pad"
                 onChangeText={(text) => setEditingData({ ...editingData, phone: text })}
               />
 
+              <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Email"
+                placeholder="Enter email address"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.email}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 onChangeText={(text) => setEditingData({ ...editingData, email: text })}
               />
 
+              <Text style={styles.label}>Address</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Address"
+                placeholder="Enter address"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.address}
                 onChangeText={(text) => setEditingData({ ...editingData, address: text })}
               />
 
+              <Text style={styles.label}>City</Text>
               <TextInput
                 style={styles.input}
-                placeholder="City"
+                placeholder="Enter city"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.city}
                 onChangeText={(text) => setEditingData({ ...editingData, city: text })}
               />
 
+              <Text style={styles.label}>State</Text>
               <TextInput
                 style={styles.input}
-                placeholder="State"
+                placeholder="Enter state"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.state}
                 onChangeText={(text) => setEditingData({ ...editingData, state: text })}
               />
 
+              <Text style={styles.label}>Bank Account</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Bank Account"
+                placeholder="Enter bank account number"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.bank_account}
                 onChangeText={(text) => setEditingData({ ...editingData, bank_account: text })}
               />
 
+              <Text style={styles.label}>Bank Name</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Bank Name"
+                placeholder="Enter bank name"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.bank_name}
                 onChangeText={(text) => setEditingData({ ...editingData, bank_name: text })}
               />
 
+              <Text style={styles.label}>Notes</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="Notes"
+                placeholder="Enter notes (optional)"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.notes}
                 multiline
                 numberOfLines={3}
@@ -558,13 +594,21 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 20,
   },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 6,
+    marginTop: 4,
+  },
   input: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    color: '#111827',
     marginBottom: 12,
   },
   textArea: {

@@ -11,6 +11,9 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import {
   getFishVarieties,
   getPurchasesByDate,
@@ -22,7 +25,10 @@ import {
 } from '../api/stock';
 import type { Purchase, FishVariety, Farmer } from '../types';
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 export default function PurchaseScreen() {
+  const navigation = useNavigation<NavigationProp>();
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [varieties, setVarieties] = useState<FishVariety[]>([]);
@@ -32,6 +38,8 @@ export default function PurchaseScreen() {
 
   // Form state
   const [farmerId, setFarmerId] = useState<number | null>(null);
+  const [location, setLocation] = useState('');
+  const [secondaryName, setSecondaryName] = useState('');
   const [fishVarietyId, setFishVarietyId] = useState<number | null>(null);
   const [quantityCrates, setQuantityCrates] = useState('');
   const [quantityKg, setQuantityKg] = useState('');
@@ -45,6 +53,8 @@ export default function PurchaseScreen() {
 
   // Edit mode state
   const [editingFarmerId, setEditingFarmerId] = useState<number | null>(null);
+  const [editLocation, setEditLocation] = useState('');
+  const [editSecondaryName, setEditSecondaryName] = useState('');
   const [editItems, setEditItems] = useState<Array<{
     id: number;
     varietyId: number;
@@ -175,16 +185,23 @@ export default function PurchaseScreen() {
       return;
     }
 
+    if (!location || !secondaryName) {
+      Alert.alert('Error', 'Please enter Location and Secondary Name');
+      return;
+    }
+
     setSubmitting(true);
     try {
       // Save all items
       for (const item of tempItems) {
-        await addPurchase(farmerId, item.varietyId, item.crates, item.kg, date);
+        await addPurchase(farmerId, item.varietyId, item.crates, item.kg, date, location, secondaryName);
       }
 
       // Clear form
       setTempItems([]);
       setFarmerId(null);
+      setLocation('');
+      setSecondaryName('');
       setFishVarietyId(null);
       setQuantityCrates('');
       setQuantityKg('');
@@ -210,6 +227,8 @@ export default function PurchaseScreen() {
             onPress: () => {
               setTempItems([]);
               setFarmerId(null);
+              setLocation('');
+              setSecondaryName('');
             },
           },
         ]
@@ -260,6 +279,12 @@ export default function PurchaseScreen() {
   // Edit mode functions
   const handleEditFarmer = (farmerId: number, farmerPurchases: Purchase[]) => {
     setEditingFarmerId(farmerId);
+
+    // Get location and secondary_name from first purchase (they should all be the same for a farmer)
+    const firstPurchase = farmerPurchases[0];
+    setEditLocation(firstPurchase?.location || '');
+    setEditSecondaryName(firstPurchase?.secondary_name || '');
+
     setEditItems(farmerPurchases.map(purchase => ({
       id: purchase.id,
       varietyId: purchase.fish_variety_id,
@@ -278,6 +303,8 @@ export default function PurchaseScreen() {
 
   const handleCancelEdit = () => {
     setEditingFarmerId(null);
+    setEditLocation('');
+    setEditSecondaryName('');
     setEditItems([]);
   };
 
@@ -330,6 +357,11 @@ export default function PurchaseScreen() {
   const handleSaveEditChanges = async () => {
     if (!editingFarmerId) return;
 
+    if (!editLocation || !editSecondaryName) {
+      Alert.alert('Error', 'Please enter Location and Secondary Name');
+      return;
+    }
+
     setSubmitting(true);
     try {
       for (const item of editItems) {
@@ -337,11 +369,11 @@ export default function PurchaseScreen() {
 
         if (item.id > 0) {
           // Update existing
-          await updatePurchase(item.id, editingFarmerId, item.varietyId, item.crates, item.kg);
+          await updatePurchase(item.id, editingFarmerId, item.varietyId, item.crates, item.kg, editLocation, editSecondaryName);
         } else {
           // Create new
           if (item.crates > 0 || item.kg > 0) {
-            await addPurchase(editingFarmerId, item.varietyId, item.crates, item.kg, date);
+            await addPurchase(editingFarmerId, item.varietyId, item.crates, item.kg, date, editLocation, editSecondaryName);
           }
         }
       }
@@ -431,6 +463,33 @@ export default function PurchaseScreen() {
           </View>
         ) : (
           <>
+            {/* Location and Secondary Name Fields */}
+            <View style={styles.row}>
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>
+                  Location <Text style={styles.required}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Market, Farm, Dock"
+                  value={location}
+                  onChangeText={setLocation}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>
+                  Secondary Name <Text style={styles.required}>*</Text>
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Alternate name"
+                  value={secondaryName}
+                  onChangeText={setSecondaryName}
+                />
+              </View>
+            </View>
+
             {/* Temp Items Preview */}
             {tempItems.length > 0 && (
               <View style={styles.tempItemsContainer}>
@@ -566,6 +625,34 @@ export default function PurchaseScreen() {
                   </TouchableOpacity>
                 </View>
 
+                {/* Location and Secondary Name in Edit Mode */}
+                <View style={styles.editItemContainer}>
+                  <View style={styles.editRow}>
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.label}>
+                        Location <Text style={styles.required}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.editInput}
+                        placeholder="Market, Farm, Dock"
+                        value={editLocation}
+                        onChangeText={setEditLocation}
+                      />
+                    </View>
+                    <View style={styles.inputContainer}>
+                      <Text style={styles.label}>
+                        Secondary Name <Text style={styles.required}>*</Text>
+                      </Text>
+                      <TextInput
+                        style={styles.editInput}
+                        placeholder="Alternate name"
+                        value={editSecondaryName}
+                        onChangeText={setEditSecondaryName}
+                      />
+                    </View>
+                  </View>
+                </View>
+
                 {editItems.map((item, index) => (
                   <View key={index} style={styles.editItemContainer}>
                     <View style={styles.pickerContainer}>
@@ -635,12 +722,58 @@ export default function PurchaseScreen() {
                       <Text style={styles.collapseIcon}>
                         {collapsedFarmers.has(farmerId) ? '▶' : '▼'}
                       </Text>
-                      <Text style={styles.farmerName}>{farmerName}</Text>
+                      <View style={styles.farmerNameContainer}>
+                        <Text style={styles.farmerName}>{farmerName}</Text>
+                        {/* Display Location and Secondary Name as subtitle */}
+                        {(farmerPurchases[0]?.location || farmerPurchases[0]?.secondary_name) && (
+                          <Text style={styles.farmerSubtitle}>
+                            {farmerPurchases[0]?.location && farmerPurchases[0]?.location}
+                            {farmerPurchases[0]?.location && farmerPurchases[0]?.secondary_name && ' • '}
+                            {farmerPurchases[0]?.secondary_name && farmerPurchases[0]?.secondary_name}
+                          </Text>
+                        )}
+                        {/* Billing Status Indicator */}
+                        {farmerPurchases[0]?.billing_status && (
+                          <View style={styles.billingStatusContainer}>
+                            <View style={[
+                              styles.billingStatusBadge,
+                              farmerPurchases[0].billing_status === 'billed' && styles.billingStatusBilled,
+                              farmerPurchases[0].billing_status === 'unbilled' && styles.billingStatusUnbilled,
+                              farmerPurchases[0].billing_status === 'partial' && styles.billingStatusPartial,
+                            ]}>
+                              <Text style={styles.billingStatusText}>
+                                {farmerPurchases[0].billing_status === 'billed' && '✓ Billed'}
+                                {farmerPurchases[0].billing_status === 'unbilled' && '⚠ Not Billed'}
+                                {farmerPurchases[0].billing_status === 'partial' && '◐ Partial'}
+                              </Text>
+                            </View>
+                          </View>
+                        )}
+                      </View>
                     </View>
                     <View style={styles.farmerHeaderRight}>
                       <Text style={styles.farmerCount}>
                         {farmerPurchases.reduce((sum, p) => sum + p.quantity_crates, 0)} cr
                       </Text>
+                      {/* Show Generate Bill button only for unbilled purchases */}
+                      {farmerPurchases[0]?.billing_status === 'unbilled' && (
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            navigation.navigate('PurchaseBillGeneration', {
+                              farmer_id: farmerId,
+                              farmer_name: farmerName,
+                              farmer_location: farmerPurchases[0]?.location,
+                              farmer_secondary_name: farmerPurchases[0]?.secondary_name,
+                              purchases: farmerPurchases,
+                              date: date,
+                            });
+                          }}
+                          style={styles.generateBillButton}
+                        >
+                          <Text style={styles.generateBillButtonText}>Bill</Text>
+                        </TouchableOpacity>
+                      )}
                       <TouchableOpacity
                         onPress={(e) => {
                           e.stopPropagation();
@@ -654,8 +787,10 @@ export default function PurchaseScreen() {
                   </View>
                 </TouchableOpacity>
 
-                {!collapsedFarmers.has(farmerId) && farmerPurchases.map((purchase) => (
-                  <View key={purchase.id} style={styles.purchaseItem}>
+                {!collapsedFarmers.has(farmerId) && (
+                  <>
+                    {farmerPurchases.map((purchase) => (
+                      <View key={purchase.id} style={styles.purchaseItem}>
                     <View style={styles.purchaseInfo}>
                       <Text style={styles.varietyName}>{purchase.fish_variety_name}</Text>
                       <Text style={styles.quantity}>
@@ -671,7 +806,9 @@ export default function PurchaseScreen() {
                       <Text style={styles.deleteButtonText}>Delete</Text>
                     </TouchableOpacity>
                   </View>
-                ))}
+                    ))}
+                  </>
+                )}
               </View>
             );
           })
@@ -968,10 +1105,18 @@ const styles = StyleSheet.create({
     color: '#6B7280',
     width: 16,
   },
+  farmerNameContainer: {
+    flex: 1,
+  },
   farmerName: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#111827',
+  },
+  farmerSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginTop: 2,
   },
   farmerCount: {
     fontSize: 14,
@@ -1014,6 +1159,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  generateBillButton: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  generateBillButtonText: {
+    color: '#1E40AF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   editButton: {
     backgroundColor: '#D1FAE5',
@@ -1120,5 +1277,31 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: 'bold',
+  },
+  required: {
+    color: '#DC2626',
+    fontSize: 14,
+  },
+  billingStatusContainer: {
+    marginTop: 4,
+  },
+  billingStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  billingStatusBilled: {
+    backgroundColor: '#D1FAE5',
+  },
+  billingStatusUnbilled: {
+    backgroundColor: '#FEE2E2',
+  },
+  billingStatusPartial: {
+    backgroundColor: '#FEF3C7',
+  },
+  billingStatusText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

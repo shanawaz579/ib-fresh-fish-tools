@@ -150,12 +150,16 @@ export default function FishVarietiesScreen() {
         <View style={styles.addSection}>
           <Text style={styles.sectionTitle}>Add New Fish Variety</Text>
           <View style={styles.addForm}>
-            <TextInput
-              style={styles.addInput}
-              placeholder="Enter fish variety name"
-              value={newName}
-              onChangeText={setNewName}
-            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.label}>Fish Variety Name</Text>
+              <TextInput
+                style={styles.addInput}
+                placeholder="Enter fish variety name"
+                placeholderTextColor="#9CA3AF"
+                value={newName}
+                onChangeText={setNewName}
+              />
+            </View>
             <TouchableOpacity
               onPress={handleAddVariety}
               disabled={submitting}
@@ -183,29 +187,34 @@ export default function FishVarietiesScreen() {
               <View key={variety.id} style={styles.varietyCard}>
                 {editingId === variety.id ? (
                   // Edit Mode
-                  <>
-                    <TextInput
-                      style={styles.editInput}
-                      value={editingName}
-                      onChangeText={setEditingName}
-                      autoFocus
-                    />
-                    <View style={styles.editActions}>
-                      <TouchableOpacity
-                        onPress={handleSaveEdit}
-                        disabled={submitting}
-                        style={[styles.saveButton, submitting && styles.disabledButton]}
-                      >
-                        <Text style={styles.saveButtonText}>Save</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={handleCancelEdit}
-                        style={styles.cancelButton}
-                      >
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
-                      </TouchableOpacity>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.label}>Fish Variety Name</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <TextInput
+                        style={styles.editInput}
+                        placeholder="Enter fish variety name"
+                        placeholderTextColor="#9CA3AF"
+                        value={editingName}
+                        onChangeText={setEditingName}
+                        autoFocus
+                      />
+                      <View style={styles.editActions}>
+                        <TouchableOpacity
+                          onPress={handleSaveEdit}
+                          disabled={submitting}
+                          style={[styles.saveButton, submitting && styles.disabledButton]}
+                        >
+                          <Text style={styles.saveButtonText}>Save</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={handleCancelEdit}
+                          style={styles.cancelButton}
+                        >
+                          <Text style={styles.cancelButtonText}>Cancel</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                  </>
+                  </View>
                 ) : (
                   // View Mode
                   <>
@@ -276,12 +285,13 @@ const styles = StyleSheet.create({
   },
   addInput: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    color: '#111827',
   },
   addButton: {
     backgroundColor: '#10B981',
@@ -357,12 +367,13 @@ const styles = StyleSheet.create({
   },
   editInput: {
     flex: 1,
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#3B82F6',
     borderRadius: 8,
     padding: 8,
     fontSize: 16,
+    color: '#111827',
     marginRight: 8,
   },
   editActions: {
@@ -393,5 +404,12 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.5,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 6,
+    marginTop: 4,
   },
 });

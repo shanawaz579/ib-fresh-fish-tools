@@ -9,8 +9,8 @@ import {
   RefreshControl,
   Alert,
 } from 'react-native';
-import { getSalesByDate, getPackingStatusByDate, togglePackingStatus, clearPackingStatusByDate } from '../api/stock';
-import type { Sale } from '../types';
+import { getSalesByDate, getPackingStatusByDate, togglePackingStatus, clearPackingStatusByDate, getCustomers } from '../api/stock';
+import type { Sale, Customer } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 interface PackingItem {
@@ -59,6 +59,7 @@ export default function PackingScreen() {
   const { signOut, user } = useAuth();
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadedItems, setLoadedItems] = useState<Set<number>>(new Set());
@@ -66,6 +67,10 @@ export default function PackingScreen() {
   const [completedSectionExpanded, setCompletedSectionExpanded] = useState(false);
 
   const t = translations.en;
+
+  useEffect(() => {
+    loadCustomers();
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -78,6 +83,11 @@ export default function PackingScreen() {
       .map(g => g.customerId);
     setExpandedCustomers(new Set(inProgressCustomers));
   }, [customerGroups, loadedItems]);
+
+  const loadCustomers = async () => {
+    const customersData = await getCustomers();
+    setCustomers(customersData);
+  };
 
   const loadData = async (isRefreshing = false) => {
     if (isRefreshing) {
@@ -125,7 +135,23 @@ export default function PackingScreen() {
       return acc;
     }, {});
 
-    setCustomerGroups(Object.values(grouped));
+    // Sort customer groups: Wholesale Market first, then others, both sorted by total boxes descending
+    const sortedGroups = Object.values(grouped).sort((a, b) => {
+      const customerA = customers.find(c => c.id === a.customerId);
+      const customerB = customers.find(c => c.id === b.customerId);
+
+      const isWholesaleA = customerA?.business_type === 'Wholesale Market';
+      const isWholesaleB = customerB?.business_type === 'Wholesale Market';
+
+      // Wholesale Market customers come first
+      if (isWholesaleA && !isWholesaleB) return -1;
+      if (!isWholesaleA && isWholesaleB) return 1;
+
+      // Within each group, sort by total boxes (descending)
+      return b.totalBoxes - a.totalBoxes;
+    });
+
+    setCustomerGroups(sortedGroups);
 
     if (isRefreshing) {
       setRefreshing(false);
@@ -274,6 +300,7 @@ export default function PackingScreen() {
 
       <ScrollView
         style={styles.content}
+        contentContainerStyle={styles.contentContainer}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3B82F6']} tintColor="#3B82F6" />
         }
@@ -505,7 +532,10 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     padding: 16,
+    paddingBottom: 120,
   },
   loader: {
     marginTop: 40,

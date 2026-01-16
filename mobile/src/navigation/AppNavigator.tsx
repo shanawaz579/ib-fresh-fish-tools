@@ -14,6 +14,11 @@ import DashboardScreen from '../screens/DashboardScreen';
 import BillGenerationScreen from '../screens/BillGenerationScreen';
 import PackingScreen from '../screens/PackingScreen';
 import ItemsByCustomerScreen from '../screens/ItemsByCustomerScreen';
+import PaymentsScreen from '../screens/PaymentsScreen';
+import BillsViewScreen from '../screens/BillsViewScreen';
+import PurchaseBillGenerationScreen from '../screens/PurchaseBillGenerationScreen';
+import PurchaseBillsViewScreen from '../screens/PurchaseBillsViewScreen';
+import PurchaseBillDetailsScreen from '../screens/PurchaseBillDetailsScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -27,6 +32,20 @@ export type RootStackParamList = {
   Customers: undefined;
   FishVarieties: undefined;
   BillGeneration: undefined;
+  PurchaseBillGeneration: {
+    farmer_id: number;
+    farmer_name: string;
+    farmer_location?: string;
+    farmer_secondary_name?: string;
+    purchases: any[];
+    date: string;
+  };
+  Payments: undefined;
+  BillsView: undefined;
+  PurchaseBillsView: undefined;
+  PurchaseBillDetails: {
+    billId: number;
+  };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -69,6 +88,11 @@ function Navigation() {
           <Stack.Screen name="Purchase" component={PurchaseScreen} />
           <Stack.Screen name="Sales" component={SalesScreen} />
           <Stack.Screen name="BillGeneration" component={BillGenerationScreen} />
+          <Stack.Screen name="PurchaseBillGeneration" component={PurchaseBillGenerationScreen} />
+          <Stack.Screen name="Payments" component={PaymentsScreen} />
+          <Stack.Screen name="BillsView" component={BillsViewScreen} />
+          <Stack.Screen name="PurchaseBillsView" component={PurchaseBillsViewScreen} />
+          <Stack.Screen name="PurchaseBillDetails" component={PurchaseBillDetailsScreen} />
           <Stack.Screen name="Farmers" component={FarmersScreen} />
           <Stack.Screen name="Customers" component={CustomersScreen} />
           <Stack.Screen name="FishVarieties" component={FishVarietiesScreen} />

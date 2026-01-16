@@ -13,8 +13,9 @@ import {
   getFishVarieties,
   getPurchasesByDate,
   getSalesByDate,
+  getCustomers,
 } from '../api/stock';
-import type { Purchase, Sale, FishVariety } from '../types';
+import type { Purchase, Sale, FishVariety, Customer } from '../types';
 import { useAuth } from '../context/AuthContext';
 
 type Language = 'en' | 'te';
@@ -136,6 +137,7 @@ export default function DashboardScreen() {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [varieties, setVarieties] = useState<FishVariety[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [collapsedCustomers, setCollapsedCustomers] = useState<Set<number>>(new Set());
@@ -164,15 +166,17 @@ export default function DashboardScreen() {
       setLoading(true);
     }
 
-    const [purchasesData, salesData, varietiesData] = await Promise.all([
+    const [purchasesData, salesData, varietiesData, customersData] = await Promise.all([
       getPurchasesByDate(date),
       getSalesByDate(date),
       getFishVarieties(),
+      getCustomers(),
     ]);
 
     setPurchases(purchasesData);
     setSales(salesData);
     setVarieties(varietiesData);
+    setCustomers(customersData);
 
     if (isRefreshing) {
       setRefreshing(false);
@@ -289,8 +293,24 @@ export default function DashboardScreen() {
     return acc;
   }, [] as CustomerSalesGroup[]);
 
-  // Sort customers by total crates descending
-  customerSalesGroups.sort((a, b) => b.totalCrates - a.totalCrates);
+  // Sort customers: Wholesale Market first, then others, both sorted by total quantity descending
+  customerSalesGroups.sort((a, b) => {
+    const customerA = customers.find(c => c.id === a.customerId);
+    const customerB = customers.find(c => c.id === b.customerId);
+
+    const isWholesaleA = customerA?.business_type === 'Wholesale Market';
+    const isWholesaleB = customerB?.business_type === 'Wholesale Market';
+
+    // Wholesale Market customers come first
+    if (isWholesaleA && !isWholesaleB) return -1;
+    if (!isWholesaleA && isWholesaleB) return 1;
+
+    // Within each group, sort by total weight (crates * 35 + kg) descending
+    const weightA = (a.totalCrates * 35) + a.totalKg;
+    const weightB = (b.totalCrates * 35) + b.totalKg;
+
+    return weightB - weightA;
+  });
 
   const toggleCustomerCollapse = (customerId: number) => {
     setCollapsedCustomers(prev => {

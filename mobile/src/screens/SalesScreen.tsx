@@ -150,7 +150,7 @@ export default function SalesScreen() {
   };
 
   const toggleAllCustomers = () => {
-    const allCustomerIds = Object.values(groupedSales).map(sales => sales[0]?.customer_id).filter(Boolean);
+    const allCustomerIds = Object.values(sortedGroupedSales).map(sales => sales[0]?.customer_id).filter(Boolean);
 
     // If all are collapsed, expand all. Otherwise, collapse all.
     const allCollapsed = allCustomerIds.every(id => collapsedCustomers.has(id));
@@ -435,6 +435,32 @@ export default function SalesScreen() {
     return acc;
   }, {} as Record<string, Sale[]>);
 
+  // Sort customers: Wholesale Market first, then others, both sorted by total amount descending
+  const sortedGroupedSales = Object.entries(groupedSales).sort(([nameA, salesA], [nameB, salesB]) => {
+    const customerA = customers.find(c => c.name === nameA);
+    const customerB = customers.find(c => c.name === nameB);
+
+    const isWholesaleA = customerA?.business_type === 'Wholesale Market';
+    const isWholesaleB = customerB?.business_type === 'Wholesale Market';
+
+    // Wholesale Market customers come first
+    if (isWholesaleA && !isWholesaleB) return -1;
+    if (!isWholesaleA && isWholesaleB) return 1;
+
+    // Within each group, sort by total amount (descending)
+    const totalA = salesA.reduce((sum, sale) => sum + ((sale.quantity_crates * 35 + sale.quantity_kg) * 0), 0);
+    const totalB = salesB.reduce((sum, sale) => sum + ((sale.quantity_crates * 35 + sale.quantity_kg) * 0), 0);
+
+    // Actually just sort by number of items/total weight as proxy for total value
+    const weightA = salesA.reduce((sum, sale) => sum + (sale.quantity_crates * 35 + sale.quantity_kg), 0);
+    const weightB = salesB.reduce((sum, sale) => sum + (sale.quantity_crates * 35 + sale.quantity_kg), 0);
+
+    return weightB - weightA;
+  }).reduce((acc, [name, sales]) => {
+    acc[name] = sales;
+    return acc;
+  }, {} as Record<string, Sale[]>);
+
   return (
     <ScrollView
       style={styles.container}
@@ -676,13 +702,13 @@ export default function SalesScreen() {
       <View style={styles.listContainer}>
         <View style={styles.listHeader}>
           <Text style={styles.listTitle}>Today's Sales</Text>
-          {Object.keys(groupedSales).length > 0 && (
+          {Object.keys(sortedGroupedSales).length > 0 && (
             <TouchableOpacity
               onPress={toggleAllCustomers}
               style={styles.toggleAllButton}
             >
               <Text style={styles.toggleAllText}>
-                {Object.values(groupedSales).every((sales) =>
+                {Object.values(sortedGroupedSales).every((sales) =>
                   collapsedCustomers.has(sales[0]?.customer_id)
                 ) ? '▼ Expand All' : '▲ Collapse All'}
               </Text>
@@ -692,10 +718,10 @@ export default function SalesScreen() {
 
         {loading ? (
           <ActivityIndicator size="large" color="#3B82F6" style={styles.loader} />
-        ) : Object.keys(groupedSales).length === 0 ? (
+        ) : Object.keys(sortedGroupedSales).length === 0 ? (
           <Text style={styles.emptyText}>No sales for this date</Text>
         ) : (
-          Object.entries(groupedSales).map(([customerName, customerSales]) => {
+          Object.entries(sortedGroupedSales).map(([customerName, customerSales]) => {
             const customerId = customerSales[0]?.customer_id;
             const isEditing = editingCustomerId === customerId;
 

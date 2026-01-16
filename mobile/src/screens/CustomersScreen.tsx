@@ -250,58 +250,73 @@ export default function CustomersScreen() {
             <ScrollView>
               <Text style={styles.modalTitle}>Add New Customer</Text>
 
+              <Text style={styles.label}>Customer Name *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Customer Name *"
+                placeholderTextColor="#9CA3AF"
                 value={formData.name}
                 onChangeText={(text) => setFormData({ ...formData, name: text })}
               />
 
+              <Text style={styles.label}>Phone</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Phone"
+                placeholderTextColor="#9CA3AF"
                 value={formData.phone}
                 keyboardType="phone-pad"
                 onChangeText={(text) => setFormData({ ...formData, phone: text })}
               />
 
+              <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Email"
+                placeholderTextColor="#9CA3AF"
                 value={formData.email}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 onChangeText={(text) => setFormData({ ...formData, email: text })}
               />
 
+              <Text style={styles.label}>Contact Person</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Contact Person"
+                placeholderTextColor="#9CA3AF"
                 value={formData.contact_person}
                 onChangeText={(text) => setFormData({ ...formData, contact_person: text })}
               />
 
+              <Text style={styles.label}>Address</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Address"
+                placeholderTextColor="#9CA3AF"
                 value={formData.address}
                 onChangeText={(text) => setFormData({ ...formData, address: text })}
               />
 
+              <Text style={styles.label}>City</Text>
               <TextInput
                 style={styles.input}
                 placeholder="City"
+                placeholderTextColor="#9CA3AF"
                 value={formData.city}
                 onChangeText={(text) => setFormData({ ...formData, city: text })}
               />
 
+              <Text style={styles.label}>State</Text>
               <TextInput
                 style={styles.input}
                 placeholder="State"
+                placeholderTextColor="#9CA3AF"
                 value={formData.state}
                 onChangeText={(text) => setFormData({ ...formData, state: text })}
               />
 
+              <Text style={styles.label}>Business Type</Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={formData.business_type}
@@ -318,9 +333,11 @@ export default function CustomersScreen() {
                 </Picker>
               </View>
 
+              <Text style={styles.label}>Notes</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Notes"
+                placeholderTextColor="#9CA3AF"
                 value={formData.notes}
                 multiline
                 numberOfLines={3}
@@ -367,58 +384,73 @@ export default function CustomersScreen() {
             <ScrollView>
               <Text style={styles.modalTitle}>Edit Customer</Text>
 
+              <Text style={styles.label}>Customer Name *</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Customer Name *"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.name}
                 onChangeText={(text) => setEditingData({ ...editingData, name: text })}
               />
 
+              <Text style={styles.label}>Phone</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Phone"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.phone}
                 keyboardType="phone-pad"
                 onChangeText={(text) => setEditingData({ ...editingData, phone: text })}
               />
 
+              <Text style={styles.label}>Email</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Email"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.email}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 onChangeText={(text) => setEditingData({ ...editingData, email: text })}
               />
 
+              <Text style={styles.label}>Contact Person</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Contact Person"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.contact_person}
                 onChangeText={(text) => setEditingData({ ...editingData, contact_person: text })}
               />
 
+              <Text style={styles.label}>Address</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Address"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.address}
                 onChangeText={(text) => setEditingData({ ...editingData, address: text })}
               />
 
+              <Text style={styles.label}>City</Text>
               <TextInput
                 style={styles.input}
                 placeholder="City"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.city}
                 onChangeText={(text) => setEditingData({ ...editingData, city: text })}
               />
 
+              <Text style={styles.label}>State</Text>
               <TextInput
                 style={styles.input}
                 placeholder="State"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.state}
                 onChangeText={(text) => setEditingData({ ...editingData, state: text })}
               />
 
+              <Text style={styles.label}>Business Type</Text>
               <View style={styles.pickerContainer}>
                 <Picker
                   selectedValue={editingData.business_type}
@@ -435,9 +467,11 @@ export default function CustomersScreen() {
                 </Picker>
               </View>
 
+              <Text style={styles.label}>Notes</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
                 placeholder="Notes"
+                placeholderTextColor="#9CA3AF"
                 value={editingData.notes}
                 multiline
                 numberOfLines={3}
@@ -580,13 +614,21 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   input: {
-    backgroundColor: '#F9FAFB',
+    backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#D1D5DB',
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
+    color: '#111827',
     marginBottom: 12,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 6,
+    marginTop: 4,
   },
   textArea: {
     height: 80,

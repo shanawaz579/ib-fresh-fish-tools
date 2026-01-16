@@ -2,15 +2,15 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { getFarmers, getFishVarieties, getPurchasesByDate } from '@/app/actions/stock';
+import { getFarmers, getFishVarieties } from '@/app/actions/stock';
 import {
   getPurchasesForBilling,
   createPurchaseBill,
   getPurchaseBillsByDate,
   deletePurchaseBill,
   getLastPurchaseRateForVariety,
+  updatePurchaseBillLocationAndName,
   type PurchaseBill,
-  type PurchaseBillItem,
 } from '@/app/actions/purchaseBills';
 import type { Farmer, FishVariety } from '@/app/actions/stock';
 import SearchableSelect from '@/components/SearchableSelect';
@@ -48,7 +48,14 @@ function PurchaseBillsContent() {
   const [otherDeductions, setOtherDeductions] = useState<{ name: string; amount: number }[]>([]);
   const [notes, setNotes] = useState('');
   const [amountPaid, setAmountPaid] = useState('0');
+  const [location, setLocation] = useState('');
+  const [secondaryName, setSecondaryName] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit bill state
+  const [editingBillId, setEditingBillId] = useState<number | null>(null);
+  const [editBillLocation, setEditBillLocation] = useState('');
+  const [editBillSecondaryName, setEditBillSecondaryName] = useState('');
 
   // Other deduction form
   const [deductionName, setDeductionName] = useState('');
@@ -324,7 +331,9 @@ function PurchaseBillsContent() {
       deduction,
       otherDeductions,
       notes || undefined,
-      paid > 0 ? { amount: paid, payment_date: date, payment_mode: 'cash' } : undefined
+      paid > 0 ? { amount: paid, payment_date: date, payment_mode: 'cash' } : undefined,
+      location || undefined,
+      secondaryName || undefined
     );
 
     if (result) {
@@ -338,6 +347,8 @@ function PurchaseBillsContent() {
       setOtherDeductions([]);
       setNotes('');
       setAmountPaid('0');
+      setLocation('');
+      setSecondaryName('');
       await loadData();
     } else {
       alert('Failed to create purchase bill');
@@ -358,6 +369,48 @@ function PurchaseBillsContent() {
       }
     } else {
       alert('Failed to delete bill');
+    }
+  };
+
+  const handleEditBill = (bill: PurchaseBill, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingBillId(bill.id);
+    setEditBillLocation(bill.location || '');
+    setEditBillSecondaryName(bill.secondary_name || '');
+    // Expand the bill to show edit form
+    if (expandedBillId !== bill.id) {
+      setExpandedBillId(bill.id);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingBillId(null);
+    setEditBillLocation('');
+    setEditBillSecondaryName('');
+  };
+
+  const handleSaveEdit = async (billId: number) => {
+    const success = await updatePurchaseBillLocationAndName(
+      billId,
+      editBillLocation,
+      editBillSecondaryName
+    );
+
+    if (success) {
+      // Update local state
+      setBills((prev) =>
+        prev.map((b) =>
+          b.id === billId
+            ? { ...b, location: editBillLocation, secondary_name: editBillSecondaryName }
+            : b
+        )
+      );
+      setEditingBillId(null);
+      setEditBillLocation('');
+      setEditBillSecondaryName('');
+      alert('Bill updated successfully!');
+    } else {
+      alert('Failed to update bill');
     }
   };
 
@@ -465,6 +518,34 @@ function PurchaseBillsContent() {
                 >
                   Load Purchases
                 </button>
+              </div>
+            </div>
+
+            {/* Location and Secondary Name */}
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Location <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g., Market, Farm, Dock"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Secondary Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Alternate/Reference name"
+                  value={secondaryName}
+                  onChange={(e) => setSecondaryName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                />
               </div>
             </div>
 
@@ -812,6 +893,20 @@ function PurchaseBillsContent() {
                           {bill.payment_status}
                         </span>
                         <button
+                          onClick={(e) => handleEditBill(bill, e)}
+                          className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                          title="Edit location and secondary name"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                            />
+                          </svg>
+                        </button>
+                        <button
                           onClick={(e) => handleDeleteBill(bill.id, e)}
                           className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                         >
@@ -845,6 +940,64 @@ function PurchaseBillsContent() {
                     {/* Expanded Details */}
                     {expandedBillId === bill.id && (
                       <div className="px-4 pb-4 bg-gray-50 border-t border-gray-100">
+                        {/* Location and Secondary Name - Editable */}
+                        {editingBillId === bill.id ? (
+                          <div className="mt-3 mb-3 p-3 bg-blue-50 rounded border border-blue-300 text-sm">
+                            <div className="grid grid-cols-2 gap-3 mb-3">
+                              <div>
+                                <label className="block font-medium text-blue-900 mb-1">Location</label>
+                                <input
+                                  type="text"
+                                  value={editBillLocation}
+                                  onChange={(e) => setEditBillLocation(e.target.value)}
+                                  className="w-full px-2 py-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="Enter location"
+                                />
+                              </div>
+                              <div>
+                                <label className="block font-medium text-blue-900 mb-1">Secondary Name</label>
+                                <input
+                                  type="text"
+                                  value={editBillSecondaryName}
+                                  onChange={(e) => setEditBillSecondaryName(e.target.value)}
+                                  className="w-full px-2 py-1 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  placeholder="Enter secondary name"
+                                />
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleSaveEdit(bill.id)}
+                                className="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-xs font-medium"
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={handleCancelEdit}
+                                className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-xs font-medium"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          (bill.location || bill.secondary_name) && (
+                            <div className="mt-3 mb-3 p-3 bg-blue-50 rounded border border-blue-200 text-sm grid grid-cols-2 gap-2">
+                              {bill.location && (
+                                <div>
+                                  <span className="font-medium text-blue-900">Location:</span>
+                                  <span className="ml-2 text-blue-700">{bill.location}</span>
+                                </div>
+                              )}
+                              {bill.secondary_name && (
+                                <div>
+                                  <span className="font-medium text-blue-900">Secondary Name:</span>
+                                  <span className="ml-2 text-blue-700">{bill.secondary_name}</span>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        )}
                         <div className="mt-3 text-sm space-y-2">
                           {bill.items.map((item, idx) => (
                             <div key={idx} className="bg-white p-3 rounded border border-gray-200">

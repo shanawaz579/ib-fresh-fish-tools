@@ -34,6 +34,8 @@ export type PurchaseBill = {
   farmer_id: number;
   farmer_name?: string;
   bill_date: string;
+  location?: string; // Location where purchase was made
+  secondary_name?: string; // Alternate/secondary name for farmer
   items: PurchaseBillItem[];
   gross_amount: number; // Total before any deductions
   weight_deduction_percentage: number; // typically 5%
@@ -136,7 +138,9 @@ export async function createPurchaseBill(
   weightDeductionPercentage: number = 5, // default 5%
   otherDeductions: PurchaseBillDeduction[] = [],
   notes?: string,
-  initialPayment?: { amount: number; payment_date: string; payment_mode: 'cash' | 'upi' | 'neft' | 'other'; notes?: string }
+  initialPayment?: { amount: number; payment_date: string; payment_mode: 'cash' | 'upi' | 'neft' | 'other'; notes?: string },
+  location?: string,
+  secondaryName?: string
 ): Promise<PurchaseBill | null> {
   try {
     const billNumber = await getNextPurchaseBillNumber();
@@ -191,6 +195,8 @@ export async function createPurchaseBill(
         bill_number: billNumber,
         farmer_id: farmerId,
         bill_date: billDate,
+        location: location || null,
+        secondary_name: secondaryName || null,
         gross_amount: grossAmount,
         weight_deduction_percentage: weightDeductionPercentage,
         weight_deduction_amount: weightDeductionAmount,
@@ -498,6 +504,29 @@ export async function getPurchaseBillPayments(billId: number): Promise<PurchaseB
   } catch (err) {
     console.error('Error getting payments:', err);
     return [];
+  }
+}
+
+// Update purchase bill location and secondary name
+export async function updatePurchaseBillLocationAndName(
+  billId: number,
+  location?: string,
+  secondaryName?: string
+): Promise<boolean> {
+  try {
+    const { error } = await supabase
+      .from('purchase_bills')
+      .update({
+        location: location || null,
+        secondary_name: secondaryName || null,
+      })
+      .eq('id', billId);
+
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('Error updating purchase bill location/name:', err);
+    return false;
   }
 }
 

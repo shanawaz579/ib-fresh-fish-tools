@@ -54,7 +54,16 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <Text style={styles.menuTitle}>Sales Spreadsheet</Text>
         </TouchableOpacity>
 
-        {/* 3. Bill Generation */}
+        {/* 3. Packing List */}
+        <TouchableOpacity
+          style={[styles.menuCard, styles.packingCard]}
+          onPress={() => navigation.navigate('Packing')}
+        >
+          <Text style={styles.icon}>📦</Text>
+          <Text style={styles.menuTitle}>Packing List</Text>
+        </TouchableOpacity>
+
+        {/* 4. Bill Generation */}
         <TouchableOpacity
           style={[styles.menuCard, styles.billCard]}
           onPress={() => navigation.navigate('BillGeneration')}
@@ -63,22 +72,40 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
           <Text style={styles.menuTitle}>Bill Generation</Text>
         </TouchableOpacity>
 
-        {/* 4. Purchase */}
+        {/* 5. Payments */}
+        <TouchableOpacity
+          style={[styles.menuCard, styles.paymentsCard]}
+          onPress={() => navigation.navigate('Payments')}
+        >
+          <Text style={styles.icon}>💰</Text>
+          <Text style={styles.menuTitle}>Record Payment</Text>
+        </TouchableOpacity>
+
+        {/* 6. Sales Bills View */}
+        <TouchableOpacity
+          style={[styles.menuCard, styles.billsViewCard]}
+          onPress={() => navigation.navigate('BillsView')}
+        >
+          <Text style={styles.icon}>📄</Text>
+          <Text style={styles.menuTitle}>View Sales Bills</Text>
+        </TouchableOpacity>
+
+        {/* 7. Purchase Records */}
         <TouchableOpacity
           style={[styles.menuCard, styles.purchaseCard]}
           onPress={() => navigation.navigate('Purchase')}
         >
           <Text style={styles.icon}>🛒</Text>
-          <Text style={styles.menuTitle}>Purchase Bill</Text>
+          <Text style={styles.menuTitle}>Purchase Records</Text>
         </TouchableOpacity>
 
-        {/* Additional Features */}
+        {/* 8. Purchase Bills View */}
         <TouchableOpacity
-          style={[styles.menuCard, styles.packingCard]}
-          onPress={() => navigation.navigate('Packing')}
+          style={[styles.menuCard, styles.purchaseBillsViewCard]}
+          onPress={() => navigation.navigate('PurchaseBillsView')}
         >
-          <Text style={styles.icon}>📦</Text>
-          <Text style={styles.menuTitle}>Packing List</Text>
+          <Text style={styles.icon}>📋</Text>
+          <Text style={styles.menuTitle}>View Purchase Bills</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -182,7 +209,7 @@ const styles = StyleSheet.create({
   },
   menuContent: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 100,
   },
   menuCard: {
     backgroundColor: '#fff',
@@ -215,6 +242,15 @@ const styles = StyleSheet.create({
   },
   billCard: {
     borderLeftColor: '#F59E0B',
+  },
+  paymentsCard: {
+    borderLeftColor: '#10B981',
+  },
+  billsViewCard: {
+    borderLeftColor: '#6366F1',
+  },
+  purchaseBillsViewCard: {
+    borderLeftColor: '#059669',
   },
   farmersCard: {
     borderLeftColor: '#F59E0B',
