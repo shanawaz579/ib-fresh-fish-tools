@@ -411,7 +411,11 @@ export default function PurchaseScreen() {
     >
       {/* Header */}
       <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>←</Text>
+        </TouchableOpacity>
         <Text style={styles.title}>Purchase Records</Text>
+        <View style={styles.headerSpacer} />
       </View>
 
       {/* Date Picker */}
@@ -419,13 +423,16 @@ export default function PurchaseScreen() {
         <TouchableOpacity onPress={goToPreviousDay} style={styles.dateButton}>
           <Text style={styles.dateButtonText}>←</Text>
         </TouchableOpacity>
-        <Text style={styles.dateText}>
-          {new Date(date).toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          })}
-        </Text>
+        <View style={styles.dateTextContainer}>
+          <Text style={styles.dateText}>
+            {new Date(date).toLocaleDateString('en-IN', {
+              weekday: 'short',
+              day: '2-digit',
+              month: 'short',
+              year: 'numeric',
+            })}
+          </Text>
+        </View>
         <TouchableOpacity onPress={goToNextDay} style={styles.dateButton}>
           <Text style={styles.dateButtonText}>→</Text>
         </TouchableOpacity>
@@ -718,71 +725,81 @@ export default function PurchaseScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.farmerHeader}>
-                    <View style={styles.farmerHeaderLeft}>
-                      <Text style={styles.collapseIcon}>
-                        {collapsedFarmers.has(farmerId) ? '▶' : '▼'}
-                      </Text>
-                      <View style={styles.farmerNameContainer}>
-                        <Text style={styles.farmerName}>{farmerName}</Text>
-                        {/* Display Location and Secondary Name as subtitle */}
-                        {(farmerPurchases[0]?.location || farmerPurchases[0]?.secondary_name) && (
-                          <Text style={styles.farmerSubtitle}>
-                            {farmerPurchases[0]?.location && farmerPurchases[0]?.location}
-                            {farmerPurchases[0]?.location && farmerPurchases[0]?.secondary_name && ' • '}
-                            {farmerPurchases[0]?.secondary_name && farmerPurchases[0]?.secondary_name}
+                    {/* First row: Name and Quantity */}
+                    <View style={styles.farmerHeaderTop}>
+                      <View style={styles.farmerHeaderLeft}>
+                        <Text style={styles.collapseIcon}>
+                          {collapsedFarmers.has(farmerId) ? '▶' : '▼'}
+                        </Text>
+                        <View style={styles.farmerNameContainer}>
+                          <Text style={styles.farmerName} numberOfLines={1} ellipsizeMode="tail">
+                            {farmerName}
                           </Text>
-                        )}
-                        {/* Billing Status Indicator */}
-                        {farmerPurchases[0]?.billing_status && (
-                          <View style={styles.billingStatusContainer}>
-                            <View style={[
-                              styles.billingStatusBadge,
-                              farmerPurchases[0].billing_status === 'billed' && styles.billingStatusBilled,
-                              farmerPurchases[0].billing_status === 'unbilled' && styles.billingStatusUnbilled,
-                              farmerPurchases[0].billing_status === 'partial' && styles.billingStatusPartial,
-                            ]}>
-                              <Text style={styles.billingStatusText}>
-                                {farmerPurchases[0].billing_status === 'billed' && '✓ Billed'}
-                                {farmerPurchases[0].billing_status === 'unbilled' && '⚠ Not Billed'}
-                                {farmerPurchases[0].billing_status === 'partial' && '◐ Partial'}
-                              </Text>
-                            </View>
-                          </View>
-                        )}
+                          {/* Display Location and Secondary Name as subtitle */}
+                          {(farmerPurchases[0]?.location || farmerPurchases[0]?.secondary_name) && (
+                            <Text style={styles.farmerSubtitle} numberOfLines={1} ellipsizeMode="tail">
+                              {farmerPurchases[0]?.location && farmerPurchases[0]?.location}
+                              {farmerPurchases[0]?.location && farmerPurchases[0]?.secondary_name && ' • '}
+                              {farmerPurchases[0]?.secondary_name && farmerPurchases[0]?.secondary_name}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                      <View style={styles.quantityBadge}>
+                        <Text style={styles.farmerCount}>
+                          {farmerPurchases.reduce((sum, p) => sum + p.quantity_crates, 0)}
+                        </Text>
                       </View>
                     </View>
-                    <View style={styles.farmerHeaderRight}>
-                      <Text style={styles.farmerCount}>
-                        {farmerPurchases.reduce((sum, p) => sum + p.quantity_crates, 0)} cr
-                      </Text>
-                      {/* Show Generate Bill button only for unbilled purchases */}
-                      {farmerPurchases[0]?.billing_status === 'unbilled' && (
+
+                    {/* Second row: Status and Action Buttons */}
+                    <View style={styles.farmerHeaderBottom}>
+                      {/* Billing Status Indicator */}
+                      {farmerPurchases[0]?.billing_status && (
+                        <View style={[
+                          styles.billingStatusBadge,
+                          farmerPurchases[0].billing_status === 'billed' && styles.billingStatusBilled,
+                          farmerPurchases[0].billing_status === 'unbilled' && styles.billingStatusUnbilled,
+                          farmerPurchases[0].billing_status === 'partial' && styles.billingStatusPartial,
+                        ]}>
+                          <Text style={styles.billingStatusIcon}>
+                            {farmerPurchases[0].billing_status === 'billed' && '✓'}
+                            {farmerPurchases[0].billing_status === 'unbilled' && '⚠'}
+                            {farmerPurchases[0].billing_status === 'partial' && '◐'}
+                          </Text>
+                        </View>
+                      )}
+
+                      <View style={styles.actionButtons}>
+                        {/* Show Generate Bill button only for unbilled purchases */}
+                        {farmerPurchases[0]?.billing_status === 'unbilled' && (
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              navigation.navigate('PurchaseBillGeneration', {
+                                farmer_id: farmerId,
+                                farmer_name: farmerName,
+                                farmer_location: farmerPurchases[0]?.location,
+                                farmer_secondary_name: farmerPurchases[0]?.secondary_name,
+                                purchases: farmerPurchases,
+                                date: date,
+                              });
+                            }}
+                            style={styles.generateBillButton}
+                          >
+                            <Text style={styles.generateBillButtonText}>Bill</Text>
+                          </TouchableOpacity>
+                        )}
                         <TouchableOpacity
                           onPress={(e) => {
                             e.stopPropagation();
-                            navigation.navigate('PurchaseBillGeneration', {
-                              farmer_id: farmerId,
-                              farmer_name: farmerName,
-                              farmer_location: farmerPurchases[0]?.location,
-                              farmer_secondary_name: farmerPurchases[0]?.secondary_name,
-                              purchases: farmerPurchases,
-                              date: date,
-                            });
+                            handleEditFarmer(farmerId, farmerPurchases);
                           }}
-                          style={styles.generateBillButton}
+                          style={styles.editButton}
                         >
-                          <Text style={styles.generateBillButtonText}>Bill</Text>
+                          <Text style={styles.editButtonText}>Edit</Text>
                         </TouchableOpacity>
-                      )}
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleEditFarmer(farmerId, farmerPurchases);
-                        }}
-                        style={styles.editButton}
-                      >
-                        <Text style={styles.editButtonText}>Edit</Text>
-                      </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -827,11 +844,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
     padding: 20,
     paddingTop: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backButtonText: {
+    fontSize: 28,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  headerSpacer: {
+    width: 40,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#fff',
+    flex: 1,
+    textAlign: 'center',
   },
   dateContainer: {
     flexDirection: 'row',
@@ -853,11 +889,14 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#374151',
   },
+  dateTextContainer: {
+    marginHorizontal: 12,
+  },
   dateText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
-    marginHorizontal: 12,
+    textAlign: 'center',
   },
   todayButton: {
     padding: 12,
@@ -1090,15 +1129,25 @@ const styles = StyleSheet.create({
   farmerHeader: {
     backgroundColor: '#F3F4F6',
     padding: 16,
+  },
+  farmerHeaderTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 10,
+  },
+  farmerHeaderBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingLeft: 24,
   },
   farmerHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     flex: 1,
+    minWidth: 0,
   },
   collapseIcon: {
     fontSize: 12,
@@ -1107,21 +1156,45 @@ const styles = StyleSheet.create({
   },
   farmerNameContainer: {
     flex: 1,
+    minWidth: 0,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   farmerName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#111827',
+    flexShrink: 1,
   },
   farmerSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#6B7280',
-    marginTop: 2,
+    marginTop: 4,
+  },
+  quantityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  quantityIcon: {
+    fontSize: 16,
   },
   farmerCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#10B981',
+    color: '#047857',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   purchaseItem: {
     flexDirection: 'row',
@@ -1155,17 +1228,11 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  farmerHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
   generateBillButton: {
     backgroundColor: '#DBEAFE',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginRight: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   generateBillButtonText: {
     color: '#1E40AF',
@@ -1174,9 +1241,9 @@ const styles = StyleSheet.create({
   },
   editButton: {
     backgroundColor: '#D1FAE5',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   editButtonText: {
     color: '#065F46',
@@ -1282,14 +1349,12 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     fontSize: 14,
   },
-  billingStatusContainer: {
-    marginTop: 4,
-  },
   billingStatusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   billingStatusBilled: {
     backgroundColor: '#D1FAE5',
@@ -1300,8 +1365,7 @@ const styles = StyleSheet.create({
   billingStatusPartial: {
     backgroundColor: '#FEF3C7',
   },
-  billingStatusText: {
-    fontSize: 11,
-    fontWeight: '600',
+  billingStatusIcon: {
+    fontSize: 18,
   },
 });

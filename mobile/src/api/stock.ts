@@ -850,12 +850,24 @@ export async function getBillById(id: number): Promise<Bill | null> {
     if (chargesError) throw chargesError;
 
     // Get payments that were included in this bill
-    // Fetch payments between previous bill date and this bill date
+    // First, find the previous bill date for this customer
+    const { data: previousBillData } = await supabase
+      .from('bills')
+      .select('bill_date')
+      .eq('customer_id', billData.customer_id)
+      .lt('bill_date', billData.bill_date)
+      .order('bill_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    const previousBillDate = previousBillData?.bill_date || '1900-01-01';
+
+    // Fetch payments between previous bill date and this bill date (exclusive of previous, inclusive of current)
     const { data: paymentsData } = await supabase
       .from('payments')
       .select('*')
       .eq('customer_id', billData.customer_id)
-      .gte('payment_date', billData.bill_date) // This is simplified - ideally we'd need previous bill date
+      .gt('payment_date', previousBillDate)
       .lte('payment_date', billData.bill_date)
       .order('payment_date', { ascending: true });
 
@@ -1011,19 +1023,23 @@ export async function getCustomerOutstanding(customerId: number): Promise<{
   oldest_bill_date: string | null;
 }> {
   try {
+    // Get the active bill for this customer (there should only be one)
     const { data, error } = await supabase
       .from('bills')
       .select('total, bill_date, status')
       .eq('customer_id', customerId)
-      .eq('status', 'unpaid')
       .eq('is_active', true)
       .order('bill_date', { ascending: true });
 
     if (error) throw error;
 
-    const total_outstanding = (data || []).reduce((sum, bill) => sum + Number(bill.total), 0);
-    const unpaid_bills_count = (data || []).length;
-    const oldest_bill_date = (data && data.length > 0) ? data[0].bill_date : null;
+    // The 'total' field represents the current outstanding (Previous Balance - Payments + New Items)
+    // If total > 0, there's an outstanding balance
+    // Count only bills with total > 0 as unpaid
+    const unpaidBills = (data || []).filter(bill => Number(bill.total) > 0);
+    const total_outstanding = unpaidBills.reduce((sum, bill) => sum + Number(bill.total), 0);
+    const unpaid_bills_count = unpaidBills.length;
+    const oldest_bill_date = unpaidBills.length > 0 ? unpaidBills[0].bill_date : null;
 
     return {
       total_outstanding,
@@ -1120,15 +1136,6 @@ export async function createPayment(
   notes?: string
 ): Promise<Payment | null> {
   try {
-    console.log('Creating payment with:', {
-      customer_id: customerId,
-      payment_date: paymentDate,
-      amount,
-      payment_method: paymentMethod,
-      reference_number: referenceNumber,
-      notes,
-    });
-
     // Insert payment
     const { data: paymentData, error: paymentError } = await supabase
       .from('payments')
@@ -1541,6 +1548,122 @@ export async function getPurchaseBillDetails(billId: number): Promise<any> {
     return billDetails;
   } catch (error) {
     console.error('Error fetching purchase bill details:', error);
+    throw error;
+  }
+}
+
+// Create purchase bill payment
+export async function createPurchaseBillPayment(
+  purchaseBillId: number,
+  paymentDate: string,
+  amount: number,
+  paymentMode: 'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'other',
+  notes?: string
+): Promise<boolean> {
+  try {
+    // Insert the payment
+    const { error } = await supabase
+      .from('purchase_bill_payments')
+      .insert({
+        purchase_bill_id: purchaseBillId,
+        payment_date: paymentDate,
+        amount,
+        payment_mode: paymentMode,
+        notes: notes || null,
+      });
+
+    if (error) throw error;
+
+    // Update the purchase bill status and amounts
+    await updatePurchaseBillPaymentStatus(purchaseBillId);
+
+    return true;
+  } catch (error) {
+    console.error('Error creating purchase bill payment:', error);
+    throw error;
+  }
+}
+
+// Delete purchase bill payment
+export async function deletePurchaseBillPayment(paymentId: number): Promise<boolean> {
+  try {
+    // First, get the purchase_bill_id before deleting
+    const { data: paymentData, error: fetchError } = await supabase
+      .from('purchase_bill_payments')
+      .select('purchase_bill_id')
+      .eq('id', paymentId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    const purchaseBillId = paymentData?.purchase_bill_id;
+
+    // Delete the payment
+    const { error } = await supabase
+      .from('purchase_bill_payments')
+      .delete()
+      .eq('id', paymentId);
+
+    if (error) throw error;
+
+    // Update the purchase bill status and amounts
+    if (purchaseBillId) {
+      await updatePurchaseBillPaymentStatus(purchaseBillId);
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error deleting purchase bill payment:', error);
+    return false;
+  }
+}
+
+// Helper function to update purchase bill payment status
+async function updatePurchaseBillPaymentStatus(purchaseBillId: number): Promise<void> {
+  try {
+    // Get the bill total
+    const { data: billData, error: billError } = await supabase
+      .from('purchase_bills')
+      .select('total')
+      .eq('id', purchaseBillId)
+      .single();
+
+    if (billError) throw billError;
+
+    const billTotal = billData?.total || 0;
+
+    // Get total payments
+    const { data: paymentsData, error: paymentsError } = await supabase
+      .from('purchase_bill_payments')
+      .select('amount')
+      .eq('purchase_bill_id', purchaseBillId);
+
+    if (paymentsError) throw paymentsError;
+
+    const totalPaid = paymentsData?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
+    const balanceDue = Math.max(0, billTotal - totalPaid);
+
+    // Determine status
+    let status: 'pending' | 'partial' | 'paid' = 'pending';
+    if (balanceDue === 0) {
+      status = 'paid';
+    } else if (totalPaid > 0) {
+      status = 'partial';
+    }
+
+    // Update the bill
+    const { error: updateError } = await supabase
+      .from('purchase_bills')
+      .update({
+        amount_paid: totalPaid,
+        balance_due: balanceDue,
+        payment_status: status,
+      })
+      .eq('id', purchaseBillId);
+
+    if (updateError) throw updateError;
+  } catch (error) {
+    console.error('Error updating purchase bill payment status:', error);
     throw error;
   }
 }

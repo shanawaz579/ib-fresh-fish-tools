@@ -13,6 +13,9 @@ import {
   Platform,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import {
@@ -45,8 +48,13 @@ type BillItemForm = {
   rate_per_kg: number;
 };
 
+type BillGenerationScreenRouteProp = RouteProp<RootStackParamList, 'BillGeneration'>;
+
 export default function BillGenerationScreen() {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const route = useRoute<BillGenerationScreenRouteProp>();
+  const params = route.params;
+
+  const [date, setDate] = useState(params?.date || new Date().toISOString().split('T')[0]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [varieties, setVarieties] = useState<FishVariety[]>([]);
@@ -55,7 +63,7 @@ export default function BillGenerationScreen() {
   const [loadingItems, setLoadingItems] = useState(false);
 
   // Form state
-  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(params?.customer_id || null);
   const [billItems, setBillItems] = useState<BillItemForm[]>([]);
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -344,6 +352,17 @@ export default function BillGenerationScreen() {
       return;
     }
 
+    // Check if a bill already exists for this customer on this date
+    const existingBill = bills.find(b => b.customer_id === selectedCustomerId && b.bill_date === date);
+    if (existingBill) {
+      Alert.alert(
+        'Bill Already Exists',
+        `A bill (${existingBill.bill_number}) already exists for this customer on this date. Please edit or delete the existing bill first.`,
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
       // First, save all quick payments (using the bill date)
@@ -578,7 +597,7 @@ Thank you for your business!
 
     const customer = customers.find(c => c.id === previewBill.customer_id);
 
-    // Generate HTML for PDF
+    // Generate HTML for PDF (matching purchase bill format)
     const htmlContent = `
     <!DOCTYPE html>
     <html>
@@ -586,63 +605,75 @@ Thank you for your business!
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <style>
         @page {
-          size: A5;
+          size: A4;
           margin: 10mm;
         }
         body {
           font-family: 'Arial', sans-serif;
           padding: 0;
           margin: 0;
-          width: 148mm;
-          font-size: 11px;
+          font-size: 12px;
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+        }
+        .content-wrapper {
+          flex: 1;
         }
         .header {
-          background: #f8fafc;
-          padding: 8px 12px;
-          border-bottom: 2px solid #0ea5e9;
-          margin-bottom: 12px;
+          background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+          padding: 10px 16px;
+          border-bottom: 3px solid #0ea5e9;
+          margin-bottom: 10px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
         .header-top {
           display: flex;
           justify-content: space-between;
           align-items: center;
           margin-bottom: 8px;
-          font-size: 9px;
+          font-size: 12px;
         }
         .company-name {
-          font-size: 22px;
+          font-size: 24px;
           font-weight: 900;
           color: #0f172a;
           letter-spacing: 2px;
           text-align: center;
           margin-bottom: 4px;
+          text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
         }
         .proprietor {
-          color: #475569;
-          font-weight: 600;
+          color: #1e293b;
+          font-weight: 700;
+          font-size: 12px;
         }
         .contact {
-          color: #0ea5e9;
-          font-weight: 700;
+          color: #0284c7;
+          font-weight: 800;
+          font-size: 13px;
         }
         .tagline {
-          font-size: 9px;
-          font-weight: 600;
-          color: #64748b;
+          font-size: 12px;
+          font-weight: 700;
+          color: #475569;
           text-transform: uppercase;
-          letter-spacing: 0.5px;
+          letter-spacing: 0.8px;
           text-align: center;
-          margin-bottom: 3px;
+          margin-bottom: 4px;
         }
         .address {
-          font-size: 8px;
+          font-size: 11px;
           color: #64748b;
           text-align: center;
+          font-weight: 500;
         }
         .customer-section {
           margin-bottom: 10px;
-          padding-bottom: 8px;
-          border-bottom: 1px solid #e5e7eb;
+          padding: 10px;
+          background: #f9fafb;
+          border-radius: 6px;
+          border: 1px solid #e5e7eb;
         }
         .customer-row {
           display: flex;
@@ -654,51 +685,66 @@ Thank you for your business!
         }
         .customer-right {
           text-align: right;
+          background: #fff;
+          padding: 8px 12px;
+          border-radius: 6px;
+          border: 1px solid #e5e7eb;
         }
         .customer-name {
-          font-size: 13px;
-          font-weight: bold;
+          font-size: 16px;
+          font-weight: 800;
           color: #111827;
           margin-bottom: 2px;
         }
         .total-boxes {
-          font-size: 8px;
+          font-size: 11px;
           color: #6b7280;
+          font-weight: 500;
         }
         .bill-number {
-          font-size: 11px;
-          font-weight: bold;
-          color: #111827;
+          font-size: 14px;
+          font-weight: 800;
+          color: #0ea5e9;
           margin-bottom: 2px;
         }
         .bill-date {
-          font-size: 9px;
+          font-size: 11px;
           color: #6b7280;
+          font-weight: 600;
         }
         table {
           width: 100%;
           border-collapse: collapse;
-          margin-bottom: 12px;
+          margin-bottom: 10px;
+          border: 1px solid #e5e7eb;
+          border-radius: 6px;
+          overflow: hidden;
         }
         thead {
-          background: #f3f4f6;
+          background: linear-gradient(to bottom, #1e293b, #334155);
         }
         th {
           padding: 6px 4px;
           text-align: left;
-          font-size: 9px;
-          font-weight: bold;
-          color: #374151;
+          font-size: 11px;
+          font-weight: 700;
+          color: #ffffff;
+          text-transform: uppercase;
+          letter-spacing: 0.3px;
         }
         td {
           padding: 6px 4px;
-          font-size: 10px;
+          font-size: 12px;
           color: #111827;
-          border-bottom: 1px solid #f3f4f6;
+          border-bottom: 1px solid #e5e7eb;
+          background: #ffffff;
+          vertical-align: middle;
         }
-        .qty-subtext {
-          font-size: 8px;
-          color: #6b7280;
+        tbody tr:nth-child(even) td {
+          background: #f9fafb;
+        }
+        tbody tr:hover td {
+          background: #f0f9ff;
         }
         .text-center {
           text-align: center;
@@ -707,40 +753,75 @@ Thank you for your business!
           text-align: right;
         }
         .totals {
-          margin-top: 12px;
-          padding-top: 10px;
-          border-top: 1px solid #e5e7eb;
+          margin-top: 10px;
+          padding: 10px;
+          background: linear-gradient(to bottom, #f8fafc, #ffffff);
+          border-radius: 6px;
+          border: 1px solid #e5e7eb;
         }
         .total-row {
           display: flex;
           justify-content: space-between;
-          margin-bottom: 5px;
-          font-size: 10px;
+          margin-bottom: 4px;
+          font-size: 12px;
+          padding: 1px 0;
         }
         .total-label {
-          color: #6b7280;
+          color: #475569;
+          font-weight: 600;
         }
         .total-value {
-          font-weight: 600;
+          font-weight: 700;
           color: #111827;
+        }
+        .charge-row {
+          padding-left: 20px;
+          border-left: 3px solid #e0f2fe;
+        }
+        .charge-label {
+          font-weight: 500;
+          font-size: 12px;
+          color: #64748b;
+        }
+        .charge-value {
+          font-size: 12px;
+          color: #059669;
+          font-weight: 700;
+        }
+        .separator {
+          height: 1px;
+          background: linear-gradient(to right, #e5e7eb, #cbd5e1, #e5e7eb);
+          margin: 6px 0;
         }
         .grand-total {
           margin-top: 8px;
-          padding-top: 8px;
-          border-top: 2px solid #3b82f6;
+          padding: 8px;
+          border-top: 3px solid #3b82f6;
+          background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+          border-radius: 6px;
         }
         .grand-total .total-label {
-          font-size: 13px;
-          font-weight: bold;
-          color: #111827;
+          font-size: 15px;
+          font-weight: 900;
+          color: #1e3a8a;
+          text-transform: uppercase;
+          letter-spacing: 0.8px;
         }
         .grand-total .total-value {
-          font-size: 14px;
-          font-weight: bold;
-          color: #3b82f6;
+          font-size: 18px;
+          font-weight: 900;
+          color: #1e40af;
+        }
+        .payment-paid {
+          color: #059669;
+          font-weight: 700;
+        }
+        .payment-due {
+          color: #DC2626;
+          font-weight: 700;
         }
         .notes {
-          margin-top: 12px;
+          margin-top: 10px;
           padding-top: 10px;
           border-top: 1px solid #e5e7eb;
         }
@@ -755,170 +836,197 @@ Thank you for your business!
           color: #374151;
           font-style: italic;
         }
+        .footer {
+          margin-top: auto;
+          padding-top: 10px;
+          padding-bottom: 8px;
+          border-top: 3px double #cbd5e1;
+          text-align: center;
+          background: linear-gradient(to top, #f8fafc, transparent);
+        }
+        .footer-text {
+          font-size: 13px;
+          font-weight: 700;
+          color: #059669;
+          letter-spacing: 0.4px;
+        }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div class="header-top">
-          <span class="proprietor">Ibrahim Shaik (IB-NLR)</span>
-          <span class="contact">📞 99087 04047</span>
-        </div>
-        <div class="company-name">S.K.S. Co.</div>
-        <div class="tagline">Wholesale Fish & Prawn Trading</div>
-        <div class="address">Raghavendra Ice Factory, Muttukur Road, Nellore, AP.</div>
-      </div>
-
-      <div class="customer-section">
-        <div class="customer-row">
-          <div class="customer-left">
-            <div class="customer-name">${customer?.name || 'Unknown'}</div>
-            <div class="total-boxes">Total: ${(previewBill.items || []).reduce((sum, item) => sum + item.quantity_crates, 0)} boxes</div>
+      <div class="content-wrapper">
+        <div class="header">
+          <div class="header-top">
+            <span class="proprietor">Ibrahim Shaik (IB-NLR)</span>
+            <span class="contact">📞 99087 04047</span>
           </div>
-          <div class="customer-right">
-            <div class="bill-number">${previewBill.bill_number}</div>
-            <div class="bill-date">${new Date(previewBill.bill_date).toLocaleDateString('en-IN')}</div>
+          <div class="company-name">SKS SEA FOODS</div>
+          <div class="tagline">Wholesale Fish & Prawn Trading</div>
+          <div class="address">Raghavendra Ice Factory, Muttukur Road, Nellore, AP.</div>
+        </div>
+
+        <div class="customer-section">
+          <div class="customer-row">
+            <div class="customer-left">
+              <div class="customer-name">${customer?.name || 'Unknown'}</div>
+              <div class="total-boxes">Total: ${(previewBill.items || []).reduce((sum, item) => sum + item.quantity_crates, 0)} boxes</div>
+            </div>
+            <div class="customer-right">
+              <div class="bill-number">${previewBill.bill_number}</div>
+              <div class="bill-date">${new Date(previewBill.bill_date).toLocaleDateString('en-IN')}</div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th class="text-center">Weight (kg)</th>
-            <th class="text-center">Rate (₹/kg)</th>
-            <th class="text-right">Amount (₹)</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${(previewBill.items || []).map(item => {
-            const crateWeight = 35;
-            const totalWeight = (item.quantity_crates * crateWeight) + item.quantity_kg;
-            const qtyText = [
-              item.quantity_crates > 0 && `${item.quantity_crates} cr`,
-              item.quantity_kg > 0 && `${item.quantity_kg} kg`
-            ].filter(Boolean).join(' + ') || '0 kg';
-            return `
+        <table>
+          <thead>
             <tr>
-              <td>
-                <div>${item.fish_variety_name}</div>
-                <div class="qty-subtext">${qtyText}</div>
-              </td>
-              <td class="text-center">${totalWeight.toFixed(2)}</td>
-              <td class="text-center">${item.rate_per_kg}</td>
-              <td class="text-right">${item.amount.toFixed(2)}</td>
+              <th>Item</th>
+              <th class="text-center">Qty</th>
+              <th class="text-center">Weight (kg)</th>
+              <th class="text-center">Rate (₹/kg)</th>
+              <th class="text-right">Amount (₹)</th>
             </tr>
-            `;
-          }).join('')}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            ${(previewBill.items || []).map(item => {
+              const crateWeight = 35;
+              const totalWeight = (item.quantity_crates * crateWeight) + item.quantity_kg;
+              let qtyText = '';
+              if (item.quantity_crates > 0 && item.quantity_kg > 0) {
+                qtyText = `${item.quantity_crates}+${item.quantity_kg}kg`;
+              } else if (item.quantity_crates > 0) {
+                qtyText = `${item.quantity_crates} cr`;
+              } else if (item.quantity_kg > 0) {
+                qtyText = `${item.quantity_kg} kg`;
+              } else {
+                qtyText = '0';
+              }
+              return `
+              <tr>
+                <td>${item.fish_variety_name}</td>
+                <td class="text-center">${qtyText}</td>
+                <td class="text-center">${totalWeight}</td>
+                <td class="text-center">${item.rate_per_kg}</td>
+                <td class="text-right">${item.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+              </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
 
-      <div class="totals">
-        ${(() => {
-          // Calculate items total
-          const itemsTotal = (previewBill.items || []).reduce((sum, item) => sum + item.amount, 0);
+        <div class="totals">
+          ${(() => {
+            const itemsTotal = (previewBill.items || []).reduce((sum, item) => sum + item.amount, 0);
+            const otherChargesTotal = (previewBill.other_charges || []).reduce((sum, charge) => sum + charge.amount, 0);
+            const subtotal = itemsTotal + otherChargesTotal;
+            let html = '';
 
-          // Calculate other charges total
-          const otherChargesTotal = (previewBill.other_charges || []).reduce((sum, charge) => sum + charge.amount, 0);
-
-          let html = '';
-
-          // Previous Balance
-          if (previewBill.previous_balance && previewBill.previous_balance > 0) {
-            html += `
-              <div class="total-row">
-                <span class="total-label">Previous Balance (₹):</span>
-                <span class="total-value">${previewBill.previous_balance.toFixed(2)}</span>
-              </div>
-            `;
-          }
-
-          // Payments Received
-          if (previewBill.payments && previewBill.payments.length > 0) {
-            html += '<div style="margin-top: 8px; margin-bottom: 4px; font-weight: 600; color: #059669;">Less: Payments Received</div>';
-            previewBill.payments.forEach(payment => {
-              const paymentDate = new Date(payment.payment_date).toLocaleDateString('en-IN');
+            // Previous Balance Section
+            if (previewBill.previous_balance && previewBill.previous_balance > 0) {
               html += `
-                <div class="total-row" style="padding-left: 16px;">
-                  <span class="total-label" style="font-weight: normal; font-size: 13px;">${paymentDate} - ${payment.payment_method.toUpperCase()}</span>
-                  <span class="total-value" style="font-size: 13px; color: #DC2626;">₹${payment.amount.toFixed(2)}</span>
+                <div class="total-row">
+                  <span class="total-label">Previous Balance:</span>
+                  <span class="total-value">₹${previewBill.previous_balance.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                 </div>
               `;
-            });
-            const balanceLabel = previewBill.balance_due < 0 ? 'Credit Balance:' : 'Balance Outstanding:';
-            const balanceColor = previewBill.balance_due < 0 ? '#10B981' : '#111827';
-            html += `
-              <div class="total-row" style="border-top: 1px solid #ddd; padding-top: 8px; margin-top: 4px;">
-                <span class="total-label">${balanceLabel}</span>
-                <span class="total-value" style="color: ${balanceColor};">₹${Math.abs(previewBill.balance_due).toFixed(2)}</span>
-              </div>
-            `;
-          }
+            }
 
-          // Separator
-          if ((previewBill.previous_balance && previewBill.previous_balance > 0) || (previewBill.payments && previewBill.payments.length > 0)) {
-            html += '<div style="height: 2px; background-color: #E5E7EB; margin: 12px 0;"></div>';
-          }
+            // Payments Received - Show independently of previous balance
+            if (previewBill.payments && previewBill.payments.length > 0) {
+              html += `<div style="margin-top: 8px; margin-bottom: 4px; font-weight: 600; font-size: 11px; color: #059669;">Less: Payments Received</div>`;
+              previewBill.payments.forEach(payment => {
+                const paymentDate = new Date(payment.payment_date).toLocaleDateString('en-IN', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric'
+                });
+                const paymentMethod = payment.payment_method.toUpperCase();
+                html += `
+                  <div class="total-row charge-row">
+                    <span class="charge-label">${paymentDate} - ${paymentMethod}:</span>
+                    <span class="total-value payment-paid">₹${payment.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                `;
+              });
 
-          // Items Total
-          html += `
-            <div class="total-row">
-              <span class="total-label">Items Total (₹):</span>
-              <span class="total-value">${itemsTotal.toFixed(2)}</span>
-            </div>
-          `;
-
-          // Other Charges
-          if (previewBill.other_charges && previewBill.other_charges.length > 0) {
-            previewBill.other_charges.forEach(charge => {
+              // Show Credit Balance / Balance Outstanding after payments
+              const balanceLabel = previewBill.balance_due < 0 ? 'Credit Balance:' : 'Balance Outstanding:';
               html += `
-                <div class="total-row" style="padding-left: 20px;">
-                  <span class="total-label" style="font-weight: normal; font-size: 13px;">+ ${charge.charge_type.charAt(0).toUpperCase() + charge.charge_type.slice(1)}${charge.description ? ` (${charge.description})` : ''}:</span>
-                  <span class="total-value" style="font-size: 13px;">${charge.amount.toFixed(2)}</span>
+                <div class="total-row">
+                  <span class="total-label">${balanceLabel}</span>
+                  <span class="total-value ${previewBill.balance_due < 0 ? 'payment-paid' : 'payment-due'}">₹${Math.abs(previewBill.balance_due).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
                 </div>
               `;
-            });
-            html += `
-              <div class="total-row" style="border-top: 1px solid #ddd; padding-top: 8px; margin-top: 4px;">
-                <span class="total-label">Subtotal (₹):</span>
-                <span class="total-value">${(itemsTotal + otherChargesTotal).toFixed(2)}</span>
-              </div>
-            `;
-          }
+            }
 
-          // Discount
-          if (previewBill.discount > 0) {
+            // Separator after previous balance/payments section
+            if ((previewBill.previous_balance && previewBill.previous_balance > 0) || (previewBill.payments && previewBill.payments.length > 0)) {
+              html += `<div class="separator"></div>`;
+            }
+
+            // Current Bill Items
             html += `
               <div class="total-row">
-                <span class="total-label">Discount (₹):</span>
-                <span class="total-value">${previewBill.discount.toFixed(2)}</span>
+                <span class="total-label">Items Total:</span>
+                <span class="total-value">₹${itemsTotal.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
               </div>
             `;
-          }
 
-          // Grand Total
-          html += `
-            <div class="total-row grand-total">
-              <span class="total-label">TOTAL DUE (₹):</span>
-              <span class="total-value">${previewBill.total.toFixed(2)}</span>
-            </div>
-          `;
+            // Other Charges
+            if (previewBill.other_charges && previewBill.other_charges.length > 0) {
+              previewBill.other_charges.forEach(charge => {
+                const chargeName = charge.charge_type.charAt(0).toUpperCase() + charge.charge_type.slice(1);
+                html += `
+                  <div class="total-row charge-row">
+                    <span class="charge-label">+ ${chargeName}${charge.description ? ` (${charge.description})` : ''}:</span>
+                    <span class="charge-value">₹${charge.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                  </div>
+                `;
+              });
+            }
 
-          return html;
-        })()}
-      </div>
+            // Discount
+            if (previewBill.discount > 0) {
+              html += `
+                <div class="total-row charge-row">
+                  <span class="charge-label">- Discount:</span>
+                  <span class="total-value payment-due">₹${previewBill.discount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                </div>
+              `;
+            }
 
-      ${previewBill.notes ? `
-      <div class="notes">
-        <div class="notes-title">Notes:</div>
-        <div class="notes-text">${previewBill.notes}</div>
-      </div>
-      ` : ''}
+            // Current Bill Subtotal (if there are charges or discount)
+            if (otherChargesTotal > 0 || previewBill.discount > 0) {
+              html += `
+                <div class="total-row">
+                  <span class="total-label">Current Bill Subtotal:</span>
+                  <span class="total-value">₹${(subtotal - previewBill.discount).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+                </div>
+              `;
+            }
 
-      <div style="margin-top: 32px; padding-top: 16px; border-top: 2px solid #E5E7EB; text-align: center;">
-        <div style="font-size: 14px; font-weight: 600; color: #10B981;">
-          Thank you for your business!
+            // Grand Total
+            html += `
+              <div class="total-row grand-total">
+                <span class="total-label">TOTAL DUE:</span>
+                <span class="total-value">₹${previewBill.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+              </div>
+            `;
+
+            return html;
+          })()}
+
+          ${previewBill.notes ? `
+          <div class="notes">
+            <div class="notes-title">Notes:</div>
+            <div class="notes-text">${previewBill.notes}</div>
+          </div>
+          ` : ''}
         </div>
+      </div>
+
+      <div class="footer">
+        <div class="footer-text">Thank you for your business!</div>
       </div>
     </body>
     </html>
@@ -998,8 +1106,29 @@ Thank you for your business!
             </Picker>
           </View>
 
+          {/* Check if bill already exists for this customer on this date */}
+          {selectedCustomerId && (() => {
+            const existingBill = bills.find(b => b.customer_id === selectedCustomerId && b.bill_date === date);
+            if (existingBill) {
+              const customer = customers.find(c => c.id === selectedCustomerId);
+              return (
+                <View style={styles.billExistsContainer}>
+                  <Text style={styles.billExistsIcon}>✓</Text>
+                  <Text style={styles.billExistsTitle}>Bill Already Generated</Text>
+                  <Text style={styles.billExistsText}>
+                    A bill ({existingBill.bill_number}) already exists for {customer?.name} on this date.
+                  </Text>
+                  <Text style={styles.billExistsSubtext}>
+                    You can view, edit, or delete the existing bill from the "Generated Bills" section below.
+                  </Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
+
           {/* Customer Outstanding Balance */}
-          {selectedCustomerId && (
+          {selectedCustomerId && !bills.find(b => b.customer_id === selectedCustomerId && b.bill_date === date) && (
             <CustomerOutstandingCard
               totalOutstanding={customerOutstanding.total_outstanding}
               unpaidBillsCount={customerOutstanding.unpaid_bills_count}
@@ -1008,59 +1137,78 @@ Thank you for your business!
           )}
 
           {/* Bill Items */}
-          {selectedCustomerId && loadingItems && (
+          {selectedCustomerId && loadingItems && !bills.find(b => b.customer_id === selectedCustomerId && b.bill_date === date) && (
             <View style={styles.loadingItemsContainer}>
               <ActivityIndicator size="large" color="#10B981" />
               <Text style={styles.loadingText}>Loading items for {new Date(date).toLocaleDateString('en-IN')}...</Text>
             </View>
           )}
 
-          {selectedCustomerId && !loadingItems && billItems.length > 0 && (
+          {selectedCustomerId && !loadingItems && billItems.length > 0 && !bills.find(b => b.customer_id === selectedCustomerId && b.bill_date === date) && (
             <>
               <Text style={styles.subSectionTitle}>Bill Items</Text>
+
               {billItems.map((item, index) => {
                 const qtyDisplay = `${item.quantity_crates} cr${item.quantity_kg > 0 ? ` + ${Math.round(item.quantity_kg)} kg` : ''}`;
                 const weightDisplay = `${Math.round(item.total_weight)} kg`;
+                const cratesDisplay = `${item.quantity_crates} cr`;
 
                 return (
-                  <View key={index} style={styles.billItemCardCompact}>
-                    {/* Single Row Layout */}
-                    <View style={styles.singleRow}>
-                      {/* Left: Name */}
-                      <View style={styles.nameSection}>
-                        <Text style={styles.itemNameCompact}>{item.fish_variety_name}</Text>
-                        <Text style={styles.itemQtyCompact}>{qtyDisplay}</Text>
+                  <View key={index} style={styles.billItemCard}>
+                    {/* Item Name and Total Amount */}
+                    <View style={styles.itemNameRow}>
+                      <Text style={styles.itemNameLarge}>{item.fish_variety_name}</Text>
+                      <Text style={styles.itemAmount}>₹{calculateItemAmount(item).toLocaleString('en-IN')}</Text>
+                    </View>
+
+                    <Text style={styles.itemQtyText}>{qtyDisplay}</Text>
+
+                    {/* Row 1: Crate Weight × Crates → Total Weight */}
+                    <View style={styles.itemDataRow}>
+                      <View style={styles.dataGroup}>
+                        <TextInput
+                          style={styles.dataInputSubtle}
+                          placeholder="35"
+                          keyboardType="numeric"
+                          value={item.crate_weight.toString()}
+                          onChangeText={(value) => updateItemField(index, 'crate_weight', value)}
+                        />
+                        <Text style={styles.dataLabel}>kg/crate</Text>
                       </View>
 
-                      {/* Right: Inputs and Values */}
-                      <View style={styles.valuesSection}>
-                        {/* Row 1: Crate Wt and Total Wt */}
-                        <View style={styles.weightInputRow}>
-                          <TextInput
-                            style={styles.miniInput}
-                            placeholder="35"
-                            keyboardType="numeric"
-                            value={item.crate_weight.toString()}
-                            onChangeText={(value) => updateItemField(index, 'crate_weight', value)}
-                          />
-                          <Text style={styles.miniLabel}>kg/cr</Text>
-                          <Text style={styles.miniArrow}>→</Text>
-                          <Text style={styles.miniWeight}>{weightDisplay}</Text>
-                        </View>
+                      <Text style={styles.dataArrow}>×</Text>
 
-                        {/* Row 2: Rate and Amount */}
-                        <View style={styles.rateAmountRow}>
-                          <TextInput
-                            style={styles.miniInput}
-                            placeholder="0"
-                            keyboardType="numeric"
-                            value={item.rate_per_kg.toString()}
-                            onChangeText={(value) => updateItemField(index, 'rate_per_kg', value)}
-                          />
-                          <Text style={styles.miniLabel}>₹/kg</Text>
-                          <Text style={styles.miniArrow}>→</Text>
-                          <Text style={styles.miniAmount}>₹{calculateItemAmount(item).toLocaleString('en-IN')}</Text>
-                        </View>
+                      <View style={styles.dataGroup}>
+                        <Text style={styles.dataValueSubtle}>{cratesDisplay}</Text>
+                        <Text style={styles.dataLabel}>Crates</Text>
+                      </View>
+
+                      <Text style={styles.dataArrow}>→</Text>
+
+                      <View style={styles.dataGroup}>
+                        <Text style={styles.dataValue}>{weightDisplay}</Text>
+                        <Text style={styles.dataLabel}>Total</Text>
+                      </View>
+                    </View>
+
+                    {/* Row 2: Price × Total Weight */}
+                    <View style={styles.itemDataRow}>
+                      <View style={styles.dataGroupPrice}>
+                        <TextInput
+                          style={styles.dataInputPrice}
+                          placeholder="0"
+                          keyboardType="numeric"
+                          value={item.rate_per_kg.toString()}
+                          onChangeText={(value) => updateItemField(index, 'rate_per_kg', value)}
+                        />
+                        <Text style={styles.dataLabelPrice}>₹/kg</Text>
+                      </View>
+
+                      <Text style={styles.dataArrowPrice}>×</Text>
+
+                      <View style={styles.dataGroup}>
+                        <Text style={styles.dataValue}>{weightDisplay}</Text>
+                        <Text style={styles.dataLabel}>Weight</Text>
                       </View>
                     </View>
                   </View>
@@ -1263,12 +1411,18 @@ Thank you for your business!
             bills.map((bill) => {
               const customer = customers.find(c => c.id === bill.customer_id);
               const billTotal = typeof bill.total === 'number' ? bill.total : parseFloat(bill.total || '0');
+              const billDate = new Date(bill.bill_date).toLocaleDateString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                year: 'numeric',
+              });
               return (
                 <View key={bill.id} style={styles.billCard}>
                   <View style={styles.billHeader}>
-                    <View>
+                    <View style={styles.billHeaderLeft}>
                       <Text style={styles.billNumber}>{bill.bill_number}</Text>
                       <Text style={styles.billCustomer}>{customer?.name || 'Unknown'}</Text>
+                      <Text style={styles.billDate}>{billDate}</Text>
                     </View>
                     <Text style={styles.billTotal}>₹{billTotal.toFixed(2)}</Text>
                   </View>
@@ -1794,84 +1948,109 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#15803D',
   },
-  // Ultra Compact Single Row Bill Item
-  billItemCardCompact: {
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  singleRow: {
+  // Two-row Card Layout for Bill Items
+  itemNameRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    marginBottom: 4,
   },
-  nameSection: {
-    flex: 1,
-  },
-  itemNameCompact: {
-    fontSize: 15,
+  itemNameLarge: {
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#111827',
-    marginBottom: 2,
   },
-  itemQtyCompact: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '500',
+  itemAmount: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#10B981',
   },
-  valuesSection: {
-    gap: 4,
+  itemQtyText: {
+    fontSize: 12,
+    color: '#6B7280',
+    marginBottom: 12,
   },
-  weightInputRow: {
+  itemDataRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
-  rateAmountRow: {
-    flexDirection: 'row',
+  dataGroup: {
+    flex: 1,
     alignItems: 'center',
-    gap: 4,
   },
-  miniInput: {
+  dataGroupPrice: {
+    flex: 1.5,
+    alignItems: 'center',
+  },
+  // Subtle crate weight input (less emphasized)
+  dataInputSubtle: {
     backgroundColor: '#F9FAFB',
     borderWidth: 1,
     borderColor: '#E5E7EB',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     fontSize: 13,
-    fontWeight: '600',
-    color: '#111827',
-    minWidth: 35,
+    fontWeight: '500',
+    color: '#6B7280',
     textAlign: 'center',
+    minWidth: 50,
+    marginBottom: 4,
   },
-  miniLabel: {
-    fontSize: 10,
-    color: '#9CA3AF',
+  // Highlighted price input (most important)
+  dataInputPrice: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: '#92400E',
+    textAlign: 'center',
+    minWidth: 70,
+    marginBottom: 4,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  dataLabel: {
+    fontSize: 11,
+    color: '#6B7280',
     fontWeight: '500',
   },
-  miniArrow: {
-    fontSize: 11,
-    color: '#D1D5DB',
-    marginHorizontal: 2,
+  dataLabelPrice: {
+    fontSize: 12,
+    color: '#92400E',
+    fontWeight: '700',
   },
-  miniWeight: {
-    fontSize: 13,
+  dataValue: {
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#3B82F6',
+    marginBottom: 4,
   },
-  miniRupee: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '600',
-  },
-  miniAmount: {
+  dataValueSubtle: {
     fontSize: 13,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 4,
+  },
+  dataArrow: {
+    fontSize: 16,
+    color: '#D1D5DB',
+    marginHorizontal: 6,
+  },
+  dataArrowPrice: {
+    fontSize: 20,
+    color: '#F59E0B',
+    marginHorizontal: 10,
     fontWeight: 'bold',
-    color: '#10B981',
   },
   // Adjustments
   balanceContainer: {
@@ -2552,5 +2731,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#15803D',
     fontWeight: '500',
+  },
+  billExistsContainer: {
+    backgroundColor: '#DBEAFE',
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    alignItems: 'center',
+  },
+  billExistsIcon: {
+    fontSize: 48,
+    color: '#3B82F6',
+    marginBottom: 12,
+  },
+  billExistsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  billExistsText: {
+    fontSize: 14,
+    color: '#1E40AF',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  billExistsSubtext: {
+    fontSize: 13,
+    color: '#3B82F6',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  billHeaderLeft: {
+    flex: 1,
+  },
+  billDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
   },
 });

@@ -11,6 +11,9 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 import {
   getFishVarieties,
   getSalesByDate,
@@ -22,6 +25,8 @@ import {
   cleanupDuplicateSales,
 } from '../api/stock';
 import type { Sale, FishVariety, Customer, Purchase } from '../types';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 // Hardcoded order for fish varieties - same as web
 const VARIETY_ORDER = ['Pangasius', 'Roopchand', 'Rohu', 'Katla', 'Tilapia', 'Silver Carp', 'Grass Carp', 'Common Carp'];
@@ -63,6 +68,7 @@ const sortVarietiesByOrder = (varietiesData: FishVariety[]) => {
 };
 
 export default function SalesScreen() {
+  const navigation = useNavigation<NavigationProp>();
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -801,25 +807,68 @@ export default function SalesScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.customerHeader}>
-                    <View style={styles.customerHeaderLeft}>
-                      <Text style={styles.collapseIcon}>
-                        {collapsedCustomers.has(customerId) ? '▶' : '▼'}
-                      </Text>
-                      <Text style={styles.customerName}>{customerName}</Text>
+                    {/* First row: Name and Quantity */}
+                    <View style={styles.customerHeaderTop}>
+                      <View style={styles.customerHeaderLeft}>
+                        <Text style={styles.collapseIcon}>
+                          {collapsedCustomers.has(customerId) ? '▶' : '▼'}
+                        </Text>
+                        <Text style={styles.customerName} numberOfLines={1} ellipsizeMode="tail">
+                          {customerName}
+                        </Text>
+                      </View>
+                      <View style={styles.quantityBadge}>
+                        <Text style={styles.customerCount}>
+                          {customerSales.reduce((sum, s) => sum + s.quantity_crates, 0)}
+                        </Text>
+                      </View>
                     </View>
-                    <View style={styles.customerHeaderRight}>
-                      <Text style={styles.customerCount}>
-                        {customerSales.reduce((sum, s) => sum + s.quantity_crates, 0)} cr
-                      </Text>
-                      <TouchableOpacity
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleEditCustomer(customerId, customerSales);
-                        }}
-                        style={styles.editButton}
-                      >
-                        <Text style={styles.editButtonText}>Edit</Text>
-                      </TouchableOpacity>
+
+                    {/* Second row: Status and Action Buttons */}
+                    <View style={styles.customerHeaderBottom}>
+                      {/* Billing Status Indicator */}
+                      {customerSales[0]?.billing_status && (
+                        <View style={[
+                          styles.billingStatusBadge,
+                          customerSales[0].billing_status === 'billed' && styles.billingStatusBilled,
+                          customerSales[0].billing_status === 'unbilled' && styles.billingStatusUnbilled,
+                          customerSales[0].billing_status === 'partial' && styles.billingStatusPartial,
+                        ]}>
+                          <Text style={styles.billingStatusIcon}>
+                            {customerSales[0].billing_status === 'billed' && '✓'}
+                            {customerSales[0].billing_status === 'unbilled' && '⚠'}
+                            {customerSales[0].billing_status === 'partial' && '◐'}
+                          </Text>
+                        </View>
+                      )}
+
+                      <View style={styles.actionButtons}>
+                        {/* Show Generate Bill button only for unbilled sales */}
+                        {customerSales[0]?.billing_status === 'unbilled' && (
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              navigation.navigate('BillGeneration', {
+                                customer_id: customerId,
+                                customer_name: customerName,
+                                date: date,
+                              });
+                            }}
+                            style={styles.generateBillButton}
+                          >
+                            <Text style={styles.generateBillButtonText}>Bill</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            handleEditCustomer(customerId, customerSales);
+                          }}
+                          style={styles.editButton}
+                        >
+                          <Text style={styles.editButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 </TouchableOpacity>
@@ -1228,15 +1277,25 @@ const styles = StyleSheet.create({
   customerHeader: {
     backgroundColor: '#F3F4F6',
     padding: 16,
+  },
+  customerHeaderTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 10,
+  },
+  customerHeaderBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingLeft: 24,
   },
   customerHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     flex: 1,
+    minWidth: 0,
   },
   collapseIcon: {
     fontSize: 12,
@@ -1244,14 +1303,62 @@ const styles = StyleSheet.create({
     width: 16,
   },
   customerName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#111827',
+    flexShrink: 1,
+  },
+  quantityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  quantityIcon: {
+    fontSize: 16,
   },
   customerCount: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#3B82F6',
+    color: '#1E40AF',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  billingStatusBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  billingStatusBilled: {
+    backgroundColor: '#D1FAE5',
+  },
+  billingStatusUnbilled: {
+    backgroundColor: '#FEE2E2',
+  },
+  billingStatusPartial: {
+    backgroundColor: '#FEF3C7',
+  },
+  billingStatusIcon: {
+    fontSize: 18,
+  },
+  generateBillButton: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  generateBillButtonText: {
+    color: '#1E40AF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   saleItem: {
     flexDirection: 'row',

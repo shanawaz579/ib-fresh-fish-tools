@@ -14,8 +14,9 @@ export default function CustomerOutstandingCard({
 }: CustomerOutstandingCardProps) {
   if (totalOutstanding === 0) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.noOutstanding}>✓ No Outstanding Balance</Text>
+      <View style={[styles.container, styles.noOutstandingContainer]}>
+        <Text style={styles.noOutstanding}>✓ All Bills Paid</Text>
+        <Text style={styles.noOutstandingSubtext}>Customer has no pending payments</Text>
       </View>
     );
   }
@@ -112,11 +113,24 @@ const styles = StyleSheet.create({
   overdueText: {
     color: '#DC2626',
   },
+  noOutstandingContainer: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
   noOutstanding: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#059669',
     textAlign: 'center',
-    padding: 16,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+  },
+  noOutstandingSubtext: {
+    fontSize: 13,
+    color: '#047857',
+    textAlign: 'center',
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 4,
   },
 });

@@ -52,22 +52,12 @@ export default function PurchaseBillGenerationScreen() {
 
   useEffect(() => {
     // Initialize items from purchases
-    console.log('Purchases data:', JSON.stringify(purchases, null, 2));
-
     const initialItems = purchases.map(p => {
       const crates = p.quantity_crates || 0;
       const looseKg = p.quantity_kg || 0;
       const kgPerCrate = 35; // Default 35 kg per crate
       const calculatedWeight = crates * kgPerCrate;
       const actualWeight = calculatedWeight + looseKg;
-
-      console.log(`Processing purchase ${p.id}:`, {
-        variety: p.fish_variety_name,
-        crates,
-        kgPerCrate,
-        looseKg,
-        totalWeight: actualWeight,
-      });
 
       return {
         purchaseId: p.id,
@@ -84,7 +74,6 @@ export default function PurchaseBillGenerationScreen() {
       };
     });
 
-    console.log('Initial items:', JSON.stringify(initialItems, null, 2));
     setItems(initialItems);
   }, [purchases]);
 

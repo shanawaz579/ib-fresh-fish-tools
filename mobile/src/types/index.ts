@@ -24,6 +24,8 @@ export type Sale = {
   quantity_crates: number;
   quantity_kg: number;
   sale_date: string;
+  billing_status?: 'unbilled' | 'billed' | 'partial'; // New field - optional for backward compatibility
+  billed_in_bill_id?: number; // Reference to sales bill - optional
 };
 
 export type FishVariety = {
@@ -102,6 +104,16 @@ export type Payment = {
   amount: number;
   payment_method: 'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'other';
   reference_number?: string;
+  notes?: string;
+  created_at?: string;
+};
+
+export type PurchaseBillPayment = {
+  id: number;
+  purchase_bill_id: number;
+  payment_date: string;
+  amount: number;
+  payment_mode: 'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'other';
   notes?: string;
   created_at?: string;
 };

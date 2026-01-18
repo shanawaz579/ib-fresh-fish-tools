@@ -36,89 +36,99 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
       </View>
 
       <ScrollView style={styles.menuContainer} contentContainerStyle={styles.menuContent}>
-        {/* 1. Stock Dashboard */}
+        {/* Quick Access - Dashboard */}
         <TouchableOpacity
-          style={[styles.menuCard, styles.dashboardCard]}
+          style={[styles.heroCard, styles.dashboardCard]}
           onPress={() => navigation.navigate('Dashboard')}
         >
-          <Text style={styles.icon}>📈</Text>
-          <Text style={styles.menuTitle}>Stock Dashboard</Text>
+          <Text style={styles.heroIcon}>📈</Text>
+          <View style={styles.heroContent}>
+            <Text style={styles.heroTitle}>Stock Dashboard</Text>
+            <Text style={styles.heroDescription}>View current inventory & stock levels</Text>
+          </View>
         </TouchableOpacity>
 
-        {/* 2. Sales */}
-        <TouchableOpacity
-          style={[styles.menuCard, styles.salesCard]}
-          onPress={() => navigation.navigate('Sales')}
-        >
-          <Text style={styles.icon}>📊</Text>
-          <Text style={styles.menuTitle}>Sales Spreadsheet</Text>
-        </TouchableOpacity>
+        {/* Sales Section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Sales Operations</Text>
+        </View>
 
-        {/* 3. Packing List */}
-        <TouchableOpacity
-          style={[styles.menuCard, styles.packingCard]}
-          onPress={() => navigation.navigate('Packing')}
-        >
-          <Text style={styles.icon}>📦</Text>
-          <Text style={styles.menuTitle}>Packing List</Text>
-        </TouchableOpacity>
+        <View style={styles.gridContainer}>
+          <TouchableOpacity
+            style={[styles.gridCard, styles.salesCard]}
+            onPress={() => navigation.navigate('Sales')}
+          >
+            <Text style={styles.gridIcon}>📊</Text>
+            <Text style={styles.gridTitle}>Sales Entry</Text>
+          </TouchableOpacity>
 
-        {/* 4. Bill Generation */}
-        <TouchableOpacity
-          style={[styles.menuCard, styles.billCard]}
-          onPress={() => navigation.navigate('BillGeneration')}
-        >
-          <Text style={styles.icon}>🧾</Text>
-          <Text style={styles.menuTitle}>Bill Generation</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gridCard, styles.packingCard]}
+            onPress={() => navigation.navigate('Packing')}
+          >
+            <Text style={styles.gridIcon}>📦</Text>
+            <Text style={styles.gridTitle}>Packing</Text>
+          </TouchableOpacity>
 
-        {/* 5. Payments */}
-        <TouchableOpacity
-          style={[styles.menuCard, styles.paymentsCard]}
-          onPress={() => navigation.navigate('Payments')}
-        >
-          <Text style={styles.icon}>💰</Text>
-          <Text style={styles.menuTitle}>Record Payment</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gridCard, styles.itemsByCustomerCard]}
+            onPress={() => navigation.navigate('ItemsByCustomer')}
+          >
+            <Text style={styles.gridIcon}>📋</Text>
+            <Text style={styles.gridTitle}>Items by Customer</Text>
+          </TouchableOpacity>
 
-        {/* 6. Sales Bills View */}
-        <TouchableOpacity
-          style={[styles.menuCard, styles.billsViewCard]}
-          onPress={() => navigation.navigate('BillsView')}
-        >
-          <Text style={styles.icon}>📄</Text>
-          <Text style={styles.menuTitle}>View Sales Bills</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gridCard, styles.billCard]}
+            onPress={() => navigation.navigate('BillGeneration')}
+          >
+            <Text style={styles.gridIcon}>🧾</Text>
+            <Text style={styles.gridTitle}>Generate Bill</Text>
+          </TouchableOpacity>
 
-        {/* 7. Purchase Records */}
-        <TouchableOpacity
-          style={[styles.menuCard, styles.purchaseCard]}
-          onPress={() => navigation.navigate('Purchase')}
-        >
-          <Text style={styles.icon}>🛒</Text>
-          <Text style={styles.menuTitle}>Purchase Records</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gridCard, styles.billsViewCard]}
+            onPress={() => navigation.navigate('BillsView')}
+          >
+            <Text style={styles.gridIcon}>📄</Text>
+            <Text style={styles.gridTitle}>View Bills</Text>
+          </TouchableOpacity>
 
-        {/* 8. Purchase Bills View */}
-        <TouchableOpacity
-          style={[styles.menuCard, styles.purchaseBillsViewCard]}
-          onPress={() => navigation.navigate('PurchaseBillsView')}
-        >
-          <Text style={styles.icon}>📋</Text>
-          <Text style={styles.menuTitle}>View Purchase Bills</Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.gridCard, styles.paymentsCard]}
+            onPress={() => navigation.navigate('Payments')}
+          >
+            <Text style={styles.gridIcon}>💰</Text>
+            <Text style={styles.gridTitle}>Payments</Text>
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity
-          style={[styles.menuCard, styles.itemsByCustomerCard]}
-          onPress={() => navigation.navigate('ItemsByCustomer')}
-        >
-          <Text style={styles.icon}>📋</Text>
-          <Text style={styles.menuTitle}>Items by Customer</Text>
-        </TouchableOpacity>
+        {/* Purchase Section */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Purchase Operations</Text>
+        </View>
+
+        <View style={styles.gridContainer}>
+          <TouchableOpacity
+            style={[styles.gridCard, styles.purchaseCard]}
+            onPress={() => navigation.navigate('Purchase')}
+          >
+            <Text style={styles.gridIcon}>🛒</Text>
+            <Text style={styles.gridTitle}>Purchase Entry</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.gridCard, styles.purchaseBillsViewCard]}
+            onPress={() => navigation.navigate('PurchaseBillsView')}
+          >
+            <Text style={styles.gridIcon}>📋</Text>
+            <Text style={styles.gridTitle}>Purchase Bills</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Management Section */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Manage</Text>
+          <Text style={styles.sectionTitle}>Master Data</Text>
         </View>
 
         <View style={styles.gridContainer}>
@@ -143,7 +153,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             onPress={() => navigation.navigate('FishVarieties')}
           >
             <Text style={styles.gridIcon}>🐟</Text>
-            <Text style={styles.gridTitle}>Fish Varieties</Text>
+            <Text style={styles.gridTitle}>Fish Types</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -211,93 +221,96 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 100,
   },
-  menuCard: {
+  heroCard: {
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 12,
+    borderRadius: 20,
+    padding: 24,
+    marginBottom: 24,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-    borderLeftWidth: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+    borderLeftWidth: 6,
+  },
+  heroIcon: {
+    fontSize: 48,
+    marginRight: 20,
+  },
+  heroContent: {
+    flex: 1,
+  },
+  heroTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  heroDescription: {
+    fontSize: 14,
+    color: '#6B7280',
   },
   dashboardCard: {
     borderLeftColor: '#8B5CF6',
   },
   packingCard: {
-    borderLeftColor: '#0EA5E9',
+    borderBottomColor: '#0EA5E9',
   },
   itemsByCustomerCard: {
-    borderLeftColor: '#6366F1',
+    borderBottomColor: '#6366F1',
   },
   purchaseCard: {
-    borderLeftColor: '#10B981',
+    borderBottomColor: '#10B981',
   },
   salesCard: {
-    borderLeftColor: '#3B82F6',
+    borderBottomColor: '#3B82F6',
   },
   billCard: {
-    borderLeftColor: '#F59E0B',
+    borderBottomColor: '#F59E0B',
   },
   paymentsCard: {
-    borderLeftColor: '#10B981',
+    borderBottomColor: '#10B981',
   },
   billsViewCard: {
-    borderLeftColor: '#6366F1',
+    borderBottomColor: '#6366F1',
   },
   purchaseBillsViewCard: {
-    borderLeftColor: '#059669',
+    borderBottomColor: '#059669',
   },
   farmersCard: {
-    borderLeftColor: '#F59E0B',
+    borderBottomColor: '#F59E0B',
   },
   customersCard: {
-    borderLeftColor: '#8B5CF6',
+    borderBottomColor: '#8B5CF6',
   },
   varietiesCard: {
-    borderLeftColor: '#EC4899',
+    borderBottomColor: '#EC4899',
   },
   sectionHeader: {
-    marginTop: 16,
-    marginBottom: 12,
+    marginTop: 20,
+    marginBottom: 16,
     paddingHorizontal: 4,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#0EA5E9',
     textTransform: 'uppercase',
-    letterSpacing: 1,
-  },
-  icon: {
-    fontSize: 36,
-    marginRight: 16,
-  },
-  menuTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#111827',
-    flex: 1,
-  },
-  menuDescription: {
-    fontSize: 15,
-    color: '#6B7280',
-    lineHeight: 22,
+    letterSpacing: 1.2,
   },
   gridContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginBottom: 8,
   },
   gridCard: {
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 16,
-    width: '30%',
+    width: '31%',
     aspectRatio: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -310,11 +323,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   gridIcon: {
-    fontSize: 32,
+    fontSize: 36,
     marginBottom: 8,
   },
   gridTitle: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#111827',
     textAlign: 'center',

@@ -31,7 +31,11 @@ export type RootStackParamList = {
   Farmers: undefined;
   Customers: undefined;
   FishVarieties: undefined;
-  BillGeneration: undefined;
+  BillGeneration: {
+    customer_id?: number;
+    customer_name?: string;
+    date?: string;
+  } | undefined;
   PurchaseBillGeneration: {
     farmer_id: number;
     farmer_name: string;

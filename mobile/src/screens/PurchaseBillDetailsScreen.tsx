@@ -7,10 +7,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { getPurchaseBillDetails } from '../api/stock';
+import { getPurchaseBillDetails, createPurchaseBillPayment, deletePurchaseBillPayment } from '../api/stock';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
@@ -73,6 +76,14 @@ export default function PurchaseBillDetailsScreen() {
   const [billDetails, setBillDetails] = useState<BillDetails | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Payment modal state
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().split('T')[0]);
+  const [paymentMode, setPaymentMode] = useState<'cash' | 'bank_transfer' | 'upi' | 'cheque' | 'other'>('cash');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+
   useEffect(() => {
     loadBillDetails();
   }, []);
@@ -92,17 +103,21 @@ export default function PurchaseBillDetailsScreen() {
 
   const generatePrintableHTML = (bill: BillDetails): string => {
     const itemsHTML = bill.items.map((item) => {
-      const qtyParts = [];
-      if (item.quantity_crates > 0) qtyParts.push(`${item.quantity_crates} cr`);
-      if (item.quantity_kg > 0) qtyParts.push(`${item.quantity_kg} kg`);
-      const qtyText = qtyParts.length > 0 ? qtyParts.join(' + ') : '0 kg';
+      let qtyText = '';
+      if (item.quantity_crates > 0 && item.quantity_kg > 0) {
+        qtyText = `${item.quantity_crates}+${item.quantity_kg}kg`;
+      } else if (item.quantity_crates > 0) {
+        qtyText = `${item.quantity_crates} cr`;
+      } else if (item.quantity_kg > 0) {
+        qtyText = `${item.quantity_kg} kg`;
+      } else {
+        qtyText = '0 kg';
+      }
 
       return `
       <tr>
-        <td>
-          <div>${item.fish_variety_name}</div>
-          <div class="qty-subtext">${qtyText}</div>
-        </td>
+        <td>${item.fish_variety_name}</td>
+        <td class="text-center">${qtyText}</td>
         <td class="text-center">${item.billable_weight}</td>
         <td class="text-center">${item.rate_per_kg}</td>
         <td class="text-right">${item.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
@@ -117,6 +132,15 @@ export default function PurchaseBillDetailsScreen() {
       </div>
     `).join('');
 
+    const paymentsHTML = bill.payments.length > 0 ? bill.payments.map((payment) => `
+      <tr>
+        <td>${new Date(payment.payment_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+        <td class="text-center">${payment.payment_mode.toUpperCase()}</td>
+        <td class="text-right payment-amount-cell">₹${payment.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+        ${payment.notes ? `<td class="payment-notes-cell">${payment.notes}</td>` : '<td class="payment-notes-cell">-</td>'}
+      </tr>
+    `).join('') : '';
+
     return `
       <!DOCTYPE html>
       <html>
@@ -125,61 +149,74 @@ export default function PurchaseBillDetailsScreen() {
           <style>
             @page {
               size: A4;
-              margin: 15mm;
+              margin: 10mm;
             }
             body {
               font-family: 'Arial', sans-serif;
               padding: 0;
               margin: 0;
               font-size: 12px;
+              min-height: 100vh;
+              display: flex;
+              flex-direction: column;
+            }
+            .content-wrapper {
+              flex: 1;
             }
             .header {
-              background: #f8fafc;
-              padding: 12px 16px;
-              border-bottom: 2px solid #0ea5e9;
-              margin-bottom: 16px;
+              background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+              padding: 10px 16px;
+              border-bottom: 3px solid #0ea5e9;
+              margin-bottom: 10px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             .header-top {
               display: flex;
               justify-content: space-between;
               align-items: center;
-              margin-bottom: 10px;
-              font-size: 10px;
+              margin-bottom: 8px;
+              font-size: 12px;
             }
             .company-name {
-              font-size: 26px;
+              font-size: 24px;
               font-weight: 900;
               color: #0f172a;
               letter-spacing: 2px;
               text-align: center;
-              margin-bottom: 6px;
+              margin-bottom: 4px;
+              text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
             }
             .proprietor {
-              color: #475569;
-              font-weight: 600;
+              color: #1e293b;
+              font-weight: 700;
+              font-size: 13px;
             }
             .contact {
-              color: #0ea5e9;
-              font-weight: 700;
+              color: #0284c7;
+              font-weight: 800;
+              font-size: 14px;
             }
             .tagline {
-              font-size: 11px;
-              font-weight: 600;
-              color: #64748b;
+              font-size: 12px;
+              font-weight: 700;
+              color: #475569;
               text-transform: uppercase;
-              letter-spacing: 0.5px;
+              letter-spacing: 0.8px;
               text-align: center;
               margin-bottom: 4px;
             }
             .address {
-              font-size: 10px;
+              font-size: 11px;
               color: #64748b;
               text-align: center;
+              font-weight: 500;
             }
             .farmer-section {
-              margin-bottom: 16px;
-              padding-bottom: 12px;
-              border-bottom: 1px solid #e5e7eb;
+              margin-bottom: 10px;
+              padding: 10px;
+              background: #f9fafb;
+              border-radius: 6px;
+              border: 1px solid #e5e7eb;
             }
             .farmer-row {
               display: flex;
@@ -191,52 +228,71 @@ export default function PurchaseBillDetailsScreen() {
             }
             .farmer-right {
               text-align: right;
+              background: #fff;
+              padding: 8px 12px;
+              border-radius: 6px;
+              border: 1px solid #e5e7eb;
             }
             .farmer-name {
               font-size: 16px;
-              font-weight: bold;
+              font-weight: 800;
               color: #111827;
-              margin-bottom: 4px;
+              margin-bottom: 2px;
             }
             .farmer-details {
               font-size: 11px;
               color: #6b7280;
+              font-weight: 500;
             }
             .bill-number {
               font-size: 14px;
-              font-weight: bold;
-              color: #111827;
-              margin-bottom: 4px;
+              font-weight: 800;
+              color: #0ea5e9;
+              margin-bottom: 2px;
             }
             .bill-date {
               font-size: 11px;
               color: #6b7280;
+              font-weight: 600;
             }
             table {
               width: 100%;
               border-collapse: collapse;
-              margin-bottom: 16px;
+              margin-bottom: 10px;
+              border: 1px solid #e5e7eb;
+              border-radius: 6px;
+              overflow: hidden;
             }
             thead {
-              background: #f3f4f6;
+              background: linear-gradient(to bottom, #1e293b, #334155);
             }
             th {
-              padding: 10px 8px;
+              padding: 6px 4px;
               text-align: left;
               font-size: 11px;
-              font-weight: bold;
-              color: #374151;
+              font-weight: 700;
+              color: #ffffff;
+              text-transform: uppercase;
+              letter-spacing: 0.3px;
             }
             td {
-              padding: 10px 8px;
+              padding: 6px 4px;
               font-size: 12px;
               color: #111827;
-              border-bottom: 1px solid #f3f4f6;
+              border-bottom: 1px solid #e5e7eb;
+              background: #ffffff;
+            }
+            tbody tr:nth-child(even) td {
+              background: #f9fafb;
+            }
+            tbody tr:hover td {
+              background: #f0f9ff;
             }
             .qty-subtext {
-              font-size: 10px;
+              font-size: 11px;
               color: #6b7280;
               margin-top: 2px;
+              font-weight: 500;
             }
             .text-center {
               text-align: center;
@@ -245,63 +301,77 @@ export default function PurchaseBillDetailsScreen() {
               text-align: right;
             }
             .totals {
-              margin-top: 16px;
-              padding-top: 12px;
-              border-top: 1px solid #e5e7eb;
+              margin-top: 10px;
+              padding: 10px;
+              background: linear-gradient(to bottom, #f8fafc, #ffffff);
+              border-radius: 6px;
+              border: 1px solid #e5e7eb;
             }
             .total-row {
               display: flex;
               justify-content: space-between;
-              margin-bottom: 8px;
+              margin-bottom: 4px;
               font-size: 12px;
+              padding: 1px 0;
             }
             .total-label {
-              color: #6b7280;
+              color: #475569;
+              font-weight: 600;
             }
             .total-value {
-              font-weight: 600;
+              font-weight: 700;
               color: #111827;
             }
             .charge-row {
-              padding-left: 20px;
+              padding-left: 16px;
+              border-left: 3px solid #e0f2fe;
             }
             .charge-label {
-              font-weight: normal;
-              font-size: 11px;
+              font-weight: 500;
+              font-size: 12px;
+              color: #64748b;
             }
             .charge-value {
-              font-size: 11px;
+              font-size: 12px;
               color: #059669;
+              font-weight: 700;
             }
             .deduction-value {
-              font-size: 11px;
+              font-size: 12px;
               color: #DC2626;
+              font-weight: 700;
             }
             .separator {
-              height: 2px;
-              background-color: #E5E7EB;
-              margin: 16px 0;
+              height: 1px;
+              background: linear-gradient(to right, #e5e7eb, #cbd5e1, #e5e7eb);
+              margin: 6px 0;
             }
             .grand-total {
-              margin-top: 12px;
-              padding-top: 12px;
-              border-top: 2px solid #3b82f6;
+              margin-top: 8px;
+              padding: 8px;
+              border-top: 3px solid #3b82f6;
+              background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+              border-radius: 6px;
             }
             .grand-total .total-label {
-              font-size: 16px;
-              font-weight: bold;
-              color: #111827;
+              font-size: 15px;
+              font-weight: 900;
+              color: #1e3a8a;
+              text-transform: uppercase;
+              letter-spacing: 0.8px;
             }
             .grand-total .total-value {
               font-size: 18px;
-              font-weight: bold;
-              color: #3b82f6;
+              font-weight: 900;
+              color: #1e40af;
             }
             .payment-paid {
               color: #059669;
+              font-weight: 700;
             }
             .payment-due {
               color: #DC2626;
+              font-weight: 700;
             }
             .notes {
               margin-top: 16px;
@@ -309,41 +379,120 @@ export default function PurchaseBillDetailsScreen() {
               border-top: 1px solid #e5e7eb;
             }
             .notes-title {
-              font-size: 11px;
+              font-size: 9px;
               font-weight: 600;
               color: #6b7280;
-              margin-bottom: 6px;
+              margin-bottom: 3px;
             }
             .notes-text {
-              font-size: 12px;
+              font-size: 10px;
               color: #374151;
               font-style: italic;
             }
+            .payment-details-section {
+              margin-top: 10px;
+              padding: 10px;
+              background: #f8fafc;
+              border-radius: 6px;
+              border: 1px solid #e5e7eb;
+            }
+            .payment-details-title {
+              font-size: 12px;
+              font-weight: 700;
+              color: #374151;
+              margin-bottom: 6px;
+              text-transform: uppercase;
+              letter-spacing: 0.3px;
+              border-bottom: 2px solid #0ea5e9;
+              padding-bottom: 3px;
+            }
+            .payment-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 0;
+              background: #fff;
+            }
+            .payment-table thead {
+              background: linear-gradient(to bottom, #0ea5e9, #0284c7);
+            }
+            .payment-table th {
+              padding: 5px 4px;
+              text-align: left;
+              font-size: 10px;
+              font-weight: 700;
+              color: #ffffff;
+              text-transform: uppercase;
+              letter-spacing: 0.3px;
+            }
+            .payment-table td {
+              padding: 5px 4px;
+              font-size: 11px;
+              color: #111827;
+              border-bottom: 1px solid #e5e7eb;
+              background: #ffffff;
+            }
+            .payment-table tbody tr:nth-child(even) td {
+              background: #f9fafb;
+            }
+            .payment-amount-cell {
+              font-weight: 700;
+              color: #059669;
+            }
+            .payment-notes-cell {
+              font-size: 9px;
+              color: #6b7280;
+              font-style: italic;
+            }
+            .payment-space {
+              margin-top: 15px;
+              padding: 12px;
+              border: 2px dashed #d1d5db;
+              border-radius: 6px;
+              background: #fafafa;
+              min-height: 60px;
+            }
+            .payment-space-title {
+              font-size: 10px;
+              font-weight: 700;
+              color: #374151;
+              margin-bottom: 4px;
+              text-transform: uppercase;
+              letter-spacing: 0.3px;
+            }
+            .payment-space-subtitle {
+              font-size: 9px;
+              color: #6b7280;
+              font-style: italic;
+            }
             .footer {
-              margin-top: 40px;
-              padding-top: 20px;
-              border-top: 2px solid #E5E7EB;
+              margin-top: auto;
+              padding-top: 10px;
+              padding-bottom: 8px;
+              border-top: 3px double #cbd5e1;
               text-align: center;
+              background: linear-gradient(to top, #f8fafc, transparent);
             }
             .footer-text {
-              font-size: 16px;
-              font-weight: 600;
-              color: #10B981;
+              font-size: 13px;
+              font-weight: 700;
+              color: #059669;
+              letter-spacing: 0.4px;
             }
           </style>
         </head>
         <body>
-          <div class="header">
-            <div class="header-top">
-              <span class="proprietor">Ibrahim Shaik (IB-NLR)</span>
-              <span class="contact">📞 99087 04047</span>
+          <div class="content-wrapper">
+            <div class="header">
+              <div class="header-top">
+                <span class="proprietor">Ibrahim Shaik (IB-NLR)</span>
+                <span class="contact">📞 99087 04047</span>
+              </div>
+              <div class="company-name">SKS SEA FOODS</div>
+              <div class="tagline">Wholesale Fish & Prawn Trading</div>
+              <div class="address">Raghavendra Ice Factory, Muttukur Road, Nellore, AP.</div>
             </div>
-            <div class="company-name">S.K.S. Co.</div>
-            <div class="tagline">Wholesale Fish & Prawn Trading</div>
-            <div class="address">Raghavendra Ice Factory, Muttukur Road, Nellore, AP.</div>
-          </div>
 
-          <div class="farmer-section">
+            <div class="farmer-section">
             <div class="farmer-row">
               <div class="farmer-left">
                 <div class="farmer-name">${bill.farmer_name}</div>
@@ -366,6 +515,7 @@ export default function PurchaseBillDetailsScreen() {
             <thead>
               <tr>
                 <th>Item</th>
+                <th class="text-center">Qty</th>
                 <th class="text-center">Weight (kg)</th>
                 <th class="text-center">Rate (₹/kg)</th>
                 <th class="text-right">Amount (₹)</th>
@@ -394,7 +544,7 @@ export default function PurchaseBillDetailsScreen() {
               <span class="total-value">${bill.total.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
             </div>
 
-            ${bill.amount_paid > 0 ? `
+            ${bill.payments.length > 0 ? `
               <div class="separator"></div>
 
               <div class="total-row">
@@ -409,12 +559,37 @@ export default function PurchaseBillDetailsScreen() {
             ` : ''}
           </div>
 
-          ${bill.notes ? `
-          <div class="notes">
-            <div class="notes-title">Notes:</div>
-            <div class="notes-text">${bill.notes}</div>
+            ${bill.payments.length > 0 ? `
+            <div class="payment-details-section">
+              <div class="payment-details-title">Payment Details</div>
+              <table class="payment-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th class="text-center">Mode</th>
+                    <th class="text-right">Amount</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${paymentsHTML}
+                </tbody>
+              </table>
+            </div>
+            ` : ''}
+
+            ${bill.notes ? `
+            <div class="notes">
+              <div class="notes-title">Notes:</div>
+              <div class="notes-text">${bill.notes}</div>
+            </div>
+            ` : ''}
+
+            <div class="payment-space">
+              <div class="payment-space-title">Payment Records</div>
+              <div class="payment-space-subtitle">Use this space to record payment details manually</div>
+            </div>
           </div>
-          ` : ''}
 
           <div class="footer">
             <div class="footer-text">
@@ -447,6 +622,74 @@ export default function PurchaseBillDetailsScreen() {
       console.error('Error printing bill:', error);
       Alert.alert('Error', 'Failed to generate printable bill');
     }
+  };
+
+  const handleOpenPaymentModal = () => {
+    if (!billDetails) return;
+    setPaymentAmount(billDetails.balance_due.toString());
+    setPaymentDate(new Date().toISOString().split('T')[0]);
+    setPaymentMode('cash');
+    setPaymentNotes('');
+    setShowPaymentModal(true);
+  };
+
+  const handleAddPayment = async () => {
+    if (!billDetails) return;
+
+    const amount = parseFloat(paymentAmount);
+    if (isNaN(amount) || amount <= 0) {
+      Alert.alert('Error', 'Please enter a valid amount');
+      return;
+    }
+
+    if (amount > billDetails.balance_due) {
+      Alert.alert('Error', `Payment amount cannot exceed balance due (₹${billDetails.balance_due.toLocaleString('en-IN')})`);
+      return;
+    }
+
+    setSubmittingPayment(true);
+    try {
+      await createPurchaseBillPayment(
+        billDetails.id,
+        paymentDate,
+        amount,
+        paymentMode,
+        paymentNotes
+      );
+
+      Alert.alert('Success', 'Payment recorded successfully');
+      setShowPaymentModal(false);
+      await loadBillDetails(); // Reload to get updated data
+    } catch (error) {
+      console.error('Error adding payment:', error);
+      Alert.alert('Error', 'Failed to record payment');
+    } finally {
+      setSubmittingPayment(false);
+    }
+  };
+
+  const handleDeletePayment = async (paymentId: number) => {
+    Alert.alert(
+      'Confirm Delete',
+      'Are you sure you want to delete this payment?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deletePurchaseBillPayment(paymentId);
+              Alert.alert('Success', 'Payment deleted successfully');
+              await loadBillDetails();
+            } catch (error) {
+              console.error('Error deleting payment:', error);
+              Alert.alert('Error', 'Failed to delete payment');
+            }
+          },
+        },
+      ]
+    );
   };
 
   if (loading) {
@@ -610,9 +853,7 @@ export default function PurchaseBillDetailsScreen() {
             {billDetails.balance_due > 0 && (
               <TouchableOpacity
                 style={styles.addPaymentButton}
-                onPress={() => {
-                  Alert.alert('Coming Soon', 'Add payment functionality will be implemented soon!');
-                }}
+                onPress={handleOpenPaymentModal}
               >
                 <Text style={styles.addPaymentText}>+ Add Payment</Text>
               </TouchableOpacity>
@@ -626,7 +867,7 @@ export default function PurchaseBillDetailsScreen() {
             billDetails.payments.map((payment) => (
               <View key={payment.id} style={styles.paymentCard}>
                 <View style={styles.paymentHeader}>
-                  <View>
+                  <View style={styles.paymentLeft}>
                     <Text style={styles.paymentAmount}>
                       ₹{payment.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
                     </Text>
@@ -634,13 +875,21 @@ export default function PurchaseBillDetailsScreen() {
                       {payment.payment_mode.toUpperCase()}
                     </Text>
                   </View>
-                  <Text style={styles.paymentDate}>
-                    {new Date(payment.payment_date).toLocaleDateString('en-IN', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric'
-                    })}
-                  </Text>
+                  <View style={styles.paymentRight}>
+                    <Text style={styles.paymentDate}>
+                      {new Date(payment.payment_date).toLocaleDateString('en-IN', {
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric'
+                      })}
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.deletePaymentButton}
+                      onPress={() => handleDeletePayment(payment.id)}
+                    >
+                      <Text style={styles.deletePaymentText}>Delete</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
                 {payment.notes && (
                   <Text style={styles.paymentNotes}>{payment.notes}</Text>
@@ -660,6 +909,89 @@ export default function PurchaseBillDetailsScreen() {
           </View>
         )}
       </ScrollView>
+
+      {/* Payment Modal */}
+      <Modal
+        visible={showPaymentModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPaymentModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add Payment</Text>
+              <TouchableOpacity onPress={() => setShowPaymentModal(false)}>
+                <Text style={styles.modalCloseButton}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody}>
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Amount (₹)</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Enter amount"
+                  keyboardType="numeric"
+                  value={paymentAmount}
+                  onChangeText={setPaymentAmount}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Payment Date</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="YYYY-MM-DD"
+                  value={paymentDate}
+                  onChangeText={setPaymentDate}
+                />
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Payment Mode</Text>
+                <View style={styles.pickerContainer}>
+                  <Picker
+                    selectedValue={paymentMode}
+                    onValueChange={(value) => setPaymentMode(value)}
+                    style={styles.picker}
+                  >
+                    <Picker.Item label="Cash" value="cash" />
+                    <Picker.Item label="Bank Transfer" value="bank_transfer" />
+                    <Picker.Item label="UPI" value="upi" />
+                    <Picker.Item label="Cheque" value="cheque" />
+                    <Picker.Item label="Other" value="other" />
+                  </Picker>
+                </View>
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Notes (Optional)</Text>
+                <TextInput
+                  style={[styles.formInput, styles.formTextArea]}
+                  placeholder="Add notes (e.g., Transaction ID, Cheque No, etc.)..."
+                  multiline
+                  numberOfLines={4}
+                  value={paymentNotes}
+                  onChangeText={setPaymentNotes}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.submitButton, submittingPayment && styles.submitButtonDisabled]}
+                onPress={handleAddPayment}
+                disabled={submittingPayment}
+              >
+                {submittingPayment ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.submitButtonText}>Record Payment</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1001,5 +1333,105 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#374151',
     lineHeight: 20,
+  },
+  paymentLeft: {
+    flex: 1,
+  },
+  paymentRight: {
+    alignItems: 'flex-end',
+  },
+  deletePaymentButton: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginTop: 4,
+  },
+  deletePaymentText: {
+    color: '#DC2626',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  modalCloseButton: {
+    fontSize: 28,
+    color: '#6B7280',
+    fontWeight: '300',
+  },
+  modalBody: {
+    padding: 20,
+  },
+  formGroup: {
+    marginBottom: 20,
+  },
+  formLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: '#111827',
+  },
+  formTextArea: {
+    height: 80,
+    textAlignVertical: 'top',
+  },
+  pickerContainer: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: 50,
+  },
+  submitButton: {
+    backgroundColor: '#0EA5E9',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
 });
