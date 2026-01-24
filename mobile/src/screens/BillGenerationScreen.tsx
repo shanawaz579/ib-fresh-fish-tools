@@ -619,6 +619,18 @@ Thank you for your business!
         }
         .content-wrapper {
           flex: 1;
+          position: relative;
+        }
+        .content-wrapper::before {
+          content: "🐟";
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          font-size: 300px;
+          opacity: 0.03;
+          z-index: 0;
+          pointer-events: none;
         }
         .header {
           background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
@@ -626,6 +638,8 @@ Thank you for your business!
           border-bottom: 3px solid #0ea5e9;
           margin-bottom: 10px;
           box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          position: relative;
+          z-index: 1;
         }
         .header-top {
           display: flex;
@@ -674,6 +688,8 @@ Thank you for your business!
           background: #f9fafb;
           border-radius: 6px;
           border: 1px solid #e5e7eb;
+          position: relative;
+          z-index: 1;
         }
         .customer-row {
           display: flex;
@@ -719,6 +735,8 @@ Thank you for your business!
           border: 1px solid #e5e7eb;
           border-radius: 6px;
           overflow: hidden;
+          position: relative;
+          z-index: 1;
         }
         thead {
           background: linear-gradient(to bottom, #1e293b, #334155);
@@ -758,6 +776,8 @@ Thank you for your business!
           background: linear-gradient(to bottom, #f8fafc, #ffffff);
           border-radius: 6px;
           border: 1px solid #e5e7eb;
+          position: relative;
+          z-index: 1;
         }
         .total-row {
           display: flex;

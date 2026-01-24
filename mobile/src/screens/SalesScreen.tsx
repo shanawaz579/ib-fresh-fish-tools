@@ -834,10 +834,25 @@ export default function SalesScreen() {
                           customerSales[0].billing_status === 'unbilled' && styles.billingStatusUnbilled,
                           customerSales[0].billing_status === 'partial' && styles.billingStatusPartial,
                         ]}>
-                          <Text style={styles.billingStatusIcon}>
+                          <Text style={[
+                            styles.billingStatusIcon,
+                            customerSales[0].billing_status === 'billed' && { color: '#059669' },
+                            customerSales[0].billing_status === 'unbilled' && { color: '#DC2626' },
+                            customerSales[0].billing_status === 'partial' && { color: '#D97706' },
+                          ]}>
                             {customerSales[0].billing_status === 'billed' && '✓'}
                             {customerSales[0].billing_status === 'unbilled' && '⚠'}
                             {customerSales[0].billing_status === 'partial' && '◐'}
+                          </Text>
+                          <Text style={[
+                            styles.billingStatusText,
+                            customerSales[0].billing_status === 'billed' && { color: '#059669' },
+                            customerSales[0].billing_status === 'unbilled' && { color: '#DC2626' },
+                            customerSales[0].billing_status === 'partial' && { color: '#D97706' },
+                          ]}>
+                            {customerSales[0].billing_status === 'billed' && 'Billed'}
+                            {customerSales[0].billing_status === 'unbilled' && 'Unbilled'}
+                            {customerSales[0].billing_status === 'partial' && 'Partial'}
                           </Text>
                         </View>
                       )}
@@ -1331,11 +1346,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   billingStatusBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    gap: 4,
   },
   billingStatusBilled: {
     backgroundColor: '#D1FAE5',
@@ -1347,7 +1363,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
   },
   billingStatusIcon: {
-    fontSize: 18,
+    fontSize: 12,
+  },
+  billingStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   generateBillButton: {
     backgroundColor: '#DBEAFE',
