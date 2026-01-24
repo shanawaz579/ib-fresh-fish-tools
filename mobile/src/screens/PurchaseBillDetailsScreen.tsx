@@ -125,12 +125,28 @@ export default function PurchaseBillDetailsScreen() {
       `;
     }).join('');
 
-    const otherDeductionsHTML = bill.other_deductions.map((deduction) => `
-      <div class="total-row charge-row">
-        <span class="total-label charge-label">- ${deduction.type.charAt(0).toUpperCase() + deduction.type.slice(1)}:</span>
-        <span class="total-value deduction-value">${deduction.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
-      </div>
-    `).join('');
+    const otherDeductionsHTML = bill.other_deductions.map((deduction) => {
+      const isAddition = deduction.type === 'other_charges_addition';
+
+      let displayName = '';
+      if (deduction.type === 'other_charges_addition') {
+        displayName = 'Other charges (+)';
+      } else if (deduction.type === 'other_charges_deduction') {
+        displayName = 'Other charges (-)';
+      } else {
+        displayName = deduction.type.charAt(0).toUpperCase() + deduction.type.slice(1).replace(/_/g, ' ');
+      }
+
+      const prefix = isAddition ? '+' : '-';
+      const cssClass = isAddition ? 'charge-value' : 'deduction-value';
+
+      return `
+        <div class="total-row charge-row">
+          <span class="total-label charge-label">${prefix} ${displayName}:</span>
+          <span class="total-value ${cssClass}">${deduction.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
+        </div>
+      `;
+    }).join('');
 
     const paymentsHTML = bill.payments.length > 0 ? bill.payments.map((payment) => `
       <tr>
@@ -555,7 +571,7 @@ export default function PurchaseBillDetailsScreen() {
             </div>
 
             <div class="total-row charge-row">
-              <span class="total-label charge-label">+ Commission (₹${bill.commission_per_kg}/kg):</span>
+              <span class="total-label charge-label">+ Commission:</span>
               <span class="total-value charge-value">${bill.commission_amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
             </div>
 
@@ -824,22 +840,36 @@ export default function PurchaseBillDetailsScreen() {
             </View>
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>
-                Commission (₹{billDetails.commission_per_kg}/kg)
+                Commission
               </Text>
               <Text style={styles.summaryValueAdd}>
                 +₹{billDetails.commission_amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
               </Text>
             </View>
-            {billDetails.other_deductions.map((deduction, index) => (
-              <View key={index} style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>
-                  {deduction.type.charAt(0).toUpperCase() + deduction.type.slice(1)}
-                </Text>
-                <Text style={styles.summaryValueDeduction}>
-                  -₹{deduction.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                </Text>
-              </View>
-            ))}
+            {billDetails.other_deductions.map((deduction, index) => {
+              const isAddition = deduction.type === 'other_charges_addition';
+              const isDeduction = deduction.type === 'other_charges_deduction';
+
+              let displayName = '';
+              if (deduction.type === 'other_charges_addition') {
+                displayName = 'Other charges (+)';
+              } else if (deduction.type === 'other_charges_deduction') {
+                displayName = 'Other charges (-)';
+              } else {
+                displayName = deduction.type.charAt(0).toUpperCase() + deduction.type.slice(1).replace(/_/g, ' ');
+              }
+
+              return (
+                <View key={index} style={styles.summaryRow}>
+                  <Text style={styles.summaryLabel}>
+                    {displayName}
+                  </Text>
+                  <Text style={isAddition ? styles.summaryValueAdd : styles.summaryValueDeduction}>
+                    {isAddition ? '+' : '-'}₹{deduction.amount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                  </Text>
+                </View>
+              );
+            })}
             <View style={[styles.summaryRow, styles.totalRow]}>
               <Text style={styles.totalLabel}>Total Bill Amount</Text>
               <Text style={styles.totalValue}>

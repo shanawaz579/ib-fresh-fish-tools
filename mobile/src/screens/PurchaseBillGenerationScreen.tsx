@@ -44,9 +44,10 @@ export default function PurchaseBillGenerationScreen() {
     grossAmount: number;
   }>>([]);
 
-  const [commissionPerKg, setCommissionPerKg] = useState('');
+  const [commissionAmount, setCommissionAmount] = useState('');
   const [advanceAmount, setAdvanceAmount] = useState('');
-  const [transportAmount, setTransportAmount] = useState('');
+  const [otherChargesAddition, setOtherChargesAddition] = useState('');
+  const [otherChargesDeduction, setOtherChargesDeduction] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -134,17 +135,19 @@ export default function PurchaseBillGenerationScreen() {
   const calculateTotals = () => {
     const totalBillableWeight = items.reduce((sum, item) => sum + item.billableWeight, 0);
     const subtotal = items.reduce((sum, item) => sum + item.grossAmount, 0);
-    const commission = totalBillableWeight * (parseFloat(commissionPerKg) || 0);
+    const commission = parseFloat(commissionAmount) || 0;
     const advance = parseFloat(advanceAmount) || 0;
-    const transport = parseFloat(transportAmount) || 0;
-    const total = subtotal + commission - advance - transport;
+    const otherAddition = parseFloat(otherChargesAddition) || 0;
+    const otherDeduction = parseFloat(otherChargesDeduction) || 0;
+    const total = subtotal + commission + otherAddition - advance - otherDeduction;
 
     return {
       totalBillableWeight,
       subtotal,
       commission,
       advance,
-      transport,
+      otherChargesAddition: otherAddition,
+      otherChargesDeduction: otherDeduction,
       total,
     };
   };
@@ -191,9 +194,10 @@ export default function PurchaseBillGenerationScreen() {
                 farmer_id: farmer_id,
                 bill_date: date,
                 items: billItems,
-                commission_per_kg: parseFloat(commissionPerKg) || 0,
+                commission_amount: parseFloat(commissionAmount) || 0,
                 advance_amount: parseFloat(advanceAmount) || 0,
-                transport_amount: parseFloat(transportAmount) || 0,
+                other_charges_addition: parseFloat(otherChargesAddition) || 0,
+                other_charges_deduction: parseFloat(otherChargesDeduction) || 0,
                 notes: notes,
                 location: farmer_location,
                 secondary_name: farmer_secondary_name,
@@ -305,13 +309,24 @@ export default function PurchaseBillGenerationScreen() {
           <Text style={styles.sectionTitle}>Additional Charges & Deductions</Text>
 
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Commission (per kg):</Text>
+            <Text style={styles.inputLabel}>Commission:</Text>
             <TextInput
               style={styles.input}
               placeholder="0.00"
               keyboardType="decimal-pad"
-              value={commissionPerKg}
-              onChangeText={setCommissionPerKg}
+              value={commissionAmount}
+              onChangeText={setCommissionAmount}
+            />
+          </View>
+
+          <View style={styles.inputRow}>
+            <Text style={styles.inputLabel}>Other charges (+):</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="0.00"
+              keyboardType="decimal-pad"
+              value={otherChargesAddition}
+              onChangeText={setOtherChargesAddition}
             />
           </View>
 
@@ -327,13 +342,13 @@ export default function PurchaseBillGenerationScreen() {
           </View>
 
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Transport:</Text>
+            <Text style={styles.inputLabel}>Other charges (-):</Text>
             <TextInput
               style={styles.input}
               placeholder="0.00"
               keyboardType="decimal-pad"
-              value={transportAmount}
-              onChangeText={setTransportAmount}
+              value={otherChargesDeduction}
+              onChangeText={setOtherChargesDeduction}
             />
           </View>
         </View>
@@ -347,10 +362,17 @@ export default function PurchaseBillGenerationScreen() {
             <Text style={styles.summaryValue}>₹{totals.subtotal.toFixed(2)}</Text>
           </View>
 
-          {(parseFloat(commissionPerKg) || 0) > 0 && (
+          {(parseFloat(commissionAmount) || 0) > 0 && (
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>+ Commission</Text>
               <Text style={styles.summaryValue}>₹{totals.commission.toFixed(2)}</Text>
+            </View>
+          )}
+
+          {(parseFloat(otherChargesAddition) || 0) > 0 && (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>+ Other charges</Text>
+              <Text style={styles.summaryValue}>₹{totals.otherChargesAddition.toFixed(2)}</Text>
             </View>
           )}
 
@@ -361,10 +383,10 @@ export default function PurchaseBillGenerationScreen() {
             </View>
           )}
 
-          {(parseFloat(transportAmount) || 0) > 0 && (
+          {(parseFloat(otherChargesDeduction) || 0) > 0 && (
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>- Transport</Text>
-              <Text style={styles.summaryValue}>₹{totals.transport.toFixed(2)}</Text>
+              <Text style={styles.summaryLabel}>- Other charges</Text>
+              <Text style={styles.summaryValue}>₹{totals.otherChargesDeduction.toFixed(2)}</Text>
             </View>
           )}
 

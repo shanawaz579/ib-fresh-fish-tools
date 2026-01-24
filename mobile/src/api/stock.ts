@@ -1366,9 +1366,10 @@ type CreatePurchaseBillParams = {
   farmer_id: number;
   bill_date: string;
   items: PurchaseBillItem[];
-  commission_per_kg: number;
+  commission_amount: number;
   advance_amount: number;
-  transport_amount: number;
+  other_charges_addition: number;
+  other_charges_deduction: number;
   notes?: string;
   location?: string;
   secondary_name?: string;
@@ -1381,9 +1382,9 @@ export async function createPurchaseBill(params: CreatePurchaseBillParams): Prom
     const totalBillableWeight = params.items.reduce((sum, item) => sum + item.billable_weight, 0);
     const weightDeductionAmount = grossAmount - params.items.reduce((sum, item) => sum + item.amount, 0);
     const subtotal = params.items.reduce((sum, item) => sum + item.amount, 0);
-    const commissionAmount = totalBillableWeight * params.commission_per_kg;
-    const otherDeductionsTotal = params.advance_amount + params.transport_amount;
-    const total = subtotal + commissionAmount - otherDeductionsTotal;
+    const commissionAmount = params.commission_amount;
+    const otherDeductionsTotal = params.advance_amount + params.other_charges_deduction;
+    const total = subtotal + commissionAmount + params.other_charges_addition - otherDeductionsTotal;
 
     // Generate bill number
     const { data: lastBill } = await supabase
@@ -1404,8 +1405,11 @@ export async function createPurchaseBill(params: CreatePurchaseBillParams): Prom
     if (params.advance_amount > 0) {
       otherDeductions.push({ type: 'advance', amount: params.advance_amount });
     }
-    if (params.transport_amount > 0) {
-      otherDeductions.push({ type: 'transport', amount: params.transport_amount });
+    if (params.other_charges_addition > 0) {
+      otherDeductions.push({ type: 'other_charges_addition', amount: params.other_charges_addition });
+    }
+    if (params.other_charges_deduction > 0) {
+      otherDeductions.push({ type: 'other_charges_deduction', amount: params.other_charges_deduction });
     }
 
     // Insert purchase bill
@@ -1419,7 +1423,7 @@ export async function createPurchaseBill(params: CreatePurchaseBillParams): Prom
         weight_deduction_percentage: 5, // Always 5%
         weight_deduction_amount: weightDeductionAmount,
         subtotal: subtotal,
-        commission_per_kg: params.commission_per_kg,
+        commission_per_kg: 0, // Not used anymore, set to 0
         commission_amount: commissionAmount,
         other_deductions: otherDeductions,
         other_deductions_total: otherDeductionsTotal,
