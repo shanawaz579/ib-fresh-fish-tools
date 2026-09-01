@@ -10,20 +10,9 @@ import {
 } from 'react-native';
 import { getSalesByDate } from '../api/stock';
 import type { Sale } from '../types';
-
-// Helper to extract size from variety name
-const SIZE_ORDER = ['Big', 'Medium', 'Small'];
-
-function extractSizeAndName(varietyName: string): { name: string; size: string } {
-  for (const s of SIZE_ORDER) {
-    if (varietyName.includes(s)) {
-      const name = varietyName.replace(s, '').trim();
-      const size = s.charAt(0); // Get first letter: B, M, S
-      return { name, size };
-    }
-  }
-  return { name: varietyName, size: '' };
-}
+import DateNavigator from '../components/DateNavigator';
+import { extractFishSize } from '../domain/fish';
+import { useBusinessDate } from '../hooks/useBusinessDate';
 
 interface CustomerPurchase {
   customerId: number;
@@ -41,7 +30,7 @@ interface ItemGroup {
 }
 
 export default function ItemsByCustomerScreen() {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const { date, goToPreviousDay, goToNextDay, goToToday } = useBusinessDate();
   const [itemGroups, setItemGroups] = useState<ItemGroup[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -118,22 +107,6 @@ export default function ItemsByCustomerScreen() {
     });
   };
 
-  const goToPreviousDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() - 1);
-    setDate(d.toISOString().split('T')[0]);
-  };
-
-  const goToNextDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() + 1);
-    setDate(d.toISOString().split('T')[0]);
-  };
-
-  const goToToday = () => {
-    setDate(new Date().toISOString().split('T')[0]);
-  };
-
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -141,25 +114,7 @@ export default function ItemsByCustomerScreen() {
         <Text style={styles.title}>📋 Items by Customer</Text>
       </View>
 
-      {/* Date Picker */}
-      <View style={styles.dateContainer}>
-        <TouchableOpacity onPress={goToPreviousDay} style={styles.dateButton}>
-          <Text style={styles.dateButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.dateText}>
-          {new Date(date).toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          })}
-        </Text>
-        <TouchableOpacity onPress={goToNextDay} style={styles.dateButton}>
-          <Text style={styles.dateButtonText}>→</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
-          <Text style={styles.todayButtonText}>Today</Text>
-        </TouchableOpacity>
-      </View>
+      <DateNavigator date={date} onPrevious={goToPreviousDay} onNext={goToNextDay} onToday={goToToday} />
 
       <ScrollView
         style={styles.content}
@@ -176,7 +131,7 @@ export default function ItemsByCustomerScreen() {
         ) : (
           itemGroups.map((item) => {
             const isExpanded = expandedItems.has(item.varietyId);
-            const { name, size } = extractSizeAndName(item.varietyName);
+            const { name, size } = extractFishSize(item.varietyName);
 
             return (
               <View key={item.varietyId} style={styles.itemCard}>
@@ -191,6 +146,7 @@ export default function ItemsByCustomerScreen() {
                       {size && (
                         <View style={[
                           styles.sizeBadge,
+                          size === 'OB' && styles.sizeBadgeOverBig,
                           size === 'B' && styles.sizeBadgeBig,
                           size === 'M' && styles.sizeBadgeMedium,
                           size === 'S' && styles.sizeBadgeSmall,
@@ -352,6 +308,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#DBEAFE',
     borderWidth: 1,
     borderColor: '#3B82F6',
+  },
+  sizeBadgeOverBig: {
+    backgroundColor: '#F3E8FF',
+    borderWidth: 1,
+    borderColor: '#9333EA',
   },
   sizeBadgeMedium: {
     backgroundColor: '#FEF3C7',

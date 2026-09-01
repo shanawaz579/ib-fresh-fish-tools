@@ -1,649 +1,183 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Alert,
   ActivityIndicator,
+  Alert,
   RefreshControl,
-  Modal,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import {
-  getFarmers,
-  addFarmer,
-  updateFarmer,
-  deleteFarmer,
-} from '../api/stock';
-import type { Farmer } from '../types';
+import { addSupplier, deleteSupplier, getSuppliers, updateSupplier } from '../api/stock';
+import SupplierFormModal, {
+  emptySupplierForm,
+} from '../features/suppliers/SupplierFormModal';
+import styles from '../styles/FarmersScreen.styles';
+import type { Supplier, SupplierCreateInput } from '../types';
 
-interface FarmerFormData {
-  name: string;
-  phone: string;
-  email: string;
-  address: string;
-  city: string;
-  state: string;
-  bank_account: string;
-  bank_name: string;
-  notes: string;
+function supplierToForm(supplier: Supplier): SupplierCreateInput {
+  return {
+    supplierType: supplier.supplier_type,
+    name: supplier.name,
+    location: supplier.location,
+    phone: supplier.phone ?? '',
+    email: supplier.email ?? '',
+    address: supplier.address ?? '',
+    city: supplier.city ?? '',
+    state: supplier.state ?? '',
+    bankAccount: supplier.bank_account ?? '',
+    bankName: supplier.bank_name ?? '',
+    notes: supplier.notes ?? '',
+  };
 }
 
-const initialFormData: FarmerFormData = {
-  name: '',
-  phone: '',
-  email: '',
-  address: '',
-  city: '',
-  state: '',
-  bank_account: '',
-  bank_name: '',
-  notes: '',
-};
-
 export default function FarmersScreen() {
-  const [farmers, setFarmers] = useState<Farmer[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [formData, setFormData] = useState<FarmerFormData>(initialFormData);
   const [submitting, setSubmitting] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editingData, setEditingData] = useState<FarmerFormData>(initialFormData);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [addForm, setAddForm] = useState<SupplierCreateInput>(emptySupplierForm);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState<SupplierCreateInput>(emptySupplierForm);
+
+  const loadSuppliers = async (asRefresh = false) => {
+    asRefresh ? setRefreshing(true) : setLoading(true);
+    setSuppliers(await getSuppliers());
+    setLoading(false);
+    setRefreshing(false);
+  };
 
   useEffect(() => {
-    loadFarmers();
+    loadSuppliers();
   }, []);
 
-  const loadFarmers = async (isRefreshing = false) => {
-    if (isRefreshing) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-
-    const data = await getFarmers();
-    setFarmers(data);
-
-    if (isRefreshing) {
-      setRefreshing(false);
-    } else {
-      setLoading(false);
-    }
+  const valid = (form: SupplierCreateInput) => {
+    if (form.name.trim() && form.location.trim()) return true;
+    Alert.alert('Incomplete supplier', 'Supplier name and location are required.');
+    return false;
   };
 
-  const onRefresh = () => {
-    loadFarmers(true);
-  };
-
-  const handleAddFarmer = async () => {
-    if (!formData.name.trim()) {
-      Alert.alert('Error', 'Please enter farmer name');
-      return;
-    }
-
+  const handleAdd = async () => {
+    if (!valid(addForm)) return;
     setSubmitting(true);
-    const result = await addFarmer(
-      formData.name,
-      formData.phone,
-      formData.email,
-      formData.address,
-      formData.city,
-      formData.state,
-      formData.bank_account,
-      formData.bank_name,
-      formData.notes
-    );
-
-    if (result) {
-      setFormData(initialFormData);
+    const created = await addSupplier(addForm);
+    if (created) {
       setShowAddForm(false);
-      await loadFarmers();
-      Alert.alert('Success', 'Farmer added successfully!');
+      setAddForm(emptySupplierForm);
+      await loadSuppliers();
+      Alert.alert('Supplier added', 'The supplier account is ready to use.');
     } else {
-      Alert.alert('Error', 'Failed to add farmer. Name, phone, or email might already exist.');
+      Alert.alert('Unable to add supplier', 'The same type, name, and location may already exist.');
     }
     setSubmitting(false);
   };
 
-  const handleStartEdit = (farmer: Farmer) => {
-    setEditingId(farmer.id);
-    setEditingData({
-      name: farmer.name || '',
-      phone: farmer.phone || '',
-      email: farmer.email || '',
-      address: farmer.address || '',
-      city: farmer.city || '',
-      state: farmer.state || '',
-      bank_account: farmer.bank_account || '',
-      bank_name: farmer.bank_name || '',
-      notes: farmer.notes || '',
-    });
-  };
-
-  const handleSaveEdit = async () => {
-    if (!editingData.name.trim()) {
-      Alert.alert('Error', 'Please enter farmer name');
-      return;
-    }
-
-    if (editingId === null) return;
-
+  const handleEdit = async () => {
+    if (editingId === null || !valid(editForm)) return;
     setSubmitting(true);
-    const result = await updateFarmer(
-      editingId,
-      editingData.name,
-      editingData.phone,
-      editingData.email,
-      editingData.address,
-      editingData.city,
-      editingData.state,
-      editingData.bank_account,
-      editingData.bank_name,
-      editingData.notes
-    );
-
-    if (result) {
+    const updated = await updateSupplier(editingId, editForm);
+    if (updated) {
       setEditingId(null);
-      setEditingData(initialFormData);
-      await loadFarmers();
-      Alert.alert('Success', 'Farmer updated successfully!');
+      setEditForm(emptySupplierForm);
+      await loadSuppliers();
+      Alert.alert('Supplier updated', 'Changes have been saved.');
     } else {
-      Alert.alert('Error', 'Failed to update farmer. Name, phone, or email might already exist.');
+      Alert.alert(
+        'Unable to update supplier',
+        'Check for a duplicate account. Supplier type also cannot change after purchases exist.',
+      );
     }
     setSubmitting(false);
   };
 
-  const handleDelete = async (id: number) => {
-    Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this farmer?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            setSubmitting(true);
-            const result = await deleteFarmer(id);
-            if (result) {
-              await loadFarmers();
-              setEditingId(null);
-              Alert.alert('Success', 'Farmer deleted successfully!');
-            } else {
-              Alert.alert('Error', 'Failed to delete farmer');
-            }
-            setSubmitting(false);
-          },
+  const handleDelete = () => {
+    if (editingId === null) return;
+    Alert.alert('Delete supplier?', 'Used supplier accounts cannot be deleted.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          setSubmitting(true);
+          if (await deleteSupplier(editingId)) {
+            setEditingId(null);
+            setEditForm(emptySupplierForm);
+            await loadSuppliers();
+          } else {
+            Alert.alert('Unable to delete supplier', 'This supplier may already be used by a purchase.');
+          }
+          setSubmitting(false);
         },
-      ]
-    );
-  };
-
-  const handleCancelEdit = () => {
-    setEditingId(null);
-    setEditingData(initialFormData);
+      },
+    ]);
   };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Manage Farmers</Text>
-        <TouchableOpacity
-          onPress={() => setShowAddForm(true)}
-          style={styles.addButton}
-        >
+        <Text style={styles.title}>Manage Suppliers</Text>
+        <TouchableOpacity onPress={() => setShowAddForm(true)} style={styles.addButton}>
           <Text style={styles.addButtonText}>+ Add</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Farmers List */}
       <ScrollView
         style={styles.listContainer}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#3B82F6']}
-            tintColor="#3B82F6"
-          />
-        }
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadSuppliers(true)} />}
       >
         {loading ? (
           <ActivityIndicator size="large" color="#3B82F6" style={styles.loader} />
-        ) : farmers.length === 0 ? (
-          <Text style={styles.emptyText}>No farmers found</Text>
-        ) : (
-          farmers.map((farmer) => (
-            <View key={farmer.id} style={styles.farmerCard}>
-              <View style={styles.farmerInfo}>
-                <Text style={styles.farmerName}>{farmer.name}</Text>
-                <Text style={styles.farmerDetail}>{farmer.phone || 'No phone'}</Text>
-                {farmer.city && <Text style={styles.farmerDetail}>{farmer.city}</Text>}
-              </View>
-              <TouchableOpacity
-                onPress={() => handleStartEdit(farmer)}
-                style={styles.editButton}
-              >
-                <Text style={styles.editButtonText}>Edit</Text>
-              </TouchableOpacity>
+        ) : suppliers.length === 0 ? (
+          <Text style={styles.emptyText}>No suppliers found</Text>
+        ) : suppliers.map((supplier) => (
+          <View key={supplier.id} style={styles.farmerCard}>
+            <View style={styles.farmerInfo}>
+              <Text style={styles.farmerName}>{supplier.name}</Text>
+              <Text style={styles.farmerDetail}>
+                {supplier.supplier_type === 'farmer' ? 'Direct farmer' : 'Mediator'} · {supplier.location}
+              </Text>
+              <Text style={styles.farmerDetail}>{supplier.phone || 'No phone'}</Text>
             </View>
-          ))
-        )}
+            <TouchableOpacity
+              onPress={() => {
+                setEditingId(supplier.id);
+                setEditForm(supplierToForm(supplier));
+              }}
+              style={styles.editButton}
+            >
+              <Text style={styles.editButtonText}>Edit</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
       </ScrollView>
 
-      {/* Add Farmer Modal */}
-      <Modal
+      <SupplierFormModal
         visible={showAddForm}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddForm(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <ScrollView>
-              <Text style={styles.modalTitle}>Add New Farmer</Text>
+        mode="add"
+        value={addForm}
+        submitting={submitting}
+        onChange={setAddForm}
+        onSubmit={handleAdd}
+        onClose={() => {
+          setShowAddForm(false);
+          setAddForm(emptySupplierForm);
+        }}
+      />
 
-              <Text style={styles.label}>Farmer Name *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter farmer name"
-                placeholderTextColor="#9CA3AF"
-                value={formData.name}
-                onChangeText={(text) => setFormData({ ...formData, name: text })}
-              />
-
-              <Text style={styles.label}>Phone</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter phone number"
-                placeholderTextColor="#9CA3AF"
-                value={formData.phone}
-                keyboardType="phone-pad"
-                onChangeText={(text) => setFormData({ ...formData, phone: text })}
-              />
-
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter email address"
-                placeholderTextColor="#9CA3AF"
-                value={formData.email}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                onChangeText={(text) => setFormData({ ...formData, email: text })}
-              />
-
-              <Text style={styles.label}>Address</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter address"
-                placeholderTextColor="#9CA3AF"
-                value={formData.address}
-                onChangeText={(text) => setFormData({ ...formData, address: text })}
-              />
-
-              <Text style={styles.label}>City</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter city"
-                placeholderTextColor="#9CA3AF"
-                value={formData.city}
-                onChangeText={(text) => setFormData({ ...formData, city: text })}
-              />
-
-              <Text style={styles.label}>State</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter state"
-                placeholderTextColor="#9CA3AF"
-                value={formData.state}
-                onChangeText={(text) => setFormData({ ...formData, state: text })}
-              />
-
-              <Text style={styles.label}>Bank Account</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter bank account number"
-                placeholderTextColor="#9CA3AF"
-                value={formData.bank_account}
-                onChangeText={(text) => setFormData({ ...formData, bank_account: text })}
-              />
-
-              <Text style={styles.label}>Bank Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter bank name"
-                placeholderTextColor="#9CA3AF"
-                value={formData.bank_name}
-                onChangeText={(text) => setFormData({ ...formData, bank_name: text })}
-              />
-
-              <Text style={styles.label}>Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Enter notes (optional)"
-                placeholderTextColor="#9CA3AF"
-                value={formData.notes}
-                multiline
-                numberOfLines={3}
-                onChangeText={(text) => setFormData({ ...formData, notes: text })}
-              />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  onPress={handleAddFarmer}
-                  disabled={submitting}
-                  style={[styles.modalButton, styles.saveButton, submitting && styles.disabledButton]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.modalButtonText}>Add Farmer</Text>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowAddForm(false);
-                    setFormData(initialFormData);
-                  }}
-                  style={[styles.modalButton, styles.cancelButton]}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Edit Farmer Modal */}
-      <Modal
+      <SupplierFormModal
         visible={editingId !== null}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={handleCancelEdit}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <ScrollView>
-              <Text style={styles.modalTitle}>Edit Farmer</Text>
-
-              <Text style={styles.label}>Farmer Name *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter farmer name"
-                placeholderTextColor="#9CA3AF"
-                value={editingData.name}
-                onChangeText={(text) => setEditingData({ ...editingData, name: text })}
-              />
-
-              <Text style={styles.label}>Phone</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter phone number"
-                placeholderTextColor="#9CA3AF"
-                value={editingData.phone}
-                keyboardType="phone-pad"
-                onChangeText={(text) => setEditingData({ ...editingData, phone: text })}
-              />
-
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter email address"
-                placeholderTextColor="#9CA3AF"
-                value={editingData.email}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                onChangeText={(text) => setEditingData({ ...editingData, email: text })}
-              />
-
-              <Text style={styles.label}>Address</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter address"
-                placeholderTextColor="#9CA3AF"
-                value={editingData.address}
-                onChangeText={(text) => setEditingData({ ...editingData, address: text })}
-              />
-
-              <Text style={styles.label}>City</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter city"
-                placeholderTextColor="#9CA3AF"
-                value={editingData.city}
-                onChangeText={(text) => setEditingData({ ...editingData, city: text })}
-              />
-
-              <Text style={styles.label}>State</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter state"
-                placeholderTextColor="#9CA3AF"
-                value={editingData.state}
-                onChangeText={(text) => setEditingData({ ...editingData, state: text })}
-              />
-
-              <Text style={styles.label}>Bank Account</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter bank account number"
-                placeholderTextColor="#9CA3AF"
-                value={editingData.bank_account}
-                onChangeText={(text) => setEditingData({ ...editingData, bank_account: text })}
-              />
-
-              <Text style={styles.label}>Bank Name</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter bank name"
-                placeholderTextColor="#9CA3AF"
-                value={editingData.bank_name}
-                onChangeText={(text) => setEditingData({ ...editingData, bank_name: text })}
-              />
-
-              <Text style={styles.label}>Notes</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder="Enter notes (optional)"
-                placeholderTextColor="#9CA3AF"
-                value={editingData.notes}
-                multiline
-                numberOfLines={3}
-                onChangeText={(text) => setEditingData({ ...editingData, notes: text })}
-              />
-
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  onPress={handleSaveEdit}
-                  disabled={submitting}
-                  style={[styles.modalButton, styles.saveButton, submitting && styles.disabledButton]}
-                >
-                  {submitting ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.modalButtonText}>Save</Text>
-                  )}
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => editingId && handleDelete(editingId)}
-                  style={[styles.modalButton, styles.deleteButton]}
-                >
-                  <Text style={styles.modalButtonText}>Delete</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handleCancelEdit}
-                  style={[styles.modalButton, styles.cancelButton]}
-                >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+        mode="edit"
+        value={editForm}
+        submitting={submitting}
+        onChange={setEditForm}
+        onSubmit={handleEdit}
+        onDelete={handleDelete}
+        onClose={() => {
+          setEditingId(null);
+          setEditForm(emptySupplierForm);
+        }}
+      />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    backgroundColor: '#3B82F6',
-    padding: 20,
-    paddingTop: 60,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  addButton: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  listContainer: {
-    flex: 1,
-    padding: 16,
-  },
-  loader: {
-    marginTop: 32,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#6B7280',
-    fontSize: 16,
-    marginTop: 32,
-  },
-  farmerCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  farmerInfo: {
-    flex: 1,
-  },
-  farmerName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  farmerDetail: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginBottom: 2,
-  },
-  editButton: {
-    backgroundColor: '#DBEAFE',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  editButtonText: {
-    color: '#1D4ED8',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContainer: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    width: '90%',
-    maxHeight: '80%',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 6,
-    marginTop: 4,
-  },
-  input: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: '#111827',
-    marginBottom: 12,
-  },
-  textArea: {
-    height: 80,
-    textAlignVertical: 'top',
-  },
-  modalButtons: {
-    marginTop: 8,
-  },
-  modalButton: {
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  saveButton: {
-    backgroundColor: '#10B981',
-  },
-  deleteButton: {
-    backgroundColor: '#DC2626',
-  },
-  cancelButton: {
-    backgroundColor: '#F3F4F6',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  cancelButtonText: {
-    color: '#374151',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-});

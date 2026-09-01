@@ -1,0 +1,293 @@
+import { StyleSheet } from 'react-native';
+
+export default StyleSheet.create({
+  listContainer: {
+    margin: 16,
+  },
+  listHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  listTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  toggleAllButton: {
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  toggleAllText: {
+    color: '#047857',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  loader: {
+    marginTop: 32,
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#6B7280',
+    fontSize: 16,
+    marginTop: 32,
+  },
+  farmerGroup: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  farmerHeader: {
+    backgroundColor: '#F3F4F6',
+    padding: 16,
+  },
+  farmerHeaderTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  farmerHeaderBottom: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingLeft: 24,
+  },
+  farmerHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
+  collapseIcon: {
+    fontSize: 12,
+    color: '#6B7280',
+    width: 16,
+  },
+  farmerNameContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  farmerName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    flexShrink: 1,
+  },
+  farmerSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 4,
+  },
+  quantityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+  },
+  quantityIcon: {
+    fontSize: 16,
+  },
+  farmerCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#047857',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  purchaseItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  purchaseInfo: {
+    flex: 1,
+  },
+  varietyName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  quantity: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  deleteButton: {
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  deleteButtonText: {
+    color: '#DC2626',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  generateBillButton: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  generateBillButtonText: {
+    color: '#1E40AF',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  editButton: {
+    backgroundColor: '#D1FAE5',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  editButtonText: {
+    color: '#065F46',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  editMode: {
+    borderWidth: 2,
+    borderColor: '#10B981',
+  },
+  editHeader: {
+    backgroundColor: '#ECFDF5',
+    padding: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  editTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#047857',
+  },
+  cancelEditButton: {
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  cancelEditText: {
+    color: '#374151',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  editItemContainer: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  editPicker: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  editRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 8,
+  },
+  editInput: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 14,
+  },
+  removeEditButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeEditText: {
+    color: '#DC2626',
+    fontSize: 22,
+    fontWeight: 'bold',
+  },
+  editActions: {
+    flexDirection: 'row',
+    gap: 8,
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+  },
+  addVarietyButton: {
+    flex: 1,
+    backgroundColor: '#3B82F6',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  addVarietyText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  saveChangesButton: {
+    flex: 1,
+    backgroundColor: '#10B981',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  saveChangesText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  required: {
+    color: '#DC2626',
+    fontSize: 14,
+  },
+  billingStatusBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  billingStatusBilled: {
+    backgroundColor: '#D1FAE5',
+  },
+  billingStatusUnbilled: {
+    backgroundColor: '#FEE2E2',
+  },
+  billingStatusPartial: {
+    backgroundColor: '#FEF3C7',
+  },
+  billingStatusIcon: {
+    fontSize: 18,
+  },
+});

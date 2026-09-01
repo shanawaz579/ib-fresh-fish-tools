@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import type { BillOtherCharge } from '../types';
+import { useBusinessConfig } from '../context/BusinessConfigContext';
 
 interface OtherChargesSectionProps {
   charges: BillOtherCharge[];
@@ -9,6 +10,7 @@ interface OtherChargesSectionProps {
 }
 
 export default function OtherChargesSection({ charges, onChargesChange }: OtherChargesSectionProps) {
+  const { configuration, formatMoney } = useBusinessConfig();
   const [chargeType, setChargeType] = useState<'packing' | 'ice' | 'transport' | 'loading' | 'unloading' | 'other'>('packing');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -66,7 +68,7 @@ export default function OtherChargesSection({ charges, onChargesChange }: OtherC
               </View>
               <View style={styles.chargeRight}>
                 <Text style={[styles.chargeAmount, charge.amount < 0 && styles.negativeAmount]}>
-                  {charge.amount > 0 ? '+' : ''}₹{charge.amount.toLocaleString('en-IN')}
+                  {charge.amount > 0 ? '+' : ''}{formatMoney(charge.amount, 0)}
                 </Text>
                 <TouchableOpacity
                   onPress={() => handleRemoveCharge(index)}
@@ -80,7 +82,7 @@ export default function OtherChargesSection({ charges, onChargesChange }: OtherC
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total Charges:</Text>
             <Text style={[styles.totalValue, totalCharges < 0 && styles.negativeAmount]}>
-              {totalCharges > 0 ? '+' : ''}₹{totalCharges.toLocaleString('en-IN')}
+              {totalCharges > 0 ? '+' : ''}{formatMoney(totalCharges, 0)}
             </Text>
           </View>
         </View>
@@ -119,7 +121,7 @@ export default function OtherChargesSection({ charges, onChargesChange }: OtherC
         {/* Amount and Add Button */}
         <View style={styles.amountRow}>
           <View style={styles.amountInputWrapper}>
-            <Text style={styles.rupeeSymbol}>₹</Text>
+            <Text style={styles.rupeeSymbol}>{configuration.preferences.currency_symbol}</Text>
             <TextInput
               style={styles.amountInput}
               placeholder="0"

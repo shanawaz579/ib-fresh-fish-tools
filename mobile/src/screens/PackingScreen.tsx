@@ -1,8 +1,8 @@
+import styles from '../styles/PackingScreen.styles';
 import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -12,6 +12,9 @@ import {
 import { getSalesByDate, getPackingStatusByDate, togglePackingStatus, clearPackingStatusByDate, getCustomers } from '../api/stock';
 import type { Sale, Customer } from '../types';
 import { useAuth } from '../context/AuthContext';
+import DateNavigator from '../components/DateNavigator';
+import { getTotalWeightKg } from '../domain/fish';
+import { useBusinessDate } from '../hooks/useBusinessDate';
 
 interface PackingItem {
   saleId: number;
@@ -57,7 +60,7 @@ const CUSTOMER_COLORS = [
 
 export default function PackingScreen() {
   const { signOut, user } = useAuth();
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const { date, goToPreviousDay, goToNextDay, goToToday } = useBusinessDate();
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -67,10 +70,6 @@ export default function PackingScreen() {
   const [completedSectionExpanded, setCompletedSectionExpanded] = useState(false);
 
   const t = translations.en;
-
-  useEffect(() => {
-    loadCustomers();
-  }, []);
 
   useEffect(() => {
     loadData();
@@ -84,11 +83,6 @@ export default function PackingScreen() {
     setExpandedCustomers(new Set(inProgressCustomers));
   }, [customerGroups, loadedItems]);
 
-  const loadCustomers = async () => {
-    const customersData = await getCustomers();
-    setCustomers(customersData);
-  };
-
   const loadData = async (isRefreshing = false) => {
     if (isRefreshing) {
       setRefreshing(true);
@@ -96,8 +90,12 @@ export default function PackingScreen() {
       setLoading(true);
     }
 
-    const salesData = await getSalesByDate(date);
-    const packingStatusMap = await getPackingStatusByDate(date);
+    const [salesData, packingStatusMap, customersData] = await Promise.all([
+      getSalesByDate(date),
+      getPackingStatusByDate(date),
+      getCustomers(),
+    ]);
+    setCustomers(customersData);
 
     // Update loadedItems state from database
     setLoadedItems(new Set(
@@ -119,7 +117,7 @@ export default function PackingScreen() {
         };
       }
 
-      const totalWeight = (sale.quantity_crates * 35) + sale.quantity_kg;
+      const totalWeight = getTotalWeightKg(sale.quantity_crates, sale.quantity_kg);
 
       acc[customerId].items.push({
         saleId: sale.id,
@@ -137,8 +135,8 @@ export default function PackingScreen() {
 
     // Sort customer groups: Wholesale Market first, then others, both sorted by total boxes descending
     const sortedGroups = Object.values(grouped).sort((a, b) => {
-      const customerA = customers.find(c => c.id === a.customerId);
-      const customerB = customers.find(c => c.id === b.customerId);
+      const customerA = customersData.find(c => c.id === a.customerId);
+      const customerB = customersData.find(c => c.id === b.customerId);
 
       const isWholesaleA = customerA?.business_type === 'Wholesale Market';
       const isWholesaleB = customerB?.business_type === 'Wholesale Market';
@@ -224,22 +222,6 @@ export default function PackingScreen() {
     );
   };
 
-  const goToPreviousDay = () => {
-    const currentDate = new Date(date);
-    currentDate.setDate(currentDate.getDate() - 1);
-    setDate(currentDate.toISOString().split('T')[0]);
-  };
-
-  const goToNextDay = () => {
-    const currentDate = new Date(date);
-    currentDate.setDate(currentDate.getDate() + 1);
-    setDate(currentDate.toISOString().split('T')[0]);
-  };
-
-  const goToToday = () => {
-    setDate(new Date().toISOString().split('T')[0]);
-  };
-
   const handleResetPackingStatus = () => {
     Alert.alert(
       'Reset Packing Status',
@@ -278,25 +260,7 @@ export default function PackingScreen() {
         </View>
       </View>
 
-      {/* Date Picker */}
-      <View style={styles.dateContainer}>
-        <TouchableOpacity onPress={goToPreviousDay} style={styles.dateButton}>
-          <Text style={styles.dateButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.dateText}>
-          {new Date(date).toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          })}
-        </Text>
-        <TouchableOpacity onPress={goToNextDay} style={styles.dateButton}>
-          <Text style={styles.dateButtonText}>→</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
-          <Text style={styles.todayButtonText}>Today</Text>
-        </TouchableOpacity>
-      </View>
+      <DateNavigator date={date} onPrevious={goToPreviousDay} onNext={goToNextDay} onToday={goToToday} />
 
       <ScrollView
         style={styles.content}
@@ -444,219 +408,3 @@ export default function PackingScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    backgroundColor: '#0EA5E9',
-    padding: 20,
-    paddingTop: 60,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  resetButton: {
-    backgroundColor: 'rgba(239, 68, 68, 0.9)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  resetText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  logoutText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  dateButton: {
-    padding: 12,
-    marginHorizontal: 8,
-  },
-  dateButtonText: {
-    fontSize: 24,
-    color: '#3B82F6',
-    fontWeight: 'bold',
-  },
-  dateText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    minWidth: 150,
-    textAlign: 'center',
-  },
-  todayButton: {
-    backgroundColor: '#3B82F6',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  todayButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 16,
-    paddingBottom: 120,
-  },
-  loader: {
-    marginTop: 40,
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 18,
-    color: '#6B7280',
-  },
-  sectionHeader: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F3F4F6',
-    marginTop: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#374151',
-    flex: 1,
-  },
-  sectionExpandIcon: {
-    fontSize: 16,
-    color: '#374151',
-    marginLeft: 8,
-  },
-  customerCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 12,
-    borderLeftWidth: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    overflow: 'hidden',
-  },
-  customerHeader: {
-    padding: 12,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  customerName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#fff',
-    flex: 1,
-  },
-  customerTotal: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginRight: 8,
-  },
-  expandIcon: {
-    fontSize: 16,
-    color: '#fff',
-    minWidth: 20,
-    textAlign: 'center',
-  },
-  itemCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  fishName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    flex: 1,
-  },
-  boxCount: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0EA5E9',
-    marginRight: 12,
-    minWidth: 80,
-    textAlign: 'right',
-  },
-  checkbox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#D1D5DB',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-  },
-  checkboxChecked: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
-  },
-  checkmark: {
-    fontSize: 24,
-    color: '#fff',
-    fontWeight: 'bold',
-  },
-  completedCard: {
-    opacity: 0.7,
-  },
-  completedHeader: {
-    opacity: 0.8,
-  },
-  completedItem: {
-    backgroundColor: '#F9FAFB',
-  },
-  completedText: {
-    color: '#9CA3AF',
-    textDecorationLine: 'line-through',
-  },
-});

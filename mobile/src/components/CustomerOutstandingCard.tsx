@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useBusinessConfig } from '../context/BusinessConfigContext';
 
 interface CustomerOutstandingCardProps {
   totalOutstanding: number;
@@ -12,6 +13,7 @@ export default function CustomerOutstandingCard({
   unpaidBillsCount,
   oldestBillDate,
 }: CustomerOutstandingCardProps) {
+  const { formatMoney } = useBusinessConfig();
   if (totalOutstanding === 0) {
     return (
       <View style={[styles.container, styles.noOutstandingContainer]}>
@@ -33,7 +35,7 @@ export default function CustomerOutstandingCard({
       <View style={styles.content}>
         <View style={styles.amountRow}>
           <Text style={styles.amountLabel}>Total Pending:</Text>
-          <Text style={styles.amountValue}>₹{totalOutstanding.toLocaleString('en-IN')}</Text>
+          <Text style={styles.amountValue}>{formatMoney(totalOutstanding, 0)}</Text>
         </View>
         <View style={styles.infoRow}>
           <View style={styles.infoItem}>

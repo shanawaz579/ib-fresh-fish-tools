@@ -1,0 +1,382 @@
+import { StyleSheet } from 'react-native';
+
+export default StyleSheet.create({
+  modalContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingTop: 60,
+    backgroundColor: '#3B82F6',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#fff',
+  },
+  closeButton: {
+    padding: 8,
+  },
+  closeButtonText: {
+    fontSize: 24,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  modalContent: {
+    flex: 1,
+    padding: 16,
+  },
+  billPreview: {
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  businessHeader: {
+    backgroundColor: '#F8FAFC',
+    padding: 12,
+    borderRadius: 0,
+    marginBottom: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#0EA5E9',
+  },
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  companyNameMain: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#0F172A',
+    letterSpacing: 2,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  proprietorText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  contactText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#0EA5E9',
+  },
+  businessTagline: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  addressText: {
+    fontSize: 9,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+  companyName: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#3B82F6',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  customerInfo: {
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  customerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  customerLeft: {
+    flex: 1,
+  },
+  customerRight: {
+    alignItems: 'flex-end',
+  },
+  customerNameBig: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  totalBoxesText: {
+    fontSize: 11,
+    color: '#6B7280',
+  },
+  billNumberText: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  billDateText: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  itemsTable: {
+    marginBottom: 16,
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  tableHeaderText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#374151',
+    textAlign: 'center',
+    lineHeight: 14,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  tableCellText: {
+    fontSize: 13,
+    color: '#111827',
+  },
+  itemColumn: {
+    flex: 2,
+  },
+  itemColumnWide: {
+    flex: 2.5,
+  },
+  qtySubtext: {
+    fontSize: 10,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  qtyColumn: {
+    flex: 1.2,
+    textAlign: 'center',
+  },
+  weightColumn: {
+    flex: 1.2,
+    textAlign: 'center',
+  },
+  rateColumn: {
+    flex: 1.2,
+    textAlign: 'center',
+  },
+  amountColumn: {
+    flex: 1.5,
+    textAlign: 'right',
+  },
+  billTotals: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 2,
+    borderTopColor: '#E5E7EB',
+  },
+  billTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  billTotalLabel: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  billTotalValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  chargeRow: {
+    paddingLeft: 16,
+  },
+  chargeLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: 'normal',
+  },
+  chargeValue: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#059669',
+  },
+  subtotalRow: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  paymentsSectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#059669',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  paymentRow: {
+    paddingLeft: 12,
+  },
+  paymentLabel: {
+    fontSize: 13,
+    color: '#6B7280',
+    fontWeight: 'normal',
+  },
+  paymentValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#DC2626',
+  },
+  creditBalance: {
+    color: '#10B981',
+  },
+  separator: {
+    height: 2,
+    backgroundColor: '#E5E7EB',
+    marginVertical: 12,
+  },
+  grandTotal: {
+    marginTop: 8,
+    paddingTop: 12,
+    borderTopWidth: 2,
+    borderTopColor: '#3B82F6',
+  },
+  billGrandTotalLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  billGrandTotalValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#3B82F6',
+  },
+  notesSection: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  notesTitle: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#6B7280',
+    marginBottom: 6,
+  },
+  notesText: {
+    fontSize: 14,
+    color: '#374151',
+    fontStyle: 'italic',
+  },
+  billFooter: {
+    marginTop: 24,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#10B981',
+  },
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+    marginBottom: 32,
+  },
+  printButton: {
+    flex: 1,
+    backgroundColor: '#3B82F6',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  printButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  shareButton: {
+    flex: 1,
+    backgroundColor: '#10B981',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  loadingItemsContainer: {
+    padding: 40,
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 14,
+    color: '#15803D',
+    fontWeight: '500',
+  },
+  billExistsContainer: {
+    backgroundColor: '#DBEAFE',
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 16,
+    borderWidth: 2,
+    borderColor: '#3B82F6',
+    alignItems: 'center',
+  },
+  billExistsIcon: {
+    fontSize: 48,
+    color: '#3B82F6',
+    marginBottom: 12,
+  },
+  billExistsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1E40AF',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  billExistsText: {
+    fontSize: 14,
+    color: '#1E40AF',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  billExistsSubtext: {
+    fontSize: 13,
+    color: '#3B82F6',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  billHeaderLeft: {
+    flex: 1,
+  },
+  billDate: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    marginTop: 2,
+  },
+});

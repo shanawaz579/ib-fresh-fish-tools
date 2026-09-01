@@ -1,8 +1,8 @@
+import styles from '../styles/DashboardScreen.styles';
 import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
@@ -10,13 +10,16 @@ import {
   Alert,
 } from 'react-native';
 import {
-  getFishVarieties,
-  getPurchasesByDate,
   getSalesByDate,
   getCustomers,
+  getStockSnapshot,
 } from '../api/stock';
-import type { Purchase, Sale, FishVariety, Customer } from '../types';
+import type { Sale, Customer } from '../types';
+import type { StockSnapshot } from '../domain/stockLedger';
 import { useAuth } from '../context/AuthContext';
+import DateNavigator from '../components/DateNavigator';
+import { extractFishSize, getFishVarietySortKey, getTotalWeightKg } from '../domain/fish';
+import { useBusinessDate } from '../hooks/useBusinessDate';
 
 type Language = 'en' | 'te';
 
@@ -42,8 +45,8 @@ const translations = {
     fish: 'Fish',
     sales: 'Sales',
     availableTotal: 'Available/Total',
-    purchaseIn: 'Purchase (In)',
-    salesOut: 'Sales (Out)',
+    purchaseIn: 'Inward',
+    salesOut: 'Outward',
     balance: 'Balance',
     crates: 'Crates',
     cr: 'cr',
@@ -87,56 +90,12 @@ const translations = {
   },
 };
 
-// Hardcoded order for fish varieties (matching web)
-const VARIETY_ORDER = ['Pangasius', 'Roopchand', 'Rohu', 'Katla', 'Tilapia', 'Silver Carp', 'Grass Carp', 'Common Carp'];
-const SIZE_ORDER = ['Big', 'Medium', 'Small'];
-
-// Helper function to extract size from variety name
-function extractSizeAndName(varietyName: string): { name: string; size: string } {
-  for (const s of SIZE_ORDER) {
-    if (varietyName.includes(s)) {
-      const name = varietyName.replace(s, '').trim();
-      const size = s.charAt(0); // Get first letter: B, M, S
-      return { name, size };
-    }
-  }
-  return { name: varietyName, size: '' };
-}
-
-// Helper function to get variety sort key
-function getVarietySortKey(varietyName: string): number {
-  // Extract base variety name and size
-  let baseVariety = varietyName;
-  let size = '';
-
-  for (const s of SIZE_ORDER) {
-    if (varietyName.includes(s)) {
-      size = s;
-      baseVariety = varietyName.replace(s, '').trim();
-      break;
-    }
-  }
-
-  const varietyIndex = VARIETY_ORDER.indexOf(baseVariety);
-  const sizeIndex = SIZE_ORDER.indexOf(size);
-
-  // If variety not found, put it at the end
-  if (varietyIndex === -1) return 9999;
-
-  // If size not found, treat as first (0)
-  const finalSizeIndex = sizeIndex === -1 ? 0 : sizeIndex;
-
-  // Create composite key: variety * 10 + size
-  return varietyIndex * 10 + finalSizeIndex;
-}
-
 export default function DashboardScreen() {
   const { user, isAdmin, signOut } = useAuth();
   const [language, setLanguage] = useState<Language>('en');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const { date, goToPreviousDay, goToNextDay, goToToday } = useBusinessDate();
+  const [stockSnapshot, setStockSnapshot] = useState<StockSnapshot[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
-  const [varieties, setVarieties] = useState<FishVariety[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -166,16 +125,14 @@ export default function DashboardScreen() {
       setLoading(true);
     }
 
-    const [purchasesData, salesData, varietiesData, customersData] = await Promise.all([
-      getPurchasesByDate(date),
+    const [snapshotData, salesData, customersData] = await Promise.all([
+      getStockSnapshot(date),
       getSalesByDate(date),
-      getFishVarieties(),
       getCustomers(),
     ]);
 
-    setPurchases(purchasesData);
+    setStockSnapshot(snapshotData);
     setSales(salesData);
-    setVarieties(varietiesData);
     setCustomers(customersData);
 
     if (isRefreshing) {
@@ -193,58 +150,16 @@ export default function DashboardScreen() {
     setLanguage(language === 'en' ? 'te' : 'en');
   };
 
-  const goToPreviousDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() - 1);
-    setDate(d.toISOString().split('T')[0]);
-  };
-
-  const goToNextDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() + 1);
-    setDate(d.toISOString().split('T')[0]);
-  };
-
-  const goToToday = () => {
-    setDate(new Date().toISOString().split('T')[0]);
-  };
-
   // Calculate stock summary
-  const stockSummary: StockSummary[] = varieties
-    .map((variety) => {
-      const purchased = purchases
-        .filter((p) => p.fish_variety_id === variety.id)
-        .reduce(
-          (sum, p) => ({
-            crates: sum.crates + p.quantity_crates,
-            kg: sum.kg + p.quantity_kg,
-          }),
-          { crates: 0, kg: 0 }
-        );
-
-      const sold = sales
-        .filter((s) => s.fish_variety_id === variety.id)
-        .reduce(
-          (sum, s) => ({
-            crates: sum.crates + s.quantity_crates,
-            kg: sum.kg + s.quantity_kg,
-          }),
-          { crates: 0, kg: 0 }
-        );
-
-      return {
-        varietyId: variety.id,
-        varietyName: variety.name,
-        purchased,
-        sold,
-        balance: {
-          crates: purchased.crates - sold.crates,
-          kg: purchased.kg - sold.kg,
-        },
-      };
-    })
-    .filter((item) => item.purchased.crates > 0 || item.purchased.kg > 0)
-    .sort((a, b) => getVarietySortKey(a.varietyName) - getVarietySortKey(b.varietyName));
+  const stockSummary: StockSummary[] = stockSnapshot
+    .map((snapshot) => ({
+      varietyId: snapshot.itemVariantId,
+      varietyName: snapshot.variantName,
+      purchased: { crates: snapshot.inwardCrates, kg: snapshot.inwardKg },
+      sold: { crates: snapshot.outwardCrates, kg: snapshot.outwardKg },
+      balance: { crates: snapshot.closingCrates, kg: snapshot.closingKg },
+    }))
+    .sort((a, b) => getFishVarietySortKey(a.varietyName) - getFishVarietySortKey(b.varietyName));
 
   // Calculate totals
   const totals = stockSummary.reduce(
@@ -267,8 +182,9 @@ export default function DashboardScreen() {
   );
 
   const getStockStatus = (balance: { crates: number; kg: number }) => {
-    if (balance.crates < 0) return 'critical';
-    if (balance.crates < 10) return 'low';
+    if (balance.crates < 0 || balance.kg < 0) return 'critical';
+    if (balance.crates === 0 && balance.kg === 0) return 'critical';
+    if ((balance.crates > 0 && balance.crates < 10) || (balance.kg > 0 && balance.kg < 50)) return 'low';
     return 'good';
   };
 
@@ -306,8 +222,8 @@ export default function DashboardScreen() {
     if (!isWholesaleA && isWholesaleB) return 1;
 
     // Within each group, sort by total weight (crates * 35 + kg) descending
-    const weightA = (a.totalCrates * 35) + a.totalKg;
-    const weightB = (b.totalCrates * 35) + b.totalKg;
+    const weightA = getTotalWeightKg(a.totalCrates, a.totalKg);
+    const weightB = getTotalWeightKg(b.totalCrates, b.totalKg);
 
     return weightB - weightA;
   });
@@ -346,25 +262,7 @@ export default function DashboardScreen() {
         </View>
       </View>
 
-      {/* Date Picker */}
-      <View style={styles.dateContainer}>
-        <TouchableOpacity onPress={goToPreviousDay} style={styles.dateButton}>
-          <Text style={styles.dateButtonText}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.dateText}>
-          {new Date(date).toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric',
-          })}
-        </Text>
-        <TouchableOpacity onPress={goToNextDay} style={styles.dateButton}>
-          <Text style={styles.dateButtonText}>→</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={goToToday} style={styles.todayButton}>
-          <Text style={styles.todayButtonText}>Today</Text>
-        </TouchableOpacity>
-      </View>
+      <DateNavigator date={date} onPrevious={goToPreviousDay} onNext={goToNextDay} onToday={goToToday} />
 
       <ScrollView
         style={styles.content}
@@ -417,7 +315,7 @@ export default function DashboardScreen() {
                   {/* Table Rows */}
                   {stockSummary.map((item) => {
                     const status = getStockStatus(item.balance);
-                    const { name, size } = extractSizeAndName(item.varietyName);
+                        const { name, size } = extractFishSize(item.varietyName);
                     return (
                       <View
                         key={item.varietyId}
@@ -434,6 +332,7 @@ export default function DashboardScreen() {
                             {size && (
                               <View style={[
                                 styles.sizeBadge,
+                                size === 'OB' && styles.sizeBadgeOverBig,
                                 size === 'B' && styles.sizeBadgeBig,
                                 size === 'M' && styles.sizeBadgeMedium,
                                 size === 'S' && styles.sizeBadgeSmall,
@@ -546,7 +445,7 @@ export default function DashboardScreen() {
                               <Text style={styles.saleItemName}>{sale.fish_variety_name}</Text>
                               <Text style={styles.saleItemQuantity}>
                                 {sale.quantity_crates > 0 && `${sale.quantity_crates} ${t.cr}`}
-                                {sale.quantity_crates > 0 && sale.quantity_kg > 0 && ' + '}
+                                {sale.quantity_crates > 0 && sale.quantity_kg > 0 && ' · '}
                                 {sale.quantity_kg > 0 && `${sale.quantity_kg} ${t.kg}`}
                               </Text>
                             </View>
@@ -564,415 +463,3 @@ export default function DashboardScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    backgroundColor: '#3B82F6',
-    padding: 20,
-    paddingTop: 60,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  headerLeft: {
-    flex: 1,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 12,
-    color: '#DBEAFE',
-  },
-  languageButton: {
-    backgroundColor: '#60A5FA',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  languageButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  logoutText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  dateButton: {
-    padding: 12,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    marginHorizontal: 8,
-  },
-  dateButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#374151',
-  },
-  dateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginHorizontal: 12,
-  },
-  todayButton: {
-    padding: 12,
-    backgroundColor: '#3B82F6',
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  todayButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-  },
-  loader: {
-    marginTop: 32,
-  },
-  summaryContainer: {
-    flexDirection: 'row',
-    padding: 16,
-    gap: 12,
-    alignItems: 'stretch',
-  },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-    borderBottomWidth: 3,
-    justifyContent: 'space-between',
-    minHeight: 90,
-  },
-  purchaseCard: {
-    borderBottomColor: '#10B981',
-  },
-  salesCard: {
-    borderBottomColor: '#F59E0B',
-  },
-  balanceCard: {
-    borderBottomColor: '#3B82F6',
-  },
-  summaryLabel: {
-    fontSize: 10,
-    color: '#6B7280',
-    marginBottom: 6,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  summarySubValue: {
-    fontSize: 12,
-    color: '#9CA3AF',
-  },
-  negativeValue: {
-    color: '#DC2626',
-  },
-  positiveValue: {
-    color: '#10B981',
-  },
-  salesColor: {
-    color: '#F59E0B',
-  },
-  balanceColor: {
-    color: '#3B82F6',
-  },
-  balanceNumber: {
-    fontWeight: 'bold',
-  },
-  balancePositive: {
-    color: '#10B981',
-  },
-  balanceNegative: {
-    color: '#DC2626',
-  },
-  balanceTotal: {
-    color: '#6B7280',
-    fontWeight: 'normal',
-  },
-  stockOverviewContainer: {
-    backgroundColor: '#fff',
-    margin: 16,
-    marginTop: 0,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 14,
-    letterSpacing: 0.3,
-  },
-  emptyText: {
-    textAlign: 'center',
-    color: '#6B7280',
-    fontSize: 16,
-    paddingVertical: 32,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F9FAFB',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 4,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  tableHeaderText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#6B7280',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  tableHeaderRight: {
-    textAlign: 'right',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-  },
-  criticalRow: {
-    backgroundColor: '#FEE2E2',
-  },
-  lowRow: {
-    backgroundColor: '#FEF3C7',
-  },
-  fishColumn: {
-    flex: 2.5,
-    justifyContent: 'center',
-    paddingRight: 16,
-  },
-  dataColumn: {
-    flex: 2,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    paddingHorizontal: 8,
-  },
-  fishNameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  fishName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  sizeBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    minWidth: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sizeBadgeBig: {
-    backgroundColor: '#DBEAFE',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-  },
-  sizeBadgeMedium: {
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-  },
-  sizeBadgeSmall: {
-    backgroundColor: '#D1FAE5',
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  sizeBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#374151',
-  },
-  dataValue: {
-    fontSize: 13,
-    fontWeight: 'bold',
-    color: '#111827',
-    textAlign: 'right',
-  },
-  dataSubValue: {
-    fontSize: 10,
-    color: '#6B7280',
-    marginTop: 2,
-    textAlign: 'right',
-  },
-  salesDetailsContainer: {
-    backgroundColor: '#fff',
-    margin: 16,
-    marginTop: 0,
-    borderRadius: 12,
-    padding: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginBottom: 32,
-  },
-  salesDetailsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  customersBadge: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-  },
-  customersBadgeText: {
-    color: '#1E40AF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  customerCard: {
-    backgroundColor: '#FAFAFA',
-    borderRadius: 10,
-    marginBottom: 12,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  customerCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    backgroundColor: '#F9FAFB',
-  },
-  customerCardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 8,
-  },
-  collapseIcon: {
-    fontSize: 10,
-    color: '#6B7280',
-    width: 12,
-    flexShrink: 0,
-  },
-  customerCardNameContainer: {
-    flex: 1,
-    minWidth: 0,
-  },
-  customerCardName: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  customerCardSubtext: {
-    fontSize: 11,
-    color: '#6B7280',
-  },
-  customerCardHeaderRight: {
-    alignItems: 'flex-end',
-    marginLeft: 12,
-    flexShrink: 0,
-    minWidth: 60,
-  },
-  customerCardTotal: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#F59E0B',
-  },
-  customerCardTotalKg: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginTop: 2,
-  },
-  customerCardBody: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 14,
-    paddingTop: 8,
-  },
-  saleItemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingLeft: 22,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  saleItemRowLast: {
-    borderBottomWidth: 0,
-    paddingBottom: 12,
-  },
-  saleItemName: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#374151',
-    flex: 1,
-  },
-  saleItemQuantity: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-});

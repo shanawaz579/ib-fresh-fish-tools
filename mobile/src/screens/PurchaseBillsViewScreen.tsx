@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,30 +12,23 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { getPurchaseBills } from '../api/stock';
-
-type PurchaseBill = {
-  id: number;
-  bill_number: string;
-  farmer_id: number;
-  farmer_name?: string;
-  bill_date: string;
-  total: number;
-  payment_status: string;
-  amount_paid: number;
-  balance_due: number;
-  location?: string;
-  secondary_name?: string;
-};
-
-type ViewMode = 'date' | 'farmer';
+import { deletePurchaseBillStrict, getPurchaseBills } from '../api/stock';
+import {
+  groupPurchaseBills,
+  type PurchaseBillSummary,
+  type PurchaseBillViewMode,
+} from '../domain/purchaseBills';
+import { formatBusinessDate } from '../utils/date';
+import { useBusinessConfig } from '../context/BusinessConfigContext';
 
 export default function PurchaseBillsViewScreen() {
+  const { formatMoney } = useBusinessConfig();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [bills, setBills] = useState<PurchaseBill[]>([]);
+  const [bills, setBills] = useState<PurchaseBillSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>('date');
+  const [viewMode, setViewMode] = useState<PurchaseBillViewMode>('date');
+  const [deletingBillId, setDeletingBillId] = useState<number | null>(null);
 
   useEffect(() => {
     loadBills();
@@ -66,64 +59,39 @@ export default function PurchaseBillsViewScreen() {
     }
   };
 
-  // Group bills by date
-  const groupByDate = () => {
-    const grouped: { [key: string]: PurchaseBill[] } = {};
-    bills.forEach(bill => {
-      const date = bill.bill_date;
-      if (!grouped[date]) {
-        grouped[date] = [];
-      }
-      grouped[date].push(bill);
-    });
+  const groupedBills = useMemo(() => groupPurchaseBills(bills, viewMode), [bills, viewMode]);
 
-    // Sort dates descending (newest first)
-    return Object.keys(grouped)
-      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
-      .map(date => ({
-        key: date,
-        displayName: new Date(date).toLocaleDateString('en-IN', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric'
-        }),
-        bills: grouped[date].sort((a, b) => b.id - a.id)
-      }));
+  const deleteBill = (bill: PurchaseBillSummary) => {
+    Alert.alert(
+      'Delete purchase bill?',
+      `${bill.bill_number} and its item details will be removed. Source purchases return to unbilled. Active supplier payments must be voided first.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete bill',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingBillId(bill.id);
+            try {
+              await deletePurchaseBillStrict(bill.id);
+              await loadBills();
+              Alert.alert('Bill deleted', 'Source purchases are available for rebilling.');
+            } catch (error) {
+              const message = error && typeof error === 'object' && 'message' in error
+                ? String(error.message)
+                : 'Please try again.';
+              Alert.alert(
+                message.includes('Void active supplier payments') ? 'Payment must be voided first' : 'Unable to delete bill',
+                message,
+              );
+            } finally {
+              setDeletingBillId(null);
+            }
+          },
+        },
+      ],
+    );
   };
-
-  // Group bills by farmer
-  const groupByFarmer = () => {
-    const grouped: { [key: string]: PurchaseBill[] } = {};
-    bills.forEach(bill => {
-      const farmerKey = `${bill.farmer_id}_${bill.farmer_name || 'Unknown'}`;
-      if (!grouped[farmerKey]) {
-        grouped[farmerKey] = [];
-      }
-      grouped[farmerKey].push(bill);
-    });
-
-    // Sort by farmer name
-    return Object.keys(grouped)
-      .sort((a, b) => {
-        const nameA = a.split('_')[1];
-        const nameB = b.split('_')[1];
-        return nameA.localeCompare(nameB);
-      })
-      .map(key => {
-        const farmerName = key.split('_')[1];
-        const farmerBills = grouped[key];
-        const totalDue = farmerBills.reduce((sum, bill) => sum + bill.balance_due, 0);
-
-        return {
-          key: key,
-          displayName: farmerName,
-          totalDue: totalDue,
-          bills: farmerBills.sort((a, b) => new Date(b.bill_date).getTime() - new Date(a.bill_date).getTime())
-        };
-      });
-  };
-
-  const groupedBills = viewMode === 'date' ? groupByDate() : groupByFarmer();
 
   if (loading) {
     return (
@@ -156,11 +124,11 @@ export default function PurchaseBillsViewScreen() {
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.filterButton, viewMode === 'farmer' && styles.filterButtonActive]}
-          onPress={() => setViewMode('farmer')}
+          style={[styles.filterButton, viewMode === 'supplier' && styles.filterButtonActive]}
+          onPress={() => setViewMode('supplier')}
         >
-          <Text style={[styles.filterButtonText, viewMode === 'farmer' && styles.filterButtonTextActive]}>
-            By Farmer
+          <Text style={[styles.filterButtonText, viewMode === 'supplier' && styles.filterButtonTextActive]}>
+            By Supplier
           </Text>
         </TouchableOpacity>
       </View>
@@ -185,26 +153,27 @@ export default function PurchaseBillsViewScreen() {
             <View key={group.key} style={styles.groupContainer}>
               <View style={styles.groupHeader}>
                 <Text style={styles.groupTitle}>{group.displayName}</Text>
-                {viewMode === 'farmer' && group.totalDue > 0 && (
+                {viewMode === 'supplier' && Number(group.totalDue) > 0 && (
                   <Text style={styles.groupDue}>
-                    Due: ₹{group.totalDue.toLocaleString('en-IN')}
+                    Due: {formatMoney(Number(group.totalDue), 0)}
                   </Text>
                 )}
               </View>
               {group.bills.map((bill) => (
-                <TouchableOpacity
+                <View
                   key={bill.id}
                   style={styles.billCard}
-                  onPress={() => {
-                    navigation.navigate('PurchaseBillDetails', { billId: bill.id });
-                  }}
                 >
+                  <TouchableOpacity
+                    style={styles.billTapArea}
+                    onPress={() => navigation.navigate('PurchaseBillDetails', { billId: bill.id })}
+                  >
                   <View style={styles.billHeader}>
                     <View>
                       <Text style={styles.billNumber}>{bill.bill_number}</Text>
                       {viewMode === 'date' && (
                         <>
-                          <Text style={styles.farmerName}>{bill.farmer_name || 'Unknown Farmer'}</Text>
+                          <Text style={styles.farmerName}>{bill.supplier_name || 'Unknown Supplier'}</Text>
                           {(bill.location || bill.secondary_name) && (
                             <Text style={styles.billSubtitle}>
                               {bill.location && bill.location}
@@ -214,17 +183,15 @@ export default function PurchaseBillsViewScreen() {
                           )}
                         </>
                       )}
-                      {viewMode === 'farmer' && (
+                      {viewMode === 'supplier' && (
                         <Text style={styles.billDate}>
-                          {new Date(bill.bill_date).toLocaleDateString('en-IN')}
+                          {formatBusinessDate(bill.bill_date)}
                         </Text>
                       )}
                     </View>
                     <View style={styles.billAmounts}>
                       <Text style={styles.billTotal}>
-                        ₹{Number(bill.total).toLocaleString('en-IN', {
-                          maximumFractionDigits: 0
-                        })}
+                        {formatMoney(Number(bill.total), 0)}
                       </Text>
                       <View style={[
                         styles.statusBadge,
@@ -249,23 +216,33 @@ export default function PurchaseBillsViewScreen() {
                   {viewMode === 'date' && (
                     <View style={styles.billFooter}>
                       <Text style={styles.billDate}>
-                        {new Date(bill.bill_date).toLocaleDateString('en-IN')}
+                        {formatBusinessDate(bill.bill_date)}
                       </Text>
                       {bill.balance_due > 0 && (
                         <Text style={styles.balanceDue}>
-                          Due: ₹{bill.balance_due.toLocaleString('en-IN')}
+                          Due: {formatMoney(bill.balance_due, 0)}
                         </Text>
                       )}
                     </View>
                   )}
-                  {viewMode === 'farmer' && bill.balance_due > 0 && (
+                  {viewMode === 'supplier' && bill.balance_due > 0 && (
                     <View style={styles.billFooter}>
                       <Text style={styles.balanceDue}>
-                        Due: ₹{bill.balance_due.toLocaleString('en-IN')}
+                        Due: {formatMoney(bill.balance_due, 0)}
                       </Text>
                     </View>
                   )}
-                </TouchableOpacity>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteBillButton}
+                    disabled={deletingBillId === bill.id}
+                    onPress={() => deleteBill(bill)}
+                  >
+                    {deletingBillId === bill.id
+                      ? <ActivityIndicator size="small" color="#DC2626" />
+                      : <Text style={styles.deleteBillText}>Delete bill</Text>}
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           ))
@@ -392,6 +369,21 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: '#E5E7EB',
+  },
+  billTapArea: {
+    flex: 1,
+  },
+  deleteBillButton: {
+    alignItems: 'flex-end',
+    borderTopColor: '#F3F4F6',
+    borderTopWidth: 1,
+    marginTop: 10,
+    paddingTop: 10,
+  },
+  deleteBillText: {
+    color: '#DC2626',
+    fontSize: 12,
+    fontWeight: '700',
   },
   billHeader: {
     flexDirection: 'row',

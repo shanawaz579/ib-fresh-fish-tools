@@ -1,8 +1,8 @@
+import styles from '../styles/PurchaseBillGenerationScreen.styles';
 import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   ScrollView,
   TouchableOpacity,
   TextInput,
@@ -13,13 +13,15 @@ import { Picker } from '@react-native-picker/picker';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { Purchase } from '../types';
 import { createPurchaseBill } from '../api/stock';
+import { DEFAULT_CRATE_WEIGHT_KG, getPurchaseTotalWeightKg } from '../domain/fish';
+import { useBusinessConfig } from '../context/BusinessConfigContext';
 
 type RouteParams = {
   PurchaseBillGeneration: {
-    farmer_id: number;
-    farmer_name: string;
-    farmer_location?: string;
-    farmer_secondary_name?: string;
+    supplier_id: number;
+    supplier_name: string;
+    farmer_name?: string;
+    location?: string;
     purchases: Purchase[];
     date: string;
   };
@@ -28,7 +30,12 @@ type RouteParams = {
 export default function PurchaseBillGenerationScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<RouteParams, 'PurchaseBillGeneration'>>();
-  const { farmer_id, farmer_name, farmer_location, farmer_secondary_name, purchases, date } = route.params;
+  const { supplier_id, supplier_name, farmer_name, location, purchases, date } = route.params;
+  const isDirectFarmer = purchases[0]?.supplier_type === 'farmer';
+  const { configuration, formatMoney } = useBusinessConfig();
+  const { preferences } = configuration;
+  const deductionRate = preferences.purchase_weight_deduction_percent / 100;
+  const currencySymbol = preferences.currency_symbol;
 
   const [items, setItems] = useState<Array<{
     purchaseId: number;
@@ -44,7 +51,16 @@ export default function PurchaseBillGenerationScreen() {
     grossAmount: number;
   }>>([]);
 
-  const [commissionAmount, setCommissionAmount] = useState('');
+  const [applyCommission, setApplyCommission] = useState(
+    isDirectFarmer
+      ? preferences.apply_direct_commission_by_default
+      : preferences.apply_mediator_commission_by_default,
+  );
+  const [commissionPerKg, setCommissionPerKg] = useState(String(
+    isDirectFarmer
+      ? preferences.direct_commission_per_kg
+      : preferences.mediator_commission_per_kg,
+  ));
   const [advanceAmount, setAdvanceAmount] = useState('');
   const [otherChargesAddition, setOtherChargesAddition] = useState('');
   const [otherChargesDeduction, setOtherChargesDeduction] = useState('');
@@ -56,9 +72,10 @@ export default function PurchaseBillGenerationScreen() {
     const initialItems = purchases.map(p => {
       const crates = p.quantity_crates || 0;
       const looseKg = p.quantity_kg || 0;
-      const kgPerCrate = 35; // Default 35 kg per crate
-      const calculatedWeight = crates * kgPerCrate;
-      const actualWeight = calculatedWeight + looseKg;
+      const kgPerCrate = p.default_kg_per_crate
+        || preferences.default_crate_weight_kg
+        || DEFAULT_CRATE_WEIGHT_KG;
+      const actualWeight = getPurchaseTotalWeightKg(crates, looseKg, kgPerCrate);
 
       return {
         purchaseId: p.id,
@@ -68,29 +85,32 @@ export default function PurchaseBillGenerationScreen() {
         looseKg,
         actualWeight,
         ratePerKg: '',
-        applyDeduction: true, // Default: apply 5% deduction
-        deductionWeight: Math.round(actualWeight * 0.05),
-        billableWeight: actualWeight - Math.round(actualWeight * 0.05),
+        applyDeduction: deductionRate > 0,
+        deductionWeight: Math.round(actualWeight * deductionRate),
+        billableWeight: actualWeight - Math.round(actualWeight * deductionRate),
         grossAmount: 0,
       };
     });
 
     setItems(initialItems);
-  }, [purchases]);
+  }, [deductionRate, preferences.default_crate_weight_kg, purchases]);
 
   const updateKgPerCrate = (index: number, kgPerCrate: string) => {
     const newItems = [...items];
     const kgPerCrateNum = parseFloat(kgPerCrate) || 0;
     newItems[index].kgPerCrate = kgPerCrateNum;
 
-    // Recalculate actual weight based on crates × kg/crate + loose kg
     const looseKg = purchases[index]?.quantity_kg || 0;
-    newItems[index].actualWeight = (newItems[index].crates * kgPerCrateNum) + looseKg;
+    newItems[index].actualWeight = getPurchaseTotalWeightKg(
+      newItems[index].crates,
+      looseKg,
+      kgPerCrateNum,
+    );
 
     // Recalculate deduction and billable weight
     if (newItems[index].applyDeduction) {
-      newItems[index].deductionWeight = Math.round(newItems[index].actualWeight * 0.05);
-      newItems[index].billableWeight = newItems[index].actualWeight - Math.round(newItems[index].actualWeight * 0.05);
+      newItems[index].deductionWeight = Math.round(newItems[index].actualWeight * deductionRate);
+      newItems[index].billableWeight = newItems[index].actualWeight - Math.round(newItems[index].actualWeight * deductionRate);
     } else {
       newItems[index].deductionWeight = 0;
       newItems[index].billableWeight = newItems[index].actualWeight;
@@ -116,9 +136,8 @@ export default function PurchaseBillGenerationScreen() {
     newItems[index].applyDeduction = !newItems[index].applyDeduction;
 
     if (newItems[index].applyDeduction) {
-      // Apply 5% deduction (rounded)
-      newItems[index].deductionWeight = Math.round(newItems[index].actualWeight * 0.05);
-      newItems[index].billableWeight = newItems[index].actualWeight - Math.round(newItems[index].actualWeight * 0.05);
+      newItems[index].deductionWeight = Math.round(newItems[index].actualWeight * deductionRate);
+      newItems[index].billableWeight = newItems[index].actualWeight - Math.round(newItems[index].actualWeight * deductionRate);
     } else {
       // No deduction
       newItems[index].deductionWeight = 0;
@@ -135,7 +154,10 @@ export default function PurchaseBillGenerationScreen() {
   const calculateTotals = () => {
     const totalBillableWeight = items.reduce((sum, item) => sum + item.billableWeight, 0);
     const subtotal = items.reduce((sum, item) => sum + item.grossAmount, 0);
-    const commission = parseFloat(commissionAmount) || 0;
+    const commissionRate = applyCommission
+      ? (parseFloat(commissionPerKg) || 0)
+      : 0;
+    const commission = Number((totalBillableWeight * commissionRate).toFixed(2));
     const advance = parseFloat(advanceAmount) || 0;
     const otherAddition = parseFloat(otherChargesAddition) || 0;
     const otherDeduction = parseFloat(otherChargesDeduction) || 0;
@@ -144,6 +166,7 @@ export default function PurchaseBillGenerationScreen() {
     return {
       totalBillableWeight,
       subtotal,
+      commissionRate,
       commission,
       advance,
       otherChargesAddition: otherAddition,
@@ -159,12 +182,16 @@ export default function PurchaseBillGenerationScreen() {
       Alert.alert('Error', 'Please enter rates for all items');
       return;
     }
+    if (applyCommission && (parseFloat(commissionPerKg) || 0) <= 0) {
+      Alert.alert('Check commission', 'Enter a commission rate greater than zero or turn commission off.');
+      return;
+    }
 
     const totals = calculateTotals();
 
     Alert.alert(
       'Generate Bill',
-      `Total Amount: ₹${totals.total.toLocaleString('en-IN')}\n\nBill will be created and you can add payments later from the bills list.`,
+      `Total Amount: ${formatMoney(totals.total, 2)}\n\nBill will be created and you can add payments later from the bills list.`,
       [
         {
           text: 'Cancel',
@@ -191,16 +218,15 @@ export default function PurchaseBillGenerationScreen() {
 
               // Create bill
               const result = await createPurchaseBill({
-                farmer_id: farmer_id,
+                supplier_id,
                 bill_date: date,
                 items: billItems,
-                commission_amount: parseFloat(commissionAmount) || 0,
+                commission_per_kg: totals.commissionRate,
                 advance_amount: parseFloat(advanceAmount) || 0,
                 other_charges_addition: parseFloat(otherChargesAddition) || 0,
                 other_charges_deduction: parseFloat(otherChargesDeduction) || 0,
                 notes: notes,
-                location: farmer_location,
-                secondary_name: farmer_secondary_name,
+                location,
               });
 
               setSubmitting(false);
@@ -208,7 +234,7 @@ export default function PurchaseBillGenerationScreen() {
               if (result.success) {
                 Alert.alert(
                   'Success',
-                  `Purchase bill created successfully!\n\nTotal: ₹${totals.total.toLocaleString('en-IN')}\n\nYou can now add payments from the bills list.`,
+                  `Purchase bill created successfully!\n\nTotal: ${formatMoney(totals.total, 2)}\n\nYou can now add payments from the bills list.`,
                   [
                     {
                       text: 'OK',
@@ -242,14 +268,14 @@ export default function PurchaseBillGenerationScreen() {
       </View>
 
       <ScrollView style={styles.content}>
-        {/* Farmer Info */}
+        {/* Primary supplier and source farmer */}
         <View style={styles.farmerInfoCard}>
-          <Text style={styles.farmerName}>{farmer_name}</Text>
-          {(farmer_location || farmer_secondary_name) && (
+          <Text style={styles.farmerName}>{supplier_name}</Text>
+          {(farmer_name || location) && (
             <Text style={styles.farmerSubtitle}>
-              {farmer_location && farmer_location}
-              {farmer_location && farmer_secondary_name && ' • '}
-              {farmer_secondary_name && farmer_secondary_name}
+              {farmer_name ? (isDirectFarmer ? 'Direct harvest' : `Source farmer: ${farmer_name}`) : ''}
+              {farmer_name && location ? ' • ' : ''}
+              {location || ''}
             </Text>
           )}
           <Text style={styles.billDate}>Bill Date: {date}</Text>
@@ -265,11 +291,14 @@ export default function PurchaseBillGenerationScreen() {
                 <View style={styles.itemHeaderLeft}>
                   <Text style={styles.varietyName}>{item.varietyName}</Text>
                   <Text style={styles.weightInfoText}>
-                    {item.crates} cr × {item.kgPerCrate} kg{item.looseKg > 0 ? ` + ${item.looseKg.toFixed(0)} kg` : ''} = <Text style={styles.totalWeightBold}>{item.actualWeight.toFixed(0)} kg</Text>
+                    {[
+                      item.crates > 0 ? `${item.crates} cr × ${item.kgPerCrate} kg` : '',
+                      item.looseKg > 0 ? `${item.looseKg} kg` : '',
+                    ].filter(Boolean).join(' + ')} = <Text style={styles.totalWeightBold}>{item.actualWeight.toFixed(0)} kg</Text>
                   </Text>
                 </View>
                 <View style={styles.rateInputCompact}>
-                  <Text style={styles.rupeeSymbol}>₹</Text>
+                  <Text style={styles.rupeeSymbol}>{currencySymbol}</Text>
                   <TextInput
                     style={styles.rateInputSmall}
                     placeholder="0"
@@ -289,15 +318,15 @@ export default function PurchaseBillGenerationScreen() {
                   {item.applyDeduction && <Text style={styles.checkmark}>✓</Text>}
                 </View>
                 <Text style={styles.deductionText}>
-                  5% deduction ({item.applyDeduction ? `-${item.deductionWeight.toFixed(0)} kg` : 'skip'})
+                  {preferences.purchase_weight_deduction_percent}% deduction ({item.applyDeduction ? `-${item.deductionWeight.toFixed(0)} kg` : 'skip'})
                 </Text>
               </TouchableOpacity>
 
               {/* Amount Display - Clear result */}
               <View style={styles.amountDisplay}>
                 <View style={styles.amountRow}>
-                  <Text style={styles.amountLabel}>Billable: {item.billableWeight.toFixed(0)} kg × ₹{item.ratePerKg || '0'}</Text>
-                  <Text style={styles.amountValueBold}>₹{item.grossAmount.toFixed(2)}</Text>
+                  <Text style={styles.amountLabel}>Billable: {item.billableWeight.toFixed(0)} kg × {currencySymbol}{item.ratePerKg || '0'}</Text>
+                  <Text style={styles.amountValueBold}>{formatMoney(item.grossAmount, 2)}</Text>
                 </View>
               </View>
             </View>
@@ -308,15 +337,32 @@ export default function PurchaseBillGenerationScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Additional Charges & Deductions</Text>
 
-          <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Commission:</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-              value={commissionAmount}
-              onChangeText={setCommissionAmount}
-            />
+          <View style={styles.commissionCard}>
+            <TouchableOpacity
+              style={styles.commissionToggle}
+              onPress={() => setApplyCommission((current) => !current)}
+            >
+              <View style={[styles.checkbox, applyCommission && styles.checkboxChecked]}>
+                {applyCommission ? <Text style={styles.checkmark}>✓</Text> : null}
+              </View>
+              <View style={styles.commissionIdentity}>
+                <Text style={styles.commissionTitle}>Apply commission</Text>
+                <Text style={styles.commissionSubtitle}>Calculated on total billable weight</Text>
+              </View>
+            </TouchableOpacity>
+            {applyCommission ? (
+              <View style={styles.commissionRateRow}>
+                <Text style={styles.commissionFormula}>{totals.totalBillableWeight.toFixed(0)} kg × {currencySymbol}</Text>
+                <TextInput
+                  style={styles.commissionRateInput}
+                  keyboardType="decimal-pad"
+                  value={commissionPerKg}
+                  onChangeText={setCommissionPerKg}
+                  selectTextOnFocus
+                />
+                <Text style={styles.commissionFormula}>/kg = {formatMoney(totals.commission, 2)}</Text>
+              </View>
+            ) : null}
           </View>
 
           <View style={styles.inputRow}>
@@ -331,7 +377,7 @@ export default function PurchaseBillGenerationScreen() {
           </View>
 
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Advance:</Text>
+            <Text style={styles.inputLabel}>Advance paid:</Text>
             <TextInput
               style={styles.input}
               placeholder="0.00"
@@ -340,6 +386,9 @@ export default function PurchaseBillGenerationScreen() {
               onChangeText={setAdvanceAmount}
             />
           </View>
+          <Text style={styles.paymentNote}>
+            Advance is a bill adjustment that reduces the payable total. New payments are recorded separately after creating the bill.
+          </Text>
 
           <View style={styles.inputRow}>
             <Text style={styles.inputLabel}>Other charges (-):</Text>
@@ -359,40 +408,40 @@ export default function PurchaseBillGenerationScreen() {
 
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Items Total</Text>
-            <Text style={styles.summaryValue}>₹{totals.subtotal.toFixed(2)}</Text>
+            <Text style={styles.summaryValue}>{formatMoney(totals.subtotal, 2)}</Text>
           </View>
 
-          {(parseFloat(commissionAmount) || 0) > 0 && (
+          {totals.commission > 0 && (
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>+ Commission</Text>
-              <Text style={styles.summaryValue}>₹{totals.commission.toFixed(2)}</Text>
+              <Text style={styles.summaryLabel}>+ Commission ({totals.commissionRate.toFixed(2)}/kg)</Text>
+              <Text style={styles.summaryValue}>{formatMoney(totals.commission, 2)}</Text>
             </View>
           )}
 
           {(parseFloat(otherChargesAddition) || 0) > 0 && (
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>+ Other charges</Text>
-              <Text style={styles.summaryValue}>₹{totals.otherChargesAddition.toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>{formatMoney(totals.otherChargesAddition, 2)}</Text>
             </View>
           )}
 
           {(parseFloat(advanceAmount) || 0) > 0 && (
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>- Advance</Text>
-              <Text style={styles.summaryValue}>₹{totals.advance.toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>{formatMoney(totals.advance, 2)}</Text>
             </View>
           )}
 
           {(parseFloat(otherChargesDeduction) || 0) > 0 && (
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>- Other charges</Text>
-              <Text style={styles.summaryValue}>₹{totals.otherChargesDeduction.toFixed(2)}</Text>
+              <Text style={styles.summaryValue}>{formatMoney(totals.otherChargesDeduction, 2)}</Text>
             </View>
           )}
 
           <View style={[styles.summaryRow, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total Amount</Text>
-            <Text style={styles.totalValue}>₹{totals.total.toFixed(2)}</Text>
+            <Text style={styles.totalValue}>{formatMoney(totals.total, 2)}</Text>
           </View>
         </View>
 
@@ -413,7 +462,7 @@ export default function PurchaseBillGenerationScreen() {
         <View style={styles.finalTotalCard}>
           <View style={styles.finalTotalRow}>
             <Text style={styles.finalTotalLabel}>Total Bill Amount</Text>
-            <Text style={styles.finalTotalValue}>₹{totals.total.toLocaleString('en-IN')}</Text>
+            <Text style={styles.finalTotalValue}>{formatMoney(totals.total, 2)}</Text>
           </View>
           <Text style={styles.paymentNote}>Payments can be recorded after bill is generated</Text>
         </View>
@@ -436,446 +485,3 @@ export default function PurchaseBillGenerationScreen() {
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F3F4F6',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    paddingTop: 50,
-  },
-  backButton: {
-    fontSize: 16,
-    color: '#0EA5E9',
-    marginRight: 12,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  content: {
-    flex: 1,
-  },
-  farmerInfoCard: {
-    backgroundColor: '#FFF',
-    padding: 16,
-    marginTop: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  farmerName: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#111827',
-  },
-  farmerSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  billDate: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 8,
-  },
-  section: {
-    backgroundColor: '#FFF',
-    padding: 16,
-    marginTop: 8,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  itemCard: {
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  itemHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    gap: 12,
-  },
-  itemHeaderLeft: {
-    flex: 1,
-  },
-  varietyName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  weightInfoText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  totalWeightBold: {
-    fontWeight: '600',
-    color: '#374151',
-  },
-  rateInputCompact: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderWidth: 2,
-    borderColor: '#0EA5E9',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minWidth: 100,
-  },
-  rupeeSymbol: {
-    fontSize: 16,
-    color: '#6B7280',
-    marginRight: 4,
-    fontWeight: '500',
-  },
-  rateInputSmall: {
-    fontSize: 18,
-    color: '#111827',
-    fontWeight: '600',
-    flex: 1,
-    textAlign: 'right',
-    padding: 0,
-  },
-  deductionToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 8,
-  },
-  checkbox: {
-    width: 18,
-    height: 18,
-    borderWidth: 1.5,
-    borderColor: '#D1D5DB',
-    borderRadius: 3,
-    marginRight: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: '#E5E7EB',
-    borderColor: '#9CA3AF',
-  },
-  checkmark: {
-    color: '#4B5563',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  deductionText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  amountDisplay: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    backgroundColor: '#F9FAFB',
-    marginHorizontal: -12,
-    marginBottom: -12,
-    paddingHorizontal: 12,
-    paddingBottom: 12,
-    borderBottomLeftRadius: 8,
-    borderBottomRightRadius: 8,
-  },
-  amountRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  amountLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    flex: 1,
-  },
-  amountValue: {
-    fontSize: 14,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  amountLabelBold: {
-    fontSize: 15,
-    color: '#111827',
-    fontWeight: '600',
-  },
-  amountValueBold: {
-    fontSize: 20,
-    color: '#059669',
-    fontWeight: '700',
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  inputLabel: {
-    flex: 1,
-    fontSize: 14,
-    color: '#374151',
-  },
-  input: {
-    width: 120,
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    padding: 10,
-    fontSize: 14,
-    backgroundColor: '#FFF',
-    textAlign: 'right',
-  },
-  summaryCard: {
-    backgroundColor: '#FFF',
-    padding: 16,
-    marginTop: 8,
-  },
-  summaryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 12,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  summaryLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-    flex: 1,
-  },
-  summaryValue: {
-    fontSize: 15,
-    color: '#111827',
-    fontWeight: '600',
-  },
-  totalRow: {
-    marginTop: 12,
-    paddingTop: 16,
-    borderTopWidth: 2,
-    borderTopColor: '#D1D5DB',
-  },
-  totalLabel: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  totalValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  balanceRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 12,
-    padding: 12,
-    backgroundColor: '#FEF3C7',
-    borderRadius: 6,
-  },
-  balanceLabel: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#92400E',
-  },
-  balanceValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#92400E',
-  },
-  balancePositive: {
-    color: '#B91C1C',
-  },
-  generateButton: {
-    backgroundColor: '#0EA5E9',
-    padding: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-    margin: 16,
-  },
-  generateButtonText: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  bottomPadding: {
-    height: 20,
-  },
-  notesInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    padding: 12,
-    fontSize: 14,
-    backgroundColor: '#FFF',
-    textAlignVertical: 'top',
-    minHeight: 80,
-  },
-  finalTotalCard: {
-    backgroundColor: '#FFF',
-    padding: 20,
-    marginTop: 8,
-    borderWidth: 2,
-    borderColor: '#059669',
-    borderRadius: 8,
-  },
-  finalTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  finalTotalLabel: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#111827',
-  },
-  finalTotalValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#059669',
-  },
-  paymentNote: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 8,
-    fontStyle: 'italic',
-  },
-  helpText: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    marginBottom: 12,
-  },
-  paymentItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  paymentItemLeft: {
-    flex: 1,
-  },
-  paymentItemAmount: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginBottom: 2,
-  },
-  paymentItemDetails: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  removePaymentBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FEE2E2',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removePaymentText: {
-    fontSize: 16,
-    color: '#DC2626',
-    fontWeight: 'bold',
-  },
-  addPaymentContainer: {
-    marginTop: 16,
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-  },
-  addPaymentTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
-  },
-  paymentFormRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  paymentFormField: {
-    flex: 1,
-  },
-  paymentFormLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-    fontWeight: '500',
-  },
-  paymentFormInput: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    padding: 10,
-    fontSize: 14,
-    backgroundColor: '#FFF',
-  },
-  paymentMethodPicker: {
-    borderWidth: 1,
-    borderColor: '#D1D5DB',
-    borderRadius: 6,
-    backgroundColor: '#FFF',
-    overflow: 'hidden',
-  },
-  miniPicker: {
-    height: 44,
-  },
-  addPaymentBtnNew: {
-    backgroundColor: '#0EA5E9',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 6,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'flex-end',
-  },
-  addPaymentBtnText: {
-    fontSize: 14,
-    color: '#FFF',
-    fontWeight: '600',
-  },
-  paymentsSummary: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-  },
-  paymentsSummaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  paymentsSummaryLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  paymentsSummaryValue: {
-    fontSize: 14,
-    color: '#059669',
-    fontWeight: '600',
-  },
-});

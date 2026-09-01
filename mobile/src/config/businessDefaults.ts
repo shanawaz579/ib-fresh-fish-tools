@@ -1,0 +1,56 @@
+import type { BusinessConfiguration } from '../types';
+
+const fallbackTimestamp = '1970-01-01T00:00:00.000Z';
+
+export const DEFAULT_BUSINESS_CONFIGURATION: BusinessConfiguration = {
+  profile: {
+    id: 1,
+    display_name: 'IB Fresh Fish',
+    legal_name: 'IB Fresh Fish',
+    tagline: 'Fish Trading Tools',
+    description: 'Inventory & Sales Management',
+    phone: null,
+    email: null,
+    address: null,
+    logo_url: null,
+    primary_color: '#0EA5E9',
+    created_at: fallbackTimestamp,
+    updated_at: fallbackTimestamp,
+  },
+  preferences: {
+    id: 1,
+    currency_code: 'INR',
+    currency_symbol: '₹',
+    locale: 'en-IN',
+    timezone: 'Asia/Kolkata',
+    default_crate_weight_kg: 35,
+    purchase_weight_deduction_percent: 5,
+    mediator_commission_per_kg: 0.5,
+    direct_commission_per_kg: 0.5,
+    apply_mediator_commission_by_default: true,
+    apply_direct_commission_by_default: false,
+    terminology: {
+      item: 'Item',
+      supplier: 'Supplier',
+      mediator: 'Mediator',
+      farmer: 'Farmer',
+      customer: 'Customer',
+      crate: 'Crate',
+      weight: 'kg',
+    },
+    enabled_modules: {
+      purchases: true,
+      sales: true,
+      packing: true,
+      inventory: true,
+      customer_billing: true,
+      supplier_billing: true,
+      expenses: true,
+      cashbook: true,
+      profitability: true,
+    },
+    updated_by: null,
+    created_at: fallbackTimestamp,
+    updated_at: fallbackTimestamp,
+  },
+};

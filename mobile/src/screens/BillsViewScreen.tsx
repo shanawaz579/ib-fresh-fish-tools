@@ -11,8 +11,11 @@ import {
 import { Picker } from '@react-native-picker/picker';
 import { getCustomers, getBillsByCustomer, deleteBill } from '../api/stock';
 import type { Customer, Bill } from '../types';
+import { formatBusinessDate } from '../utils/date';
+import { useBusinessConfig } from '../context/BusinessConfigContext';
 
 export default function BillsViewScreen() {
+  const { formatMoney } = useBusinessConfig();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [bills, setBills] = useState<Bill[]>([]);
@@ -70,7 +73,7 @@ export default function BillsViewScreen() {
 
     let warningMessage = `Are you sure you want to delete bill ${bill.bill_number}?\n\n`;
     warningMessage += `Status: ${badge.text}\n`;
-    warningMessage += `Amount: ₹${bill.total.toLocaleString('en-IN')}\n`;
+    warningMessage += `Amount: ${formatMoney(bill.total, 0)}\n`;
 
     if (bill.is_active) {
       warningMessage += `\n⚠️ WARNING: This is the ACTIVE bill for this customer!`;
@@ -185,7 +188,7 @@ export default function BillsViewScreen() {
                     <View style={styles.billHeaderLeft}>
                       <Text style={styles.billNumber}>{bill.bill_number}</Text>
                       <Text style={styles.billDate}>
-                        {new Date(bill.bill_date).toLocaleDateString('en-IN')}
+                        {formatBusinessDate(bill.bill_date)}
                       </Text>
                     </View>
                     <View style={styles.billHeaderRight}>
@@ -195,7 +198,7 @@ export default function BillsViewScreen() {
                         </Text>
                       </View>
                       <Text style={styles.billTotal}>
-                        ₹{bill.total.toLocaleString('en-IN')}
+                        {formatMoney(bill.total, 0)}
                       </Text>
                       <TouchableOpacity
                         style={styles.deleteButton}
@@ -210,32 +213,32 @@ export default function BillsViewScreen() {
                     <View style={styles.billDetailRow}>
                       <Text style={styles.billDetailLabel}>Previous Balance:</Text>
                       <Text style={styles.billDetailValue}>
-                        ₹{bill.previous_balance?.toLocaleString('en-IN') || '0'}
+                        {formatMoney(bill.previous_balance || 0, 0)}
                       </Text>
                     </View>
                     <View style={styles.billDetailRow}>
                       <Text style={styles.billDetailLabel}>Amount Paid:</Text>
                       <Text style={[styles.billDetailValue, styles.paidAmount]}>
-                        -₹{bill.amount_paid?.toLocaleString('en-IN') || '0'}
+                        -{formatMoney(bill.amount_paid || 0, 0)}
                       </Text>
                     </View>
                     <View style={styles.billDetailRow}>
                       <Text style={styles.billDetailLabel}>Balance Due:</Text>
                       <Text style={styles.billDetailValue}>
-                        ₹{bill.balance_due?.toLocaleString('en-IN') || '0'}
+                        {formatMoney(bill.balance_due || 0, 0)}
                       </Text>
                     </View>
                     <View style={styles.billDetailRow}>
                       <Text style={styles.billDetailLabel}>Subtotal:</Text>
                       <Text style={styles.billDetailValue}>
-                        ₹{bill.subtotal?.toLocaleString('en-IN') || '0'}
+                        {formatMoney(bill.subtotal || 0, 0)}
                       </Text>
                     </View>
                     {bill.discount > 0 && (
                       <View style={styles.billDetailRow}>
                         <Text style={styles.billDetailLabel}>Discount:</Text>
                         <Text style={[styles.billDetailValue, styles.paidAmount]}>
-                          -₹{bill.discount.toLocaleString('en-IN')}
+                          -{formatMoney(bill.discount, 0)}
                         </Text>
                       </View>
                     )}

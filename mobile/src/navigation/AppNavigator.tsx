@@ -19,6 +19,12 @@ import BillsViewScreen from '../screens/BillsViewScreen';
 import PurchaseBillGenerationScreen from '../screens/PurchaseBillGenerationScreen';
 import PurchaseBillsViewScreen from '../screens/PurchaseBillsViewScreen';
 import PurchaseBillDetailsScreen from '../screens/PurchaseBillDetailsScreen';
+import SupplierLedgerScreen from '../screens/SupplierLedgerScreen';
+import StockLedgerScreen from '../screens/StockLedgerScreen';
+import BusinessSettingsScreen from '../screens/BusinessSettingsScreen';
+import ExpensesScreen from '../screens/ExpensesScreen';
+import CashbookScreen from '../screens/CashbookScreen';
+import ProfitabilityScreen from '../screens/ProfitabilityScreen';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -37,16 +43,22 @@ export type RootStackParamList = {
     date?: string;
   } | undefined;
   PurchaseBillGeneration: {
-    farmer_id: number;
-    farmer_name: string;
-    farmer_location?: string;
-    farmer_secondary_name?: string;
+    supplier_id: number;
+    supplier_name: string;
+    farmer_name?: string;
+    location?: string;
     purchases: any[];
     date: string;
   };
   Payments: undefined;
   BillsView: undefined;
   PurchaseBillsView: undefined;
+  SupplierLedger: undefined;
+  StockLedger: undefined;
+  BusinessSettings: undefined;
+  Expenses: undefined;
+  Cashbook: undefined;
+  Profitability: undefined;
   PurchaseBillDetails: {
     billId: number;
   };
@@ -96,10 +108,16 @@ function Navigation() {
           <Stack.Screen name="Payments" component={PaymentsScreen} />
           <Stack.Screen name="BillsView" component={BillsViewScreen} />
           <Stack.Screen name="PurchaseBillsView" component={PurchaseBillsViewScreen} />
+          <Stack.Screen name="SupplierLedger" component={SupplierLedgerScreen} />
+          <Stack.Screen name="StockLedger" component={StockLedgerScreen} />
           <Stack.Screen name="PurchaseBillDetails" component={PurchaseBillDetailsScreen} />
           <Stack.Screen name="Farmers" component={FarmersScreen} />
           <Stack.Screen name="Customers" component={CustomersScreen} />
           <Stack.Screen name="FishVarieties" component={FishVarietiesScreen} />
+          <Stack.Screen name="BusinessSettings" component={BusinessSettingsScreen} />
+          <Stack.Screen name="Expenses" component={ExpensesScreen} />
+          <Stack.Screen name="Cashbook" component={CashbookScreen} />
+          <Stack.Screen name="Profitability" component={ProfitabilityScreen} />
         </>
       ) : isPacker ? (
         // Packer users only get Packing screen

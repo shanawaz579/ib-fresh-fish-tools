@@ -5,12 +5,14 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { useBusinessConfig } from '../context/BusinessConfigContext';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -18,6 +20,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { signIn } = useAuth();
+  const { configuration } = useBusinessConfig();
+  const { profile } = configuration;
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -42,16 +46,19 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: profile.primary_color }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <View style={styles.content}>
           <View style={styles.header}>
-            <Text style={styles.title}>IB Fresh Fish</Text>
-            <Text style={styles.subtitle}>Fish Trading Tools</Text>
-            <Text style={styles.description}>Inventory & Sales Management</Text>
+            {profile.logo_url ? (
+              <Image source={{ uri: profile.logo_url }} style={styles.logo} resizeMode="contain" />
+            ) : null}
+            <Text style={styles.title}>{profile.display_name}</Text>
+            <Text style={styles.subtitle}>{profile.tagline}</Text>
+            {profile.description ? <Text style={styles.description}>{profile.description}</Text> : null}
           </View>
 
           <View style={styles.form}>
@@ -132,6 +139,11 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 48,
+  },
+  logo: {
+    height: 88,
+    marginBottom: 16,
+    width: 88,
   },
   title: {
     fontSize: 32,

@@ -7,7 +7,7 @@ React Native mobile application for managing fish trading operations, including 
 - **Purchase Bill**: Record fish purchases from farmers
 - **Sales Spreadsheet**: Quick entry for daily sales records
 - **Real-time Sync**: Shared Supabase backend with web app
-- **Offline Support**: Works offline and syncs when connected
+- **Persistent Login**: Authentication sessions survive app restarts
 
 ## Prerequisites
 
@@ -33,9 +33,12 @@ Edit `mobile/.env`:
 ```
 EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
 EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+EXPO_PUBLIC_SUPABASE_SCHEMA=working # optional; working is the safe default
 ```
 
 ### 3. Run the App
+
+Do not run `supabase db push` against the live project for this refactor. The isolated development schema is defined under `supabase/working/` and must be reviewed/applied separately. The mobile app defaults to `working` and will not silently target `public`.
 
 **iOS (Mac only):**
 ```bash
@@ -66,10 +69,14 @@ Then scan the QR code with:
 ```
 mobile/
 ├── src/
-│   ├── screens/          # App screens
-│   │   ├── HomeScreen.tsx
-│   │   ├── PurchaseScreen.tsx
-│   │   └── SalesScreen.tsx
+│   ├── api/              # Supabase access split by business domain
+│   ├── auth/             # Roles and authentication helpers
+│   ├── domain/           # Pure business types and calculations
+│   ├── features/         # Feature hooks, documents, and composed UI
+│   ├── hooks/            # Shared React behavior
+│   ├── screens/          # Navigation-level presentation
+│   ├── styles/           # Feature-level React Native styles
+│   ├── utils/            # Date and infrastructure helpers
 │   ├── navigation/       # Navigation setup
 │   │   └── AppNavigator.tsx
 │   ├── components/       # Reusable components
@@ -144,14 +151,11 @@ shared/                  # Shared code with web app
 - Make sure all dependencies are installed
 - Try clearing cache: `expo start -c`
 
-## Next Steps
+## Current limitations
 
-1. Add authentication (login/signup)
-2. Add bill generation and printing
-3. Add dashboard with analytics
-4. Add push notifications
-5. Add offline mode with local storage
-6. Add camera for receipt scanning
+- Operational data requires a network connection; offline mutation syncing is not implemented.
+- Supabase RLS policies must enforce the same roles used by the client.
+- Historical customer payments still use the existing rolling-statement model rather than invoice-level allocations.
 
 ## Resources
 

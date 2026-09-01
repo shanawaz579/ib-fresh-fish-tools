@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { getUserRole, type UserRole } from '../auth/roles';
 
 interface AuthContextType {
   session: Session | null;
@@ -8,8 +9,18 @@ interface AuthContextType {
   loading: boolean;
   isAdmin: boolean;
   isPacker: boolean;
+  role: UserRole;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+}
+
+const wait = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+async function waitUntilTokenIsUsable(session: Session | null) {
+  if (!session?.expires_at || !session.expires_in) return;
+  const issuedAtMilliseconds = (session.expires_at - session.expires_in) * 1000;
+  const delay = Math.min(15_000, Math.max(1_500, issuedAtMilliseconds - Date.now() + 1_500));
+  await wait(delay);
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -18,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   loading: true,
   isAdmin: false,
   isPacker: false,
+  role: 'viewer',
   signIn: async () => ({ error: null }),
   signOut: async () => {},
 });
@@ -28,34 +40,46 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isPacker, setIsPacker] = useState(false);
+  const [role, setRole] = useState<UserRole>('viewer');
 
-  // Check if user is admin based on email
-  const checkIsAdmin = (email: string | undefined) => {
-    return email === 'shanawaz579@gmail.com';
-  };
-
-  // Check if user is packer based on email
-  const checkIsPacker = (email: string | undefined) => {
-    return email === 'shanawaz_sk@yahoo.com';
+  const applySession = (nextSession: Session | null) => {
+    const nextUser = nextSession?.user ?? null;
+    const nextRole = getUserRole(nextUser);
+    setSession(nextSession);
+    setUser(nextUser);
+    setRole(nextRole);
+    setIsAdmin(nextRole === 'admin');
+    setIsPacker(nextRole === 'packer');
+    setLoading(false);
   };
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user || null);
-      setIsAdmin(checkIsAdmin(session?.user?.email));
-      setIsPacker(checkIsPacker(session?.user?.email));
-      setLoading(false);
-    });
+    let restoringSession = true;
+
+    const restoreSession = async () => {
+      const { data: { session: storedSession } } = await supabase.auth.getSession();
+      if (!storedSession) {
+        applySession(null);
+        restoringSession = false;
+        return;
+      }
+
+      // Refresh on app startup so a stale cached JWT cannot block database requests.
+      const { data, error } = await supabase.auth.refreshSession({
+        refresh_token: storedSession.refresh_token,
+      });
+      const restoredSession = error ? storedSession : data.session;
+      await waitUntilTokenIsUsable(restoredSession);
+      applySession(restoredSession);
+      restoringSession = false;
+    };
+
+    restoreSession();
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user || null);
-      setIsAdmin(checkIsAdmin(session?.user?.email));
-      setIsPacker(checkIsPacker(session?.user?.email));
-      setLoading(false);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'INITIAL_SESSION' && restoringSession) return;
+      void waitUntilTokenIsUsable(session).then(() => applySession(session));
     });
 
     return () => subscription?.unsubscribe();
@@ -79,10 +103,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(null);
     setIsAdmin(false);
     setIsPacker(false);
+    setRole('viewer');
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, loading, isAdmin, isPacker, signIn, signOut }}>
+    <AuthContext.Provider value={{ session, user, loading, isAdmin, isPacker, role, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

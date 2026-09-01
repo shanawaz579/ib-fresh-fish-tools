@@ -1,0 +1,247 @@
+import { StyleSheet } from 'react-native';
+
+export default StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  header: {
+    backgroundColor: '#10B981',
+    padding: 20,
+    paddingTop: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  backButtonText: {
+    fontSize: 28,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    flex: 1,
+    textAlign: 'center',
+  },
+  dateContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  dateButton: {
+    padding: 12,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    marginHorizontal: 8,
+  },
+  dateButtonText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#374151',
+  },
+  dateTextContainer: {
+    marginHorizontal: 12,
+  },
+  dateText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  todayButton: {
+    padding: 12,
+    backgroundColor: '#10B981',
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  todayButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  formContainer: {
+    backgroundColor: '#fff',
+    margin: 16,
+    padding: 16,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  formHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  formTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#111827',
+    flex: 1,
+  },
+  changeFarmerButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 6,
+  },
+  changeFarmerText: {
+    color: '#10B981',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  tempItemsContainer: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  tempItemsTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#065F46',
+    marginBottom: 8,
+  },
+  tempItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#D1FAE5',
+  },
+  tempItemInfo: {
+    flex: 1,
+  },
+  tempItemName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  tempItemQty: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  tempItemActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  editTempButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#D1FAE5',
+    borderRadius: 6,
+  },
+  editTempText: {
+    color: '#059669',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  removeTempButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeTempText: {
+    color: '#DC2626',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  flexButton: {
+    flex: 1,
+  },
+  addItemButton: {
+    backgroundColor: '#10B981',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  addItemButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  saveAllButton: {
+    backgroundColor: '#059669',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  saveAllButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  pickerContainer: {
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
+  picker: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  inputContainer: {
+    flex: 1,
+  },
+  input: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+  },
+  submitButton: {
+    backgroundColor: '#10B981',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
+  },
+  submitButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+});
