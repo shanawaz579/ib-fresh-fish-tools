@@ -43,14 +43,14 @@ BEGIN
   SELECT * INTO payment_value FROM working.record_customer_payment(customer_value, CURRENT_DATE, 100, 'cash', NULL, 'Deletion guard verification');
 
   BEGIN
-    PERFORM working.delete_customer_bill(bill_value);
+    PERFORM working.release_customer_bill_for_correction(bill_value, 'Verification correction reason');
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM LIKE 'Void active receipts linked%' THEN blocked := TRUE; ELSE RAISE; END IF;
   END;
   IF NOT blocked THEN RAISE EXCEPTION 'Bill deletion was not blocked by an active receipt'; END IF;
 
   PERFORM working.void_customer_payment(payment_value.id, 'Verification cleanup');
-  IF working.delete_customer_bill(bill_value) IS NOT TRUE THEN RAISE EXCEPTION 'Bill was not deleted'; END IF;
+  IF working.release_customer_bill_for_correction(bill_value, 'Verification correction reason') IS NULL THEN RAISE EXCEPTION 'Bill was not released'; END IF;
 
   IF EXISTS (SELECT 1 FROM working.bills WHERE id = bill_value) THEN RAISE EXCEPTION 'Bill orphan remains'; END IF;
   IF EXISTS (SELECT 1 FROM working.bill_items WHERE bill_id = bill_value) THEN RAISE EXCEPTION 'Bill item orphan remains'; END IF;

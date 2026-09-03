@@ -31,6 +31,7 @@ export function useSalesRecords() {
   const [quantityCrates, setQuantityCrates] = useState('');
   const [quantityKg, setQuantityKg] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [editingDraftVarietyId, setEditingDraftVarietyId] = useState<number | null>(null);
   const [tempItems, setTempItems] = useState<Array<{
     varietyId: number;
     varietyName: string;
@@ -40,14 +41,6 @@ export function useSalesRecords() {
 
   // Edit mode state
   const [editingCustomerId, setEditingCustomerId] = useState<number | null>(null);
-  const [editItems, setEditItems] = useState<Array<{
-    id: number;
-    varietyId: number;
-    varietyName: string;
-    crates: number;
-    kg: number;
-  }>>([]);
-
   // Collapse state - track which customer cards are collapsed
   const [collapsedCustomers, setCollapsedCustomers] = useState<Set<number>>(new Set());
 
@@ -134,32 +127,56 @@ export function useSalesRecords() {
 
     const available = getStockForVariety(fishVarietyId).available;
     const existingDraft = tempItems.find((item) => item.varietyId === fishVarietyId);
-    const requestedCrates = (existingDraft?.crates ?? 0) + crates;
-    const requestedKg = (existingDraft?.kg ?? 0) + kg;
-    if (requestedCrates > available.crates || requestedKg > available.kg) {
+    const draftBeingEdited = editingDraftVarietyId === null
+      ? undefined
+      : tempItems.find((item) => item.varietyId === editingDraftVarietyId);
+    const isUpdatingDraft = editingDraftVarietyId !== null;
+    const requestedCrates = isUpdatingDraft ? crates : (existingDraft?.crates ?? 0) + crates;
+    const requestedKg = isUpdatingDraft ? kg : (existingDraft?.kg ?? 0) + kg;
+    const editingSameVariety = draftBeingEdited?.varietyId === fishVarietyId;
+    const capacityCrates = available.crates + (editingSameVariety ? draftBeingEdited.crates : existingDraft?.crates ?? 0);
+    const capacityKg = available.kg + (editingSameVariety ? draftBeingEdited.kg : existingDraft?.kg ?? 0);
+    if (requestedCrates > capacityCrates || requestedKg > capacityKg) {
       Alert.alert(
         'Insufficient stock',
-        `Available: ${available.crates} cr · ${available.kg} kg`,
+        `Available: ${capacityCrates} cr · ${capacityKg} kg`,
       );
       return;
     }
 
-    // Check if variety already exists in temp items
-    const existingIndex = tempItems.findIndex(item => item.varietyId === fishVarietyId);
-    if (existingIndex >= 0) {
-      // Update existing item
-      const updated = [...tempItems];
-      updated[existingIndex].crates += crates;
-      updated[existingIndex].kg += kg;
-      setTempItems(updated);
+    if (isUpdatingDraft) {
+      const conflictingDraft = tempItems.some((item) => (
+        item.varietyId === fishVarietyId && item.varietyId !== editingDraftVarietyId
+      ));
+      if (conflictingDraft) {
+        Alert.alert('Item already added', 'Remove the duplicate line or edit that line instead.');
+        return;
+      }
+
+      setTempItems(tempItems.map((item) => (
+        item.varietyId === editingDraftVarietyId
+          ? { varietyId: fishVarietyId, varietyName: variety.name, crates, kg }
+          : item
+      )));
+      setEditingDraftVarietyId(null);
+      // Check if variety already exists in temp items
     } else {
-      // Add new item
-      setTempItems([...tempItems, {
-        varietyId: fishVarietyId,
-        varietyName: variety.name,
-        crates,
-        kg,
-      }]);
+      const existingIndex = tempItems.findIndex(item => item.varietyId === fishVarietyId);
+      if (existingIndex >= 0) {
+        // Update existing item
+        const updated = [...tempItems];
+        updated[existingIndex].crates += crates;
+        updated[existingIndex].kg += kg;
+        setTempItems(updated);
+      } else {
+        // Add new item
+        setTempItems([...tempItems, {
+          varietyId: fishVarietyId,
+          varietyName: variety.name,
+          crates,
+          kg,
+        }]);
+      }
     }
 
     // Clear only the variety and quantities, keep customer selected
@@ -169,6 +186,12 @@ export function useSalesRecords() {
   };
 
   const handleRemoveTempItem = (index: number) => {
+    if (tempItems[index]?.varietyId === editingDraftVarietyId) {
+      setEditingDraftVarietyId(null);
+      setFishVarietyId(null);
+      setQuantityCrates('');
+      setQuantityKg('');
+    }
     setTempItems(tempItems.filter((_, i) => i !== index));
   };
 
@@ -180,8 +203,7 @@ export function useSalesRecords() {
     setQuantityCrates(item.crates.toString());
     setQuantityKg(item.kg.toString());
 
-    // Remove from temp list
-    setTempItems(tempItems.filter((_, i) => i !== index));
+    setEditingDraftVarietyId(item.varietyId);
   };
 
   const handleSaveAll = async () => {
@@ -189,10 +211,14 @@ export function useSalesRecords() {
       Alert.alert('Error', 'Please select a customer and add at least one item');
       return;
     }
+    if (editingDraftVarietyId !== null) {
+      Alert.alert('Finish item edit', 'Tap Update item before saving the sale.');
+      return;
+    }
 
     setSubmitting(true);
     try {
-      await saveSalesBatch({
+      const input = {
         customerId,
         saleDate: date,
         items: tempItems.map((item) => ({
@@ -200,17 +226,21 @@ export function useSalesRecords() {
           quantityCrates: item.crates,
           quantityKg: item.kg,
         })),
-      });
+      };
+      if (editingCustomerId) await updateSalesGroup(input);
+      else await saveSalesBatch(input);
 
       // Clear form
       setTempItems([]);
       setCustomerId(null);
+      setEditingCustomerId(null);
       setFishVarietyId(null);
       setQuantityCrates('');
       setQuantityKg('');
+      setEditingDraftVarietyId(null);
 
       loadData();
-      Alert.alert('Success', `${tempItems.length} item(s) added successfully`);
+      Alert.alert('Success', editingCustomerId ? 'Sale updated successfully' : `${tempItems.length} item(s) added successfully`);
     } catch (err) {
       const message = err && typeof err === 'object' && 'message' in err ? String(err.message) : 'Failed to add sales';
       Alert.alert('Unable to save sale', message);
@@ -219,6 +249,7 @@ export function useSalesRecords() {
   };
 
   const handleCustomerChange = (nextCustomerId: number | null) => {
+    if (editingCustomerId) return;
     if (nextCustomerId === customerId) return;
     if (tempItems.length > 0) {
       Alert.alert('Change customer?', 'Changing customer will clear the draft sale.', [
@@ -276,13 +307,24 @@ export function useSalesRecords() {
   // Edit mode functions
   const handleEditCustomer = (customerId: number, customerSales: Sale[]) => {
     setEditingCustomerId(customerId);
-    setEditItems(customerSales.map(sale => ({
-      id: sale.id,
-      varietyId: sale.fish_variety_id,
-      varietyName: sale.fish_variety_name || 'Unknown',
-      crates: sale.quantity_crates,
-      kg: sale.quantity_kg,
-    })));
+    setCustomerId(customerId);
+    const grouped = new Map<number, { varietyId: number; varietyName: string; crates: number; kg: number }>();
+    customerSales.forEach(sale => {
+      const current = grouped.get(sale.fish_variety_id) ?? {
+        varietyId: sale.fish_variety_id,
+        varietyName: sale.fish_variety_name || 'Unknown',
+        crates: 0,
+        kg: 0,
+      };
+      current.crates += sale.quantity_crates;
+      current.kg += sale.quantity_kg;
+      grouped.set(sale.fish_variety_id, current);
+    });
+    setTempItems([...grouped.values()]);
+    setFishVarietyId(null);
+    setQuantityCrates('');
+    setQuantityKg('');
+    setEditingDraftVarietyId(null);
 
     // Ensure the card is expanded when editing
     setCollapsedCustomers(prev => {
@@ -294,64 +336,12 @@ export function useSalesRecords() {
 
   const handleCancelEdit = () => {
     setEditingCustomerId(null);
-    setEditItems([]);
-  };
-
-  const handleAddVarietyToEdit = () => {
-    setEditItems([...editItems, { id: 0, varietyId: 0, varietyName: '', crates: 0, kg: 0 }]);
-  };
-
-  const handleRemoveEditItem = async (index: number) => {
-    setEditItems(editItems.filter((_, itemIndex) => itemIndex !== index));
-  };
-
-  const handleEditItemChange = (index: number, field: 'varietyId' | 'crates' | 'kg', value: any) => {
-    const updated = [...editItems];
-    if (field === 'varietyId') {
-      const variety = varieties.find(v => v.id === value);
-      updated[index].varietyId = value;
-      updated[index].varietyName = variety?.name || '';
-    } else {
-      updated[index][field] = field === 'kg' ? parseFloat(value) || 0 : parseInt(value) || 0;
-    }
-    setEditItems(updated);
-  };
-
-  const handleSaveEditChanges = async () => {
-    if (!editingCustomerId) return;
-
-    if (editItems.some((item) => item.varietyId !== 0 && (item.crates < 0 || item.kg < 0 || (item.crates === 0 && item.kg === 0)))) {
-      Alert.alert('Check quantity', 'Every selected item needs crates, kg, or both.');
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const validItems = editItems.filter((item) => item.varietyId !== 0);
-      if (validItems.length === 0) {
-        Alert.alert('Item required', 'A sale must retain at least one item.');
-        setSubmitting(false);
-        return;
-      }
-
-      await updateSalesGroup({
-        customerId: editingCustomerId,
-        saleDate: date,
-        items: validItems.map((item) => ({
-          fishVarietyId: item.varietyId,
-          quantityCrates: item.crates,
-          quantityKg: item.kg,
-        })),
-      });
-
-      handleCancelEdit();
-      loadData();
-      Alert.alert('Success', 'Changes saved successfully');
-    } catch (err) {
-      const message = err && typeof err === 'object' && 'message' in err ? String(err.message) : 'Failed to save changes';
-      Alert.alert('Unable to save changes', message);
-    }
-    setSubmitting(false);
+    setCustomerId(null);
+    setTempItems([]);
+    setFishVarietyId(null);
+    setQuantityCrates('');
+    setQuantityKg('');
+    setEditingDraftVarietyId(null);
   };
 
   // Calculate stock for a variety
@@ -366,12 +356,19 @@ export function useSalesRecords() {
       kg: snapshot?.outwardKg ?? 0,
     };
 
+    const editableSales = editingCustomerId
+      ? sales.filter(sale => sale.customer_id === editingCustomerId && sale.fish_variety_id === varietyId)
+      : [];
+    const editableCrates = editableSales.reduce((sum, sale) => sum + sale.quantity_crates, 0);
+    const editableKg = editableSales.reduce((sum, sale) => sum + sale.quantity_kg, 0);
+    const drafted = tempItems.find(item => item.varietyId === varietyId);
+
     return {
       purchased,
       sold,
       available: {
-        crates: snapshot?.closingCrates ?? 0,
-        kg: snapshot?.closingKg ?? 0,
+        crates: Math.max((snapshot?.closingCrates ?? 0) + editableCrates - (drafted?.crates ?? 0), 0),
+        kg: Math.max((snapshot?.closingKg ?? 0) + editableKg - (drafted?.kg ?? 0), 0),
       },
     };
   };
@@ -413,10 +410,9 @@ export function useSalesRecords() {
     varieties, customers, frequentVarietyIds, loading, refreshing, submitting,
     customerId, setCustomerId, fishVarietyId, setFishVarietyId,
     quantityCrates, setQuantityCrates, quantityKg, setQuantityKg,
-    tempItems, editingCustomerId, editItems, collapsedCustomers, sortedGroupedSales,
+    tempItems, editingCustomerId, editingDraftVarietyId, collapsedCustomers, sortedGroupedSales,
     onRefresh, toggleCustomerCollapse, toggleAllCustomers, handleAddItem, handleRemoveTempItem,
     handleEditTempItem, handleSaveAll, handleDelete, handleEditCustomer,
-    handleCancelEdit, handleAddVarietyToEdit, handleRemoveEditItem, handleEditItemChange,
-    handleSaveEditChanges, getStockForVariety, handleCustomerChange, handleCustomerCreated, refreshVarieties,
+    handleCancelEdit, getStockForVariety, handleCustomerChange, handleCustomerCreated, refreshVarieties,
   };
 }

@@ -1,5 +1,7 @@
 export type PurchaseBillLine = {
   id: number;
+  purchase_id: number;
+  fish_variety_id: number;
   fish_variety_name: string;
   quantity_crates: number;
   quantity_kg: number;
@@ -33,6 +35,7 @@ export type PurchaseBillDetails = {
   bill_number: string;
   supplier_id: number;
   supplier_name: string;
+  supplier_type?: 'farmer' | 'mediator';
   bill_date: string;
   gross_amount: number;
   weight_deduction_percentage: number;

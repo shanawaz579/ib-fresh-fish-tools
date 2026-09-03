@@ -1,5 +1,6 @@
 import supabase from '../lib/supabase';
 import type { Customer, Farmer, FishVariety, Supplier, SupplierCreateInput } from '../types';
+import { sortFishVarieties } from '../domain/fish';
 
 export async function getFishVarieties(): Promise<FishVariety[]> {
   try {
@@ -24,7 +25,7 @@ export async function getFishVarieties(): Promise<FishVariety[]> {
 
     if (error) throw error;
 
-    return ((data ?? []) as any[]).map((variant) => ({
+    return sortFishVarieties(((data ?? []) as any[]).map((variant) => ({
       ...variant,
       item_code: variant.item?.code,
       item_name: variant.item?.name,
@@ -35,7 +36,7 @@ export async function getFishVarieties(): Promise<FishVariety[]> {
       secondary_unit_code: variant.item?.secondary_unit?.code,
       inventory_unit_code: variant.item?.inventory_unit?.code,
       default_kg_per_crate: variant.item?.default_kg_per_crate,
-    }));
+    })));
   } catch (err) {
     console.error('Error fetching item variants:', err);
     return [];

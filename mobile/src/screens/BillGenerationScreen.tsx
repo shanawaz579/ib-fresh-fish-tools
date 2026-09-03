@@ -1,5 +1,5 @@
-import React from 'react';
-import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -9,17 +9,47 @@ import BillItemRateCard from '../features/customerBilling/BillItemRateCard';
 import BillReviewPanel from '../features/customerBilling/BillReviewPanel';
 import CustomerBillPreview from '../features/customerBilling/CustomerBillPreview';
 import GeneratedBillsList from '../features/customerBilling/GeneratedBillsList';
+import BillCorrectionModal from '../components/BillCorrectionModal';
 import { useCustomerBilling } from '../features/customerBilling/useCustomerBilling';
+import { releaseCustomerBillForCorrection } from '../api/stock';
+import type { Bill } from '../types';
 import { formatBusinessDate } from '../utils/date';
 import styles from '../styles/BillGenerationScreen.styles';
 
 export default function BillGenerationScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const billing = useCustomerBilling();
+  const scrollRef = useRef<ScrollView>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Bill | null>(null);
+  const [deleting, setDeleting] = useState(false);
   const existingBill = billing.selectedCustomerId
     ? billing.bills.find(bill => bill.customer_id === billing.selectedCustomerId && bill.bill_date === billing.date && bill.id !== billing.editingBillId)
     : undefined;
   const canEnterRates = Boolean(billing.selectedCustomerId && !existingBill);
+
+  const handleNewBill = () => {
+    billing.resetForm();
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
+
+  const handleDeleteBill = async (reason: string) => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await releaseCustomerBillForCorrection(deleteTarget.id, reason);
+      setDeleteTarget(null);
+      billing.resetForm();
+      await billing.loadData();
+      Alert.alert('Bill deleted', 'The bill remains in correction history and its sales are available for billing again.');
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Please try again.';
+      Alert.alert(message.includes('Void active receipts') ? 'Payment must be voided first' : 'Unable to delete bill', message);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -36,7 +66,7 @@ export default function BillGenerationScreen() {
 
       <DateNavigator date={billing.date} onPrevious={billing.goToPreviousDay} onNext={billing.goToNextDay} onToday={billing.goToToday} accentColor="#0F766E" />
 
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
         <BillCustomerPanel
           customers={billing.customers}
           selectedCustomer={billing.selectedCustomer}
@@ -80,6 +110,7 @@ export default function BillGenerationScreen() {
             previousBalance={billing.previewBalanceDue}
             itemsTotal={billing.itemsTotal}
             chargesTotal={billing.chargesTotal}
+            currentBillTotal={billing.currentBillTotal}
             quickPaymentsTotal={billing.quickPaymentsTotal}
             total={billing.total}
             otherCharges={billing.otherCharges}
@@ -97,15 +128,27 @@ export default function BillGenerationScreen() {
             onMarkAsPaidChange={billing.setMarkAsPaid}
             submitting={billing.submitting}
             editing={Boolean(billing.editingBillId)}
+            correctionReason={billing.correctionReason}
+            onCorrectionReasonChange={billing.setCorrectionReason}
             allRatesSet={billing.billItems.every(item => item.rate_per_kg > 0)}
             onSubmit={billing.handleGenerateBill}
           />
         ) : null}
 
-        <GeneratedBillsList bills={billing.bills} customers={billing.customers} loading={billing.loading} onView={billing.handleViewBill} onEdit={billing.handleEditBill} onDelete={billing.handleDeleteBill} />
+        <GeneratedBillsList bills={billing.bills} customers={billing.customers} loading={billing.loading} onView={billing.handleViewBill} onEdit={billing.handleEditBill} onDelete={setDeleteTarget} onAdd={handleNewBill} />
       </ScrollView>
 
       <CustomerBillPreview visible={billing.showPreview} bill={billing.previewBill} customerName={billing.previewCustomerName} onClose={() => billing.setShowPreview(false)} onPrint={billing.handlePrintBill} onShare={billing.handleShareBill} />
+
+      <BillCorrectionModal
+        visible={Boolean(deleteTarget)}
+        billNumber={deleteTarget?.bill_number}
+        documentLabel="sales bill"
+        action="delete"
+        saving={deleting}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleDeleteBill}
+      />
 
     </View>
   );

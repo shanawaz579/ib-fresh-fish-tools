@@ -54,14 +54,14 @@ BEGIN
   SELECT * INTO payment_value FROM working.purchase_bill_payments WHERE purchase_bill_id = bill_value;
 
   BEGIN
-    PERFORM working.delete_purchase_bill(bill_value);
+    PERFORM working.release_purchase_bill_for_correction(bill_value, 'Verification correction reason');
   EXCEPTION WHEN OTHERS THEN
     IF SQLERRM LIKE 'Void active supplier payments linked%' THEN blocked := TRUE; ELSE RAISE; END IF;
   END;
   IF NOT blocked THEN RAISE EXCEPTION 'Purchase bill deletion was not blocked by active payment'; END IF;
 
   PERFORM working.void_purchase_bill_payment(payment_value.id, 'Verification cleanup');
-  IF working.delete_purchase_bill(bill_value) IS NOT TRUE THEN RAISE EXCEPTION 'Purchase bill was not deleted'; END IF;
+  IF working.release_purchase_bill_for_correction(bill_value, 'Verification correction reason') IS NULL THEN RAISE EXCEPTION 'Purchase bill was not released'; END IF;
 
   IF EXISTS (SELECT 1 FROM working.purchase_bills WHERE id = bill_value) THEN RAISE EXCEPTION 'Purchase bill orphan remains'; END IF;
   IF EXISTS (SELECT 1 FROM working.purchase_bill_items WHERE purchase_bill_id = bill_value) THEN RAISE EXCEPTION 'Purchase bill item orphan remains'; END IF;

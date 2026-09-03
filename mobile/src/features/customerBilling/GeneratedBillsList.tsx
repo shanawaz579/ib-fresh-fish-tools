@@ -9,14 +9,19 @@ type Props = {
   loading: boolean;
   onView: (id: number) => void;
   onEdit: (id: number) => void;
-  onDelete: (id: number, number: string) => void;
+  onDelete: (bill: Bill) => void;
+  onAdd: () => void;
 };
 
 export default function GeneratedBillsList(props: Props) {
   const { formatMoney } = useBusinessConfig();
   return (
     <View style={styles.section}>
-      <View style={styles.headingRow}><Text style={styles.heading}>Bills for this date</Text><View style={styles.count}><Text style={styles.countText}>{props.bills.length}</Text></View></View>
+      <View style={styles.headingRow}>
+        <Text style={styles.heading}>Bills for this date</Text>
+        <View style={styles.count}><Text style={styles.countText}>{props.bills.length}</Text></View>
+        {props.bills.length > 0 ? <TouchableOpacity style={styles.addBill} onPress={props.onAdd}><Text style={styles.addBillText}>＋ New bill</Text></TouchableOpacity> : null}
+      </View>
       {props.loading ? <ActivityIndicator color="#0F766E" /> : props.bills.length === 0 ? <Text style={styles.empty}>No bills created yet</Text> : props.bills.map(bill => {
         const customer = props.customers.find(item => item.id === bill.customer_id);
         return (
@@ -26,7 +31,7 @@ export default function GeneratedBillsList(props: Props) {
               <View style={styles.copy}><Text style={styles.customer} numberOfLines={1}>{customer?.name || 'Unknown customer'}</Text><Text style={styles.number}>{bill.bill_number} · {bill.status === 'paid' ? 'Paid' : 'Unpaid'}</Text></View>
               <Text style={styles.total}>{formatMoney(Number(bill.total), 0)}</Text>
             </TouchableOpacity>
-            <View style={styles.actions}><TouchableOpacity onPress={() => props.onView(bill.id)}><Text style={styles.action}>View</Text></TouchableOpacity><TouchableOpacity onPress={() => props.onEdit(bill.id)}><Text style={styles.action}>Edit</Text></TouchableOpacity><TouchableOpacity onPress={() => props.onDelete(bill.id, bill.bill_number)}><Text style={styles.delete}>Delete</Text></TouchableOpacity></View>
+            <View style={styles.actions}><TouchableOpacity onPress={() => props.onView(bill.id)}><Text style={styles.action}>View</Text></TouchableOpacity><TouchableOpacity onPress={() => props.onEdit(bill.id)}><Text style={styles.correct}>Correct</Text></TouchableOpacity><TouchableOpacity onPress={() => props.onDelete(bill)}><Text style={styles.delete}>Delete</Text></TouchableOpacity></View>
           </View>
         );
       })}
@@ -40,6 +45,8 @@ const styles = StyleSheet.create({
   heading: { color: '#0F172A', fontSize: 17, fontWeight: '800' },
   count: { alignItems: 'center', backgroundColor: '#E2E8F0', borderRadius: 10, height: 20, justifyContent: 'center', marginLeft: 7, minWidth: 20, paddingHorizontal: 5 },
   countText: { color: '#475569', fontSize: 11, fontWeight: '800' },
+  addBill: { marginLeft: 'auto', paddingHorizontal: 4, paddingVertical: 6 },
+  addBillText: { color: '#0F766E', fontSize: 12, fontWeight: '900' },
   empty: { color: '#94A3B8', fontSize: 13, paddingVertical: 20, textAlign: 'center' },
   row: { backgroundColor: '#FFFFFF', borderColor: '#E2E8F0', borderRadius: 13, borderWidth: 1, marginBottom: 9, padding: 11 },
   main: { alignItems: 'center', flexDirection: 'row' },
@@ -51,5 +58,6 @@ const styles = StyleSheet.create({
   total: { color: '#0F766E', fontSize: 16, fontWeight: '900' },
   actions: { borderTopColor: '#F1F5F9', borderTopWidth: 1, flexDirection: 'row', gap: 20, justifyContent: 'flex-end', marginTop: 9, paddingTop: 8 },
   action: { color: '#2563EB', fontSize: 12, fontWeight: '700' },
-  delete: { color: '#DC2626', fontSize: 12, fontWeight: '700' },
+  correct: { color: '#B45309', fontSize: 12, fontWeight: '800' },
+  delete: { color: '#DC2626', fontSize: 12, fontWeight: '800' },
 });

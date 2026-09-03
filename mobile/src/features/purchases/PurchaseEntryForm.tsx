@@ -57,6 +57,7 @@ export default function PurchaseEntryForm(props: Props) {
   const itemOptions = useMemo<SearchableOption[]>(() => props.varieties.map((variant) => ({
     id: variant.id,
     label: variant.name,
+    group: variant.item_name,
     detail: variant.variant_code,
     searchText: [variant.item_name, variant.grade_code, variant.grade_name].filter(Boolean).join(' '),
   })), [props.varieties]);

@@ -1,433 +1,128 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
-import { useAuth } from '../context/AuthContext';
-import { useBusinessConfig } from '../context/BusinessConfigContext';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DayCloseHomeCard from '../features/cashbook/DayCloseHomeCard';
 import { useTodayCloseStatus } from '../features/cashbook/useTodayCloseStatus';
+import HomeActionCard from '../features/home/HomeActionCard';
+import HomeInventoryOverview from '../features/home/HomeInventoryOverview';
+import { useAuth } from '../context/AuthContext';
+import { useBusinessConfig } from '../context/BusinessConfigContext';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import styles from '../styles/HomeScreen.styles';
 
-type HomeScreenProps = {
-  navigation: NativeStackNavigationProp<RootStackParamList, 'Home'>;
+type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Home'> };
+
+type SecondaryRowProps = {
+  icon: string;
+  label: string;
+  hint: string;
+  last?: boolean;
+  onPress: () => void;
 };
 
-export default function HomeScreen({ navigation }: HomeScreenProps) {
-  const { signOut, user } = useAuth();
+function SecondaryRow({ icon, label, hint, last, onPress }: SecondaryRowProps) {
+  return (
+    <TouchableOpacity style={[styles.secondaryRow, last && styles.secondaryRowLast]} onPress={onPress}>
+      <Text style={styles.secondaryIcon}>{icon}</Text>
+      <View style={styles.secondaryCopy}>
+        <Text style={styles.secondaryLabel}>{label}</Text>
+        <Text style={styles.secondaryHint}>{hint}</Text>
+      </View>
+      <Text style={styles.secondaryArrow}>›</Text>
+    </TouchableOpacity>
+  );
+}
+
+export default function HomeScreen({ navigation }: Props) {
+  const { signOut } = useAuth();
   const { configuration } = useBusinessConfig();
   const { profile, preferences } = configuration;
+  const { enabled_modules: modules, terminology } = preferences;
   const todayCloseStatus = useTodayCloseStatus();
+  const [moreOpen, setMoreOpen] = useState(false);
 
-  const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Logout', style: 'destructive', onPress: () => signOut() },
-      ]
-    );
-  };
+  const handleLogout = () => Alert.alert('Logout', 'Are you sure you want to logout?', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Logout', style: 'destructive', onPress: () => signOut() },
+  ]);
+
+  const hasDailyWork = modules.purchases || modules.sales || modules.packing;
+  const hasAccounts = modules.customer_billing || modules.supplier_billing || modules.expenses;
+  const hasOverview = modules.inventory || modules.customer_billing || modules.supplier_billing || modules.cashbook;
+  const hasReports = modules.customer_billing || modules.supplier_billing || modules.profitability;
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={[styles.header, { backgroundColor: profile.primary_color }]}>
         <View>
-          <Text style={styles.title}>{profile.display_name}</Text>
-          <Text style={styles.subtitle}>{profile.tagline}</Text>
-          {user?.email && <Text style={styles.userEmail}>{user.email}</Text>}
+          <Text style={styles.businessName}>{profile.display_name}</Text>
+          <Text style={styles.tagline}>{profile.tagline}</Text>
         </View>
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Text style={styles.logoutText}>Logout</Text>
+        <TouchableOpacity accessibilityLabel="Logout" style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutText}>↪</Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.menuContainer} contentContainerStyle={styles.menuContent}>
-        {preferences.enabled_modules.cashbook ? <DayCloseHomeCard readiness={todayCloseStatus} onPress={() => navigation.navigate('Cashbook')} /> : null}
-        {preferences.enabled_modules.inventory ? (
-          <>
-            <TouchableOpacity
-              style={[styles.heroCard, styles.dashboardCard]}
-              onPress={() => navigation.navigate('Dashboard')}
-            >
-              <Text style={styles.heroIcon}>📈</Text>
-              <View style={styles.heroContent}>
-                <Text style={styles.heroTitle}>Stock Dashboard</Text>
-                <Text style={styles.heroDescription}>View current inventory & stock levels</Text>
-              </View>
-            </TouchableOpacity>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {modules.inventory ? <HomeInventoryOverview onPress={() => navigation.navigate('Dashboard')} /> : null}
+        {modules.cashbook ? <DayCloseHomeCard readiness={todayCloseStatus} onPress={() => navigation.navigate('Cashbook')} /> : null}
 
-            <TouchableOpacity
-              style={[styles.heroCard, styles.stockLedgerCard]}
-              onPress={() => navigation.navigate('StockLedger')}
-            >
-              <Text style={styles.heroIcon}>🧊</Text>
-              <View style={styles.heroContent}>
-                <Text style={styles.heroTitle}>Stock Ledger</Text>
-                <Text style={styles.heroDescription}>Opening, inward, outward, closing & reconciliation</Text>
-              </View>
-            </TouchableOpacity>
-          </>
-        ) : null}
-
-        {/* Sales Section */}
-        {(preferences.enabled_modules.sales
-          || preferences.enabled_modules.packing
-          || preferences.enabled_modules.customer_billing) ? (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Sales Operations</Text>
+        {hasDailyWork ? <View style={[styles.section, styles.firstSection]}>
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Daily work</Text><Text style={styles.sectionHint}>Record today’s activity</Text></View>
+          <View style={styles.actionGrid}>
+            {modules.sales ? <HomeActionCard icon="↑" title="Sales" subtitle="Sell stock to customers" color="#2563EB" onPress={() => navigation.navigate('Sales')} /> : null}
+            {modules.purchases ? <HomeActionCard icon="↓" title="Purchases" subtitle="Record incoming stock" color="#059669" onPress={() => navigation.navigate('Purchase')} /> : null}
+            {modules.packing ? <HomeActionCard icon="✓" title="Packing" subtitle="Prepare and load orders" color="#D97706" onPress={() => navigation.navigate('Packing')} /> : null}
           </View>
-        ) : null}
+        </View> : null}
 
-        <View style={styles.gridContainer}>
-          {preferences.enabled_modules.sales ? <TouchableOpacity
-            style={[styles.gridCard, styles.salesCard]}
-            onPress={() => navigation.navigate('Sales')}
-          >
-            <Text style={styles.gridIcon}>📊</Text>
-            <Text style={styles.gridTitle}>Sales Entry</Text>
-          </TouchableOpacity> : null}
-
-          {preferences.enabled_modules.packing ? <TouchableOpacity
-            style={[styles.gridCard, styles.packingCard]}
-            onPress={() => navigation.navigate('Packing')}
-          >
-            <Text style={styles.gridIcon}>📦</Text>
-            <Text style={styles.gridTitle}>Packing</Text>
-          </TouchableOpacity> : null}
-
-          {preferences.enabled_modules.sales ? <TouchableOpacity
-            style={[styles.gridCard, styles.itemsByCustomerCard]}
-            onPress={() => navigation.navigate('ItemsByCustomer')}
-          >
-            <Text style={styles.gridIcon}>📋</Text>
-            <Text style={styles.gridTitle}>{preferences.terminology.item}s by {preferences.terminology.customer}</Text>
-          </TouchableOpacity> : null}
-
-          {preferences.enabled_modules.customer_billing ? <TouchableOpacity
-            style={[styles.gridCard, styles.billCard]}
-            onPress={() => navigation.navigate('BillGeneration')}
-          >
-            <Text style={styles.gridIcon}>🧾</Text>
-            <Text style={styles.gridTitle}>Generate Bill</Text>
-          </TouchableOpacity> : null}
-
-          {preferences.enabled_modules.customer_billing ? <TouchableOpacity
-            style={[styles.gridCard, styles.billsViewCard]}
-            onPress={() => navigation.navigate('BillsView')}
-          >
-            <Text style={styles.gridIcon}>📄</Text>
-            <Text style={styles.gridTitle}>View Bills</Text>
-          </TouchableOpacity> : null}
-
-          {preferences.enabled_modules.customer_billing ? <TouchableOpacity
-            style={[styles.gridCard, styles.paymentsCard]}
-            onPress={() => navigation.navigate('Payments')}
-          >
-            <Text style={styles.gridIcon}>💰</Text>
-            <Text style={styles.gridTitle}>Payments</Text>
-          </TouchableOpacity> : null}
-        </View>
-
-        {/* Purchase Section */}
-        {(preferences.enabled_modules.purchases || preferences.enabled_modules.supplier_billing) ? (
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Purchase Operations</Text>
+        {hasAccounts ? <View style={styles.section}>
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Accounts</Text><Text style={styles.sectionHint}>Bills, balances and payments</Text></View>
+          <View style={styles.actionGrid}>
+            {modules.customer_billing ? <HomeActionCard icon="₹" title={`${terminology.customer} Accounts`} subtitle="Bills and money received" color="#0F766E" onPress={() => navigation.navigate('Payments')} /> : null}
+            {modules.supplier_billing ? <HomeActionCard icon="₹" title={`${terminology.supplier} Accounts`} subtitle="Bills and money paid" color="#7C3AED" onPress={() => navigation.navigate('SupplierLedger')} /> : null}
+            {modules.expenses ? <HomeActionCard icon="−" title="Expenses" subtitle="Record operating costs" color="#C2410C" onPress={() => navigation.navigate('Expenses')} /> : null}
           </View>
-        ) : null}
+        </View> : null}
 
-        <View style={styles.gridContainer}>
-          {preferences.enabled_modules.purchases ? <TouchableOpacity
-            style={[styles.gridCard, styles.purchaseCard]}
-            onPress={() => navigation.navigate('Purchase')}
-          >
-            <Text style={styles.gridIcon}>🛒</Text>
-            <Text style={styles.gridTitle}>Purchase Entry</Text>
-          </TouchableOpacity> : null}
+        {hasOverview ? <View style={styles.section}>
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Overview</Text><Text style={styles.sectionHint}>Monitor the business</Text></View>
+          <View style={styles.actionGrid}>
+            {modules.inventory ? <HomeActionCard icon="≡" title="Inventory" subtitle="Stock and movement ledger" color="#0891B2" onPress={() => navigation.navigate('StockLedger')} /> : null}
+            {(modules.customer_billing || modules.supplier_billing) ? <HomeActionCard icon="⇅" title="Payments" subtitle="All receipts and payments" color="#4338CA" onPress={() => navigation.navigate('PaymentRegister')} /> : null}
+            {modules.cashbook ? <HomeActionCard icon="₹" title="Cashbook" subtitle="Physical cash and day close" color="#334155" onPress={() => navigation.navigate('Cashbook')} /> : null}
+          </View>
+        </View> : null}
 
-          {preferences.enabled_modules.supplier_billing ? <TouchableOpacity
-            style={[styles.gridCard, styles.purchaseBillsViewCard]}
-            onPress={() => navigation.navigate('PurchaseBillsView')}
-          >
-            <Text style={styles.gridIcon}>📋</Text>
-            <Text style={styles.gridTitle}>Purchase Bills</Text>
-          </TouchableOpacity> : null}
+        <TouchableOpacity style={styles.moreButton} onPress={() => setMoreOpen(value => !value)}>
+          <View><Text style={styles.moreTitle}>More</Text><Text style={styles.moreSubtitle}>Reports, bill history and setup</Text></View>
+          <Text style={styles.moreChevron}>{moreOpen ? '▲' : '▼'}</Text>
+        </TouchableOpacity>
 
-          {preferences.enabled_modules.supplier_billing ? <TouchableOpacity
-            style={[styles.gridCard, styles.paymentsCard]}
-            onPress={() => navigation.navigate('SupplierLedger')}
-          >
-            <Text style={styles.gridIcon}>💳</Text>
-            <Text style={styles.gridTitle}>{preferences.terminology.supplier} Ledger</Text>
-          </TouchableOpacity> : null}
-        </View>
-
-        {(preferences.enabled_modules.expenses || preferences.enabled_modules.cashbook || preferences.enabled_modules.profitability) ? (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Finance</Text>
+        {moreOpen ? <>
+          {hasReports ? <View style={styles.secondarySection}>
+            <Text style={styles.secondaryTitle}>REPORTS & HISTORY</Text>
+            <View style={styles.secondaryGrid}>
+              {modules.customer_billing ? <SecondaryRow icon="▤" label="Sales bill history" hint="Find and correct customer bills" last={!modules.supplier_billing && !modules.profitability} onPress={() => navigation.navigate('BillsView')} /> : null}
+              {modules.supplier_billing ? <SecondaryRow icon="▤" label="Purchase bill history" hint="Review supplier bills" last={!modules.profitability} onPress={() => navigation.navigate('PurchaseBillsView')} /> : null}
+              {modules.profitability ? <SecondaryRow icon="↗" label="Profitability" hint="Revenue, costs and profit" last onPress={() => navigation.navigate('Profitability')} /> : null}
             </View>
-            <View style={styles.gridContainer}>
-              {preferences.enabled_modules.expenses ? <TouchableOpacity
-                style={[styles.gridCard, styles.expensesCard]}
-                onPress={() => navigation.navigate('Expenses')}
-              >
-                <Text style={styles.gridIcon}>🧮</Text>
-                <Text style={styles.gridTitle}>Expenses</Text>
-              </TouchableOpacity> : null}
-              {preferences.enabled_modules.cashbook ? <TouchableOpacity
-                style={[styles.gridCard, styles.cashbookCard]}
-                onPress={() => navigation.navigate('Cashbook')}
-              >
-                <Text style={styles.gridIcon}>💵</Text>
-                <Text style={styles.gridTitle}>Cashbook</Text>
-              </TouchableOpacity> : null}
-              {preferences.enabled_modules.profitability ? <TouchableOpacity
-                style={[styles.gridCard, styles.profitabilityCard]}
-                onPress={() => navigation.navigate('Profitability')}
-              >
-                <Text style={styles.gridIcon}>📈</Text>
-                <Text style={styles.gridTitle}>Profitability</Text>
-              </TouchableOpacity> : null}
+          </View> : null}
+
+          <View style={styles.secondarySection}>
+            <Text style={styles.secondaryTitle}>SETUP</Text>
+            <View style={styles.secondaryGrid}>
+              <SecondaryRow icon="S" label={`${terminology.supplier}s`} hint="Manage suppliers and mediators" onPress={() => navigation.navigate('Farmers')} />
+              <SecondaryRow icon="C" label={`${terminology.customer}s`} hint="Manage customer accounts" onPress={() => navigation.navigate('Customers')} />
+              <SecondaryRow icon="I" label={`${terminology.item} catalog`} hint="Manage items, grades and units" onPress={() => navigation.navigate('FishVarieties')} />
+              <SecondaryRow icon="⚙" label="Business settings" hint="Configure this installation" last onPress={() => navigation.navigate('BusinessSettings')} />
             </View>
-          </>
-        ) : null}
+          </View>
+        </> : null}
 
-        {/* Management Section */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Master Data</Text>
-        </View>
-
-        <View style={styles.gridContainer}>
-          <TouchableOpacity
-            style={[styles.gridCard, styles.farmersCard]}
-            onPress={() => navigation.navigate('Farmers')}
-          >
-            <Text style={styles.gridIcon}>👨‍🌾</Text>
-            <Text style={styles.gridTitle}>{preferences.terminology.supplier}s</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.gridCard, styles.customersCard]}
-            onPress={() => navigation.navigate('Customers')}
-          >
-            <Text style={styles.gridIcon}>🏢</Text>
-            <Text style={styles.gridTitle}>{preferences.terminology.customer}s</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.gridCard, styles.varietiesCard]}
-            onPress={() => navigation.navigate('FishVarieties')}
-          >
-            <Text style={styles.gridIcon}>🐟</Text>
-            <Text style={styles.gridTitle}>{preferences.terminology.item} Catalog</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.gridCard, styles.settingsCard]}
-            onPress={() => navigation.navigate('BusinessSettings')}
-          >
-            <Text style={styles.gridIcon}>⚙️</Text>
-            <Text style={styles.gridTitle}>Business Settings</Text>
-          </TouchableOpacity>
-        </View>
+        <View style={styles.footer}><Text style={styles.footerText}>VERSION 1.0.0</Text></View>
       </ScrollView>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Version 1.0.0</Text>
-      </View>
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F0F9FF',
-  },
-  header: {
-    paddingTop: 40,
-    paddingBottom: 30,
-    paddingHorizontal: 20,
-    backgroundColor: '#0EA5E9',
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#E0F2FE',
-    marginBottom: 4,
-  },
-  userEmail: {
-    fontSize: 13,
-    color: '#BAE6FD',
-  },
-  logoutButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
-  },
-  logoutText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  menuContainer: {
-    flex: 1,
-  },
-  menuContent: {
-    padding: 16,
-    paddingBottom: 100,
-  },
-  heroCard: {
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 24,
-    marginBottom: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 8,
-    borderLeftWidth: 6,
-  },
-  heroIcon: {
-    fontSize: 48,
-    marginRight: 20,
-  },
-  heroContent: {
-    flex: 1,
-  },
-  heroTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#111827',
-    marginBottom: 4,
-  },
-  heroDescription: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  dashboardCard: {
-    borderLeftColor: '#8B5CF6',
-  },
-  stockLedgerCard: {
-    borderLeftColor: '#0F766E',
-  },
-  packingCard: {
-    borderBottomColor: '#0EA5E9',
-  },
-  itemsByCustomerCard: {
-    borderBottomColor: '#6366F1',
-  },
-  purchaseCard: {
-    borderBottomColor: '#10B981',
-  },
-  salesCard: {
-    borderBottomColor: '#3B82F6',
-  },
-  billCard: {
-    borderBottomColor: '#F59E0B',
-  },
-  paymentsCard: {
-    borderBottomColor: '#10B981',
-  },
-  billsViewCard: {
-    borderBottomColor: '#6366F1',
-  },
-  purchaseBillsViewCard: {
-    borderBottomColor: '#059669',
-  },
-  farmersCard: {
-    borderBottomColor: '#F59E0B',
-  },
-  customersCard: {
-    borderBottomColor: '#8B5CF6',
-  },
-  varietiesCard: {
-    borderBottomColor: '#EC4899',
-  },
-  settingsCard: {
-    borderBottomColor: '#0F766E',
-  },
-  expensesCard: {
-    borderBottomColor: '#C2410C',
-  },
-  cashbookCard: {
-    borderBottomColor: '#334155',
-  },
-  profitabilityCard: {
-    borderBottomColor: '#7C3AED',
-  },
-  sectionHeader: {
-    marginTop: 20,
-    marginBottom: 16,
-    paddingHorizontal: 4,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#0EA5E9',
-    textTransform: 'uppercase',
-    letterSpacing: 1.2,
-  },
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  gridCard: {
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 16,
-    width: '31%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-    borderBottomWidth: 4,
-    marginBottom: 12,
-  },
-  gridIcon: {
-    fontSize: 36,
-    marginBottom: 8,
-  },
-  gridTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#111827',
-    textAlign: 'center',
-  },
-  footer: {
-    padding: 20,
-    alignItems: 'center',
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#9CA3AF',
-  },
-});

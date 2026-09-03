@@ -3,12 +3,13 @@ import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View 
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DateNavigator from '../components/DateNavigator';
+import BillCorrectionModal from '../components/BillCorrectionModal';
 import DailyBillsPanel from '../features/payments/DailyBillsPanel';
 import PaymentCustomerSelector from '../features/payments/PaymentCustomerSelector';
 import PaymentVoidModal from '../features/payments/PaymentVoidModal';
 import { type PaymentMethod, useCustomerPayments } from '../features/payments/useCustomerPayments';
 import type { RootStackParamList } from '../navigation/AppNavigator';
-import type { Payment } from '../types';
+import type { Bill, Payment } from '../types';
 import { formatBusinessDate } from '../utils/date';
 import styles from '../styles/PaymentsScreen.styles';
 import { useBusinessConfig } from '../context/BusinessConfigContext';
@@ -24,6 +25,7 @@ export default function PaymentsScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const payment = useCustomerPayments();
   const [voidTarget, setVoidTarget] = useState<Payment | null>(null);
+  const [correctionTarget, setCorrectionTarget] = useState<Bill | null>(null);
   const numericAmount = Number.parseFloat(payment.amount) || 0;
   const balanceAfter = payment.summary.account_balance - numericAmount;
 
@@ -39,7 +41,7 @@ export default function PaymentsScreen() {
         <PaymentCustomerSelector customers={payment.customers} selected={payment.selectedCustomer} onSelect={payment.selectCustomer} />
 
         {!payment.selectedCustomerId ? (
-          <DailyBillsPanel bills={payment.dailyBills} customers={payment.customers} loading={payment.loadingBills} onSelectCustomer={payment.selectCustomer} onDelete={payment.deleteBill} />
+          <DailyBillsPanel bills={payment.dailyBills} customers={payment.customers} loading={payment.loadingBills} onSelectCustomer={payment.selectCustomer} onCorrect={setCorrectionTarget} />
         ) : payment.loading ? (
           <View style={styles.loading}><ActivityIndicator color="#0F766E" /><Text style={styles.loadingText}>Loading customer account…</Text></View>
         ) : (
@@ -98,12 +100,13 @@ export default function PaymentsScreen() {
               ))}
             </View>
 
-            <DailyBillsPanel bills={payment.dailyBills} customers={payment.customers} loading={payment.loadingBills} onSelectCustomer={payment.selectCustomer} onDelete={payment.deleteBill} />
+            <DailyBillsPanel bills={payment.dailyBills} customers={payment.customers} loading={payment.loadingBills} onSelectCustomer={payment.selectCustomer} onCorrect={setCorrectionTarget} />
           </>
         )}
       </ScrollView>
 
       <PaymentVoidModal payment={voidTarget} saving={payment.submitting} onClose={() => setVoidTarget(null)} onConfirm={async reason => { if (voidTarget && await payment.voidPayment(voidTarget.id, reason)) setVoidTarget(null); }} />
+      <BillCorrectionModal visible={Boolean(correctionTarget)} billNumber={correctionTarget?.bill_number} documentLabel="sales bill" saving={payment.submitting} onClose={() => setCorrectionTarget(null)} onConfirm={async reason => { if (correctionTarget && await payment.correctBill(correctionTarget.id, reason)) setCorrectionTarget(null); }} />
     </View>
   );
 }

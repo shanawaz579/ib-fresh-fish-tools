@@ -1,5 +1,5 @@
 import styles from '../styles/PurchaseBillGenerationScreen.styles';
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,28 +9,24 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import type { Purchase } from '../types';
-import { createPurchaseBill } from '../api/stock';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { createPurchaseBill, revisePurchaseBill } from '../api/stock';
+import { getFishVarieties } from '../api/stock';
 import { DEFAULT_CRATE_WEIGHT_KG, getPurchaseTotalWeightKg } from '../domain/fish';
 import { useBusinessConfig } from '../context/BusinessConfigContext';
-
-type RouteParams = {
-  PurchaseBillGeneration: {
-    supplier_id: number;
-    supplier_name: string;
-    farmer_name?: string;
-    location?: string;
-    purchases: Purchase[];
-    date: string;
-  };
-};
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { FishVariety } from '../types';
+import SearchableSelectModal, { type SearchableOption } from '../components/SearchableSelectModal';
 
 export default function PurchaseBillGenerationScreen() {
-  const navigation = useNavigation();
-  const route = useRoute<RouteProp<RouteParams, 'PurchaseBillGeneration'>>();
-  const { supplier_id, supplier_name, farmer_name, location, purchases, date } = route.params;
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const route = useRoute<RouteProp<RootStackParamList, 'PurchaseBillGeneration'>>();
+  const { supplier_id, supplier_name, farmer_name, location, purchases, date, correction } = route.params;
+  const isCorrection = Boolean(correction);
+  const carriedPaymentTotal = correction?.bill.payments
+    .filter(payment => !payment.voided_at)
+    .reduce((sum, payment) => sum + Number(payment.amount), 0) ?? 0;
   const isDirectFarmer = purchases[0]?.supplier_type === 'farmer';
   const { configuration, formatMoney } = useBusinessConfig();
   const { preferences } = configuration;
@@ -39,6 +35,7 @@ export default function PurchaseBillGenerationScreen() {
 
   const [items, setItems] = useState<Array<{
     purchaseId: number;
+    fishVarietyId: number;
     varietyName: string;
     crates: number;
     kgPerCrate: number;
@@ -50,6 +47,8 @@ export default function PurchaseBillGenerationScreen() {
     billableWeight: number;
     grossAmount: number;
   }>>([]);
+  const [varieties, setVarieties] = useState<FishVariety[]>([]);
+  const [selectingItemIndex, setSelectingItemIndex] = useState<number | null>(null);
 
   const [applyCommission, setApplyCommission] = useState(
     isDirectFarmer
@@ -61,39 +60,75 @@ export default function PurchaseBillGenerationScreen() {
       ? preferences.direct_commission_per_kg
       : preferences.mediator_commission_per_kg,
   ));
-  const [advanceAmount, setAdvanceAmount] = useState('');
+  const [initialPaymentAmount, setInitialPaymentAmount] = useState('');
+  const [initialPaymentMode, setInitialPaymentMode] = useState<'cash' | 'upi' | 'bank_transfer'>('cash');
+  const [initialPaymentReference, setInitialPaymentReference] = useState('');
   const [otherChargesAddition, setOtherChargesAddition] = useState('');
   const [otherChargesDeduction, setOtherChargesDeduction] = useState('');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    if (!isCorrection) return;
+    getFishVarieties().then(setVarieties).catch(error => {
+      console.error('Unable to load items for purchase correction:', error);
+      Alert.alert('Unable to load items', 'Please go back and try again.');
+    });
+  }, [isCorrection]);
+
+  const itemOptions = useMemo<SearchableOption[]>(() => varieties.map(variant => ({
+    id: variant.id,
+    label: variant.name,
+    group: variant.item_name,
+    detail: variant.variant_code,
+    searchText: [variant.item_name, variant.item_code, variant.grade_code, variant.grade_name].filter(Boolean).join(' '),
+  })), [varieties]);
+
+  useEffect(() => {
     // Initialize items from purchases
     const initialItems = purchases.map(p => {
+      const original = correction?.bill.items.find(item => item.purchase_id === p.id);
       const crates = p.quantity_crates || 0;
       const looseKg = p.quantity_kg || 0;
-      const kgPerCrate = p.default_kg_per_crate
+      const originalKgPerCrate = original && crates > 0
+        ? (Number(original.actual_weight) - looseKg) / crates
+        : undefined;
+      const kgPerCrate = originalKgPerCrate || p.default_kg_per_crate
         || preferences.default_crate_weight_kg
         || DEFAULT_CRATE_WEIGHT_KG;
-      const actualWeight = getPurchaseTotalWeightKg(crates, looseKg, kgPerCrate);
+      const actualWeight = original
+        ? Number(original.actual_weight)
+        : getPurchaseTotalWeightKg(crates, looseKg, kgPerCrate);
+      const billableWeight = original ? Number(original.billable_weight) : actualWeight - Math.round(actualWeight * deductionRate);
 
       return {
         purchaseId: p.id,
+        fishVarietyId: original?.fish_variety_id ?? p.fish_variety_id,
         varietyName: p.fish_variety_name || 'Unknown',
         crates,
         kgPerCrate,
         looseKg,
         actualWeight,
-        ratePerKg: '',
-        applyDeduction: deductionRate > 0,
-        deductionWeight: Math.round(actualWeight * deductionRate),
-        billableWeight: actualWeight - Math.round(actualWeight * deductionRate),
-        grossAmount: 0,
+        ratePerKg: original ? String(original.rate_per_kg) : '',
+        applyDeduction: original ? billableWeight < actualWeight : deductionRate > 0,
+        deductionWeight: actualWeight - billableWeight,
+        billableWeight,
+        grossAmount: original ? Number(original.amount) : 0,
       };
     });
 
     setItems(initialItems);
-  }, [deductionRate, preferences.default_crate_weight_kg, purchases]);
+    if (correction) {
+      const deductions = correction.bill.other_deductions || [];
+      const deductionAmount = (type: string) => String(deductions.find(entry => entry.type === type)?.amount || '');
+      setApplyCommission(Number(correction.bill.commission_per_kg) > 0);
+      setCommissionPerKg(String(correction.bill.commission_per_kg || 0));
+      setInitialPaymentAmount(deductionAmount('advance'));
+      setOtherChargesAddition(deductionAmount('other_charges_addition'));
+      setOtherChargesDeduction(deductionAmount('other_charges_deduction'));
+      setNotes(correction.bill.notes || '');
+    }
+  }, [correction, deductionRate, preferences.default_crate_weight_kg, purchases]);
 
   const updateKgPerCrate = (index: number, kgPerCrate: string) => {
     const newItems = [...items];
@@ -121,6 +156,40 @@ export default function PurchaseBillGenerationScreen() {
     newItems[index].grossAmount = newItems[index].billableWeight * rateNum;
 
     setItems(newItems);
+  };
+
+  const updateSourceQuantity = (index: number, field: 'crates' | 'looseKg', value: string) => {
+    const next = [...items];
+    const numericValue = field === 'crates'
+      ? Math.max(0, Number.parseInt(value, 10) || 0)
+      : Math.max(0, Number.parseFloat(value) || 0);
+    next[index][field] = numericValue;
+    next[index].actualWeight = getPurchaseTotalWeightKg(next[index].crates, next[index].looseKg, next[index].kgPerCrate);
+    next[index].deductionWeight = next[index].applyDeduction
+      ? Math.round(next[index].actualWeight * deductionRate)
+      : 0;
+    next[index].billableWeight = next[index].actualWeight - next[index].deductionWeight;
+    next[index].grossAmount = next[index].billableWeight * (Number.parseFloat(next[index].ratePerKg) || 0);
+    setItems(next);
+  };
+
+  const selectCorrectedVariant = (variantId: number) => {
+    if (selectingItemIndex === null) return;
+    const variant = varieties.find(row => row.id === Number(variantId));
+    if (!variant) return;
+    const next = [...items];
+    const item = next[selectingItemIndex];
+    item.fishVarietyId = variant.id;
+    item.varietyName = variant.name;
+    if (variant.default_kg_per_crate && variant.default_kg_per_crate > 0) {
+      item.kgPerCrate = variant.default_kg_per_crate;
+      item.actualWeight = getPurchaseTotalWeightKg(item.crates, item.looseKg, item.kgPerCrate);
+      item.deductionWeight = item.applyDeduction ? Math.round(item.actualWeight * deductionRate) : 0;
+      item.billableWeight = item.actualWeight - item.deductionWeight;
+      item.grossAmount = item.billableWeight * (Number.parseFloat(item.ratePerKg) || 0);
+    }
+    setItems(next);
+    setSelectingItemIndex(null);
   };
 
   const updateItemRate = (index: number, rate: string) => {
@@ -158,17 +227,18 @@ export default function PurchaseBillGenerationScreen() {
       ? (parseFloat(commissionPerKg) || 0)
       : 0;
     const commission = Number((totalBillableWeight * commissionRate).toFixed(2));
-    const advance = parseFloat(advanceAmount) || 0;
+    const payment = parseFloat(initialPaymentAmount) || 0;
     const otherAddition = parseFloat(otherChargesAddition) || 0;
     const otherDeduction = parseFloat(otherChargesDeduction) || 0;
-    const total = subtotal + commission + otherAddition - advance - otherDeduction;
+    const total = subtotal + commission + otherAddition - otherDeduction;
 
     return {
       totalBillableWeight,
       subtotal,
       commissionRate,
       commission,
-      advance,
+      payment,
+      balanceDue: Math.max(total - carriedPaymentTotal - payment, 0),
       otherChargesAddition: otherAddition,
       otherChargesDeduction: otherDeduction,
       total,
@@ -182,16 +252,28 @@ export default function PurchaseBillGenerationScreen() {
       Alert.alert('Error', 'Please enter rates for all items');
       return;
     }
+    if (items.some(item => item.crates === 0 && item.looseKg === 0)) {
+      Alert.alert('Quantity required', 'Every item needs crates, kilograms, or both.');
+      return;
+    }
     if (applyCommission && (parseFloat(commissionPerKg) || 0) <= 0) {
       Alert.alert('Check commission', 'Enter a commission rate greater than zero or turn commission off.');
       return;
     }
+    if (isCorrection && (!correction || correction.reason.trim().length < 5)) {
+      Alert.alert('Correction reason required', 'Return to the bills list and enter why this bill is being corrected.');
+      return;
+    }
 
     const totals = calculateTotals();
+    if (carriedPaymentTotal + totals.payment > totals.total) {
+      Alert.alert('Payment is too high', 'Retained and additional payments cannot exceed the corrected bill total.');
+      return;
+    }
 
     Alert.alert(
-      'Generate Bill',
-      `Total Amount: ${formatMoney(totals.total, 2)}\n\nBill will be created and you can add payments later from the bills list.`,
+      isCorrection ? 'Save corrected bill?' : 'Generate Bill',
+      `Total Amount: ${formatMoney(totals.total, 2)}\n\n${isCorrection ? `This will replace ${correction?.bill.bill_number} and preserve the original in correction history.` : 'Bill will be created and you can add payments later from the bills list.'}`,
       [
         {
           text: 'Cancel',
@@ -206,10 +288,10 @@ export default function PurchaseBillGenerationScreen() {
               // Prepare bill items
               const billItems = items.map((item, index) => ({
                 purchase_id: item.purchaseId,
-                fish_variety_id: purchases[index].fish_variety_id,
+                fish_variety_id: item.fishVarietyId,
                 fish_variety_name: item.varietyName,
                 quantity_crates: item.crates,
-                quantity_kg: purchases[index].quantity_kg || 0,
+                quantity_kg: item.looseKg,
                 actual_weight: item.actualWeight,
                 billable_weight: item.billableWeight,
                 rate_per_kg: parseFloat(item.ratePerKg),
@@ -217,24 +299,29 @@ export default function PurchaseBillGenerationScreen() {
               }));
 
               // Create bill
-              const result = await createPurchaseBill({
+              const billParams = {
                 supplier_id,
                 bill_date: date,
                 items: billItems,
                 commission_per_kg: totals.commissionRate,
-                advance_amount: parseFloat(advanceAmount) || 0,
+                payment_amount: totals.payment,
+                payment_mode: initialPaymentMode,
+                payment_reference: initialPaymentReference,
                 other_charges_addition: parseFloat(otherChargesAddition) || 0,
                 other_charges_deduction: parseFloat(otherChargesDeduction) || 0,
                 notes: notes,
                 location,
-              });
+              };
+              const result = isCorrection && correction
+                ? await revisePurchaseBill(correction.bill.id, correction.reason, billParams)
+                : await createPurchaseBill(billParams);
 
               setSubmitting(false);
 
               if (result.success) {
                 Alert.alert(
                   'Success',
-                  `Purchase bill created successfully!\n\nTotal: ${formatMoney(totals.total, 2)}\n\nYou can now add payments from the bills list.`,
+                  `${isCorrection ? 'Purchase bill corrected successfully!' : 'Purchase bill created successfully!'}\n\nTotal: ${formatMoney(totals.total, 2)}\n\nYou can now add payments from the bills list.`,
                   [
                     {
                       text: 'OK',
@@ -264,10 +351,16 @@ export default function PurchaseBillGenerationScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backButton}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Generate Purchase Bill</Text>
+        <Text style={styles.headerTitle}>{isCorrection ? 'Correct Purchase Bill' : 'Generate Purchase Bill'}</Text>
       </View>
 
       <ScrollView style={styles.content}>
+        {isCorrection ? (
+          <View style={styles.correctionCard}>
+            <Text style={styles.correctionTitle}>CORRECTING {correction?.bill.bill_number}</Text>
+            <Text style={styles.correctionText}>All original values are prefilled. Reason: {correction?.reason}</Text>
+          </View>
+        ) : null}
         {/* Primary supplier and source farmer */}
         <View style={styles.farmerInfoCard}>
           <Text style={styles.farmerName}>{supplier_name}</Text>
@@ -286,6 +379,25 @@ export default function PurchaseBillGenerationScreen() {
           <Text style={styles.sectionTitle}>Purchase Items</Text>
           {items.map((item, index) => (
             <View key={item.purchaseId} style={styles.itemCard}>
+              {isCorrection ? (
+                <>
+                  <Text style={styles.correctionFieldLabel}>ITEM & GRADE</Text>
+                  <TouchableOpacity style={styles.correctionSelect} onPress={() => setSelectingItemIndex(index)}>
+                    <Text style={styles.correctionSelectValue}>{item.varietyName}</Text>
+                    <Text style={styles.correctionSelectAction}>Change ›</Text>
+                  </TouchableOpacity>
+                  <View style={styles.correctionQuantityRow}>
+                    <View style={styles.correctionQuantityField}>
+                      <Text style={styles.correctionFieldLabel}>CRATES</Text>
+                      <TextInput style={styles.correctionQuantityInput} keyboardType="number-pad" value={String(item.crates || '')} onChangeText={value => updateSourceQuantity(index, 'crates', value)} placeholder="0" />
+                    </View>
+                    <View style={styles.correctionQuantityField}>
+                      <Text style={styles.correctionFieldLabel}>LOOSE KG</Text>
+                      <TextInput style={styles.correctionQuantityInput} keyboardType="decimal-pad" value={String(item.looseKg || '')} onChangeText={value => updateSourceQuantity(index, 'looseKg', value)} placeholder="0" />
+                    </View>
+                  </View>
+                </>
+              ) : null}
               {/* Header with variety name and rate input */}
               <View style={styles.itemHeaderRow}>
                 <View style={styles.itemHeaderLeft}>
@@ -377,18 +489,46 @@ export default function PurchaseBillGenerationScreen() {
           </View>
 
           <View style={styles.inputRow}>
-            <Text style={styles.inputLabel}>Advance paid:</Text>
+            <Text style={styles.inputLabel}>{carriedPaymentTotal > 0 ? 'Additional payment now:' : 'Payment now:'}</Text>
             <TextInput
               style={styles.input}
               placeholder="0.00"
               keyboardType="decimal-pad"
-              value={advanceAmount}
-              onChangeText={setAdvanceAmount}
+              value={initialPaymentAmount}
+              onChangeText={setInitialPaymentAmount}
             />
           </View>
           <Text style={styles.paymentNote}>
-            Advance is a bill adjustment that reduces the payable total. New payments are recorded separately after creating the bill.
+            {carriedPaymentTotal > 0
+              ? `${formatMoney(carriedPaymentTotal, 2)} already paid will be retained automatically. Add only a new payment here.`
+              : 'This creates a real supplier payment and reduces the balance due. It does not reduce the bill value.'}
           </Text>
+          {(parseFloat(initialPaymentAmount) || 0) > 0 ? (
+            <>
+              <View style={styles.paymentMethodRow}>
+                {([
+                  ['cash', 'Cash'],
+                  ['upi', 'UPI'],
+                  ['bank_transfer', 'Bank'],
+                ] as const).map(([value, label]) => (
+                  <TouchableOpacity
+                    key={value}
+                    style={[styles.paymentMethodChip, initialPaymentMode === value && styles.paymentMethodChipActive]}
+                    onPress={() => setInitialPaymentMode(value)}
+                  >
+                    <Text style={[styles.paymentMethodText, initialPaymentMode === value && styles.paymentMethodTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={styles.paymentReferenceInput}
+                placeholder="Reference number (optional)"
+                value={initialPaymentReference}
+                onChangeText={setInitialPaymentReference}
+                autoCapitalize="characters"
+              />
+            </>
+          ) : null}
 
           <View style={styles.inputRow}>
             <Text style={styles.inputLabel}>Other charges (-):</Text>
@@ -425,12 +565,18 @@ export default function PurchaseBillGenerationScreen() {
             </View>
           )}
 
-          {(parseFloat(advanceAmount) || 0) > 0 && (
+          {totals.payment > 0 && (
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>- Advance</Text>
-              <Text style={styles.summaryValue}>{formatMoney(totals.advance, 2)}</Text>
+              <Text style={styles.summaryLabel}>Payment now ({initialPaymentMode === 'bank_transfer' ? 'Bank' : initialPaymentMode.toUpperCase()})</Text>
+              <Text style={styles.summaryValue}>-{formatMoney(totals.payment, 2)}</Text>
             </View>
           )}
+          {carriedPaymentTotal > 0 ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Payment already recorded</Text>
+              <Text style={styles.summaryValue}>-{formatMoney(carriedPaymentTotal, 2)}</Text>
+            </View>
+          ) : null}
 
           {(parseFloat(otherChargesDeduction) || 0) > 0 && (
             <View style={styles.summaryRow}>
@@ -440,9 +586,15 @@ export default function PurchaseBillGenerationScreen() {
           )}
 
           <View style={[styles.summaryRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total Amount</Text>
+            <Text style={styles.totalLabel}>Bill Amount</Text>
             <Text style={styles.totalValue}>{formatMoney(totals.total, 2)}</Text>
           </View>
+          {carriedPaymentTotal + totals.payment > 0 ? (
+            <View style={styles.summaryRow}>
+              <Text style={styles.totalLabel}>Balance Due</Text>
+              <Text style={styles.totalValue}>{formatMoney(totals.balanceDue, 2)}</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Notes Section */}
@@ -464,7 +616,7 @@ export default function PurchaseBillGenerationScreen() {
             <Text style={styles.finalTotalLabel}>Total Bill Amount</Text>
             <Text style={styles.finalTotalValue}>{formatMoney(totals.total, 2)}</Text>
           </View>
-          <Text style={styles.paymentNote}>Payments can be recorded after bill is generated</Text>
+          <Text style={styles.paymentNote}>{carriedPaymentTotal + totals.payment > 0 ? `Total paid: ${formatMoney(carriedPaymentTotal + totals.payment, 2)} · Balance due: ${formatMoney(totals.balanceDue, 2)}` : 'Payments can also be recorded after the bill is generated'}</Text>
         </View>
 
         {/* Generate Button */}
@@ -476,12 +628,21 @@ export default function PurchaseBillGenerationScreen() {
           {submitting ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.generateButtonText}>Generate Bill</Text>
+            <Text style={styles.generateButtonText}>{isCorrection ? 'Save Corrected Bill' : 'Generate Bill'}</Text>
           )}
         </TouchableOpacity>
 
         <View style={styles.bottomPadding} />
       </ScrollView>
+      <SearchableSelectModal
+        visible={selectingItemIndex !== null}
+        title="Correct item and grade"
+        searchPlaceholder="Search item, code or grade"
+        options={itemOptions}
+        emptyMessage="No active catalog item found"
+        onSelect={selectCorrectedVariant}
+        onClose={() => setSelectingItemIndex(null)}
+      />
     </View>
   );
 }

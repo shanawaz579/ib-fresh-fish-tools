@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
-import { createPayment, deleteBillStrict, getBillsByDate, getCustomerAccountSummary, getCustomers, getPaymentsByCustomer, voidCustomerPayment } from '../../api/stock';
+import { createPayment, getBillsByDate, getCustomerAccountSummary, getCustomers, getPaymentsByCustomer, releaseCustomerBillForCorrection, voidCustomerPayment } from '../../api/stock';
 import { useBusinessDate } from '../../hooks/useBusinessDate';
 import type { Bill, Customer, CustomerAccountSummary, Payment } from '../../types';
 import { useBusinessConfig } from '../../context/BusinessConfigContext';
@@ -126,18 +126,18 @@ export function useCustomerPayments() {
     }
   };
 
-  const deleteBill = async (billId: number): Promise<boolean> => {
+  const correctBill = async (billId: number, reason: string): Promise<boolean> => {
     setSubmitting(true);
     try {
-      await deleteBillStrict(billId);
+      await releaseCustomerBillForCorrection(billId, reason);
       if (selectedCustomerId) await loadCustomer(selectedCustomerId);
       await loadDailyBills();
-      Alert.alert('Bill deleted', 'Bill details were removed and its source sales are available for rebilling.');
+      Alert.alert('Ready to correct', 'The original remains in correction history. Its sales are available for rebilling.');
       return true;
     } catch (error) {
       const message = errorMessage(error);
       Alert.alert(
-        message.includes('Void active receipts') ? 'Payment must be voided first' : 'Unable to delete bill',
+        message.includes('Void active receipts') ? 'Payment must be voided first' : 'Unable to correct bill',
         message,
       );
       return false;
@@ -149,6 +149,6 @@ export function useCustomerPayments() {
   return {
     ...businessDate, customers, dailyBills, loadingBills, selectedCustomerId, selectedCustomer, selectCustomer,
     summary, payments, loading, submitting, amount, setAmount, method, setMethod,
-    reference, setReference, notes, setNotes, record, voidPayment, deleteBill,
+    reference, setReference, notes, setNotes, record, voidPayment, correctBill,
   };
 }

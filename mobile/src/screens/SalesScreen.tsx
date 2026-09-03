@@ -1,5 +1,5 @@
 import styles from '../styles/SalesScreen.styles';
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,26 +16,27 @@ import DateNavigator from '../components/DateNavigator';
 import { useSalesRecords } from '../features/sales/useSalesRecords';
 import AvailableStockStrip from '../features/sales/AvailableStockStrip';
 import SalesEntryForm from '../features/sales/SalesEntryForm';
-import SalesGroupEditCard from '../features/sales/SalesGroupEditCard';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 export default function SalesScreen() {
   const navigation = useNavigation<NavigationProp>();
+  const scrollRef = useRef<ScrollView>(null);
+  const [formOffset, setFormOffset] = useState(0);
   const {
     date, goToPreviousDay, goToNextDay, goToToday,
     varieties, customers, frequentVarietyIds, loading, refreshing, submitting,
     customerId, fishVarietyId, setFishVarietyId,
     quantityCrates, setQuantityCrates, quantityKg, setQuantityKg,
-    tempItems, editingCustomerId, editItems, collapsedCustomers, sortedGroupedSales,
+    tempItems, editingCustomerId, editingDraftVarietyId, collapsedCustomers, sortedGroupedSales,
     onRefresh, toggleCustomerCollapse, toggleAllCustomers, handleAddItem, handleRemoveTempItem,
     handleEditTempItem, handleSaveAll, handleDelete, handleEditCustomer,
-    handleCancelEdit, handleAddVarietyToEdit, handleRemoveEditItem, handleEditItemChange,
-    handleSaveEditChanges, getStockForVariety, handleCustomerChange, handleCustomerCreated, refreshVarieties,
+    handleCancelEdit, getStockForVariety, handleCustomerChange, handleCustomerCreated, refreshVarieties,
   } = useSalesRecords();
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={styles.container}
       refreshControl={
         <RefreshControl
@@ -60,6 +62,7 @@ export default function SalesScreen() {
 
       <AvailableStockStrip varieties={varieties} getStock={getStockForVariety} onSelect={setFishVarietyId} />
 
+      <View onLayout={(event: LayoutChangeEvent) => setFormOffset(event.nativeEvent.layout.y)}>
       <SalesEntryForm
         customers={customers}
         varieties={varieties}
@@ -70,6 +73,8 @@ export default function SalesScreen() {
         kg={quantityKg}
         drafts={tempItems}
         submitting={submitting}
+        editing={editingCustomerId !== null}
+        editingDraft={editingDraftVarietyId !== null}
         getStock={getStockForVariety}
         onCustomerChange={handleCustomerChange}
         onCustomerCreated={handleCustomerCreated}
@@ -81,7 +86,9 @@ export default function SalesScreen() {
         onRemoveDraft={handleRemoveTempItem}
         onAdd={handleAddItem}
         onSave={handleSaveAll}
+        onCancelEdit={handleCancelEdit}
       />
+      </View>
 
       {/* Sales List */}
       <View style={styles.listContainer}>
@@ -108,22 +115,7 @@ export default function SalesScreen() {
         ) : (
           Object.entries(sortedGroupedSales).map(([customerName, customerSales]) => {
             const customerId = customerSales[0]?.customer_id;
-            const isEditing = editingCustomerId === customerId;
-
-            return isEditing ? (
-              <SalesGroupEditCard
-                key={customerName}
-                customerName={customerName}
-                items={editItems}
-                varieties={varieties}
-                submitting={submitting}
-                onCancel={handleCancelEdit}
-                onAddItem={handleAddVarietyToEdit}
-                onRemoveItem={handleRemoveEditItem}
-                onChange={handleEditItemChange}
-                onSave={handleSaveEditChanges}
-              />
-            ) : (
+            return (
               /* View Mode */
               <View key={customerName} style={styles.customerGroup}>
                 <TouchableOpacity
@@ -210,6 +202,7 @@ export default function SalesScreen() {
                             onPress={(e) => {
                               e.stopPropagation();
                               handleEditCustomer(customerId, customerSales);
+                              requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: formOffset, animated: true }));
                             }}
                             style={styles.editButton}
                           >

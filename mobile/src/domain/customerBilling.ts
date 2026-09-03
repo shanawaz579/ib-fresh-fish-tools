@@ -62,6 +62,8 @@ export function calculateCustomerBillTotals(
     itemsTotal,
     chargesTotal,
     subtotal,
+    currentBillTotal: subtotal,
+    balanceBroughtForward: previousBalanceDue,
     quickPaymentsTotal,
     total: previousBalanceDue + subtotal - quickPaymentsTotal,
   };

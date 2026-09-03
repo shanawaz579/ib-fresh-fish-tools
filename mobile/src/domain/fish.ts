@@ -15,14 +15,15 @@ export const FISH_VARIETY_ORDER = [
 
 export const FISH_SIZE_ORDER = ['Big', 'Medium', 'Small'] as const;
 
-const GRADE_ORDER = ['S', 'M', 'B', 'OB'] as const;
+// Operational selectors show the heaviest grade first within each item group.
+const GRADE_ORDER = ['OB', 'B', 'M', 'S'] as const;
 
 export function getTotalWeightKg(
   crates: number,
-  actualWeightKg: number,
+  looseWeightKg: number,
   crateWeightKg = DEFAULT_CRATE_WEIGHT_KG,
 ): number {
-  return actualWeightKg > 0 ? actualWeightKg : crates * crateWeightKg;
+  return Math.max(crates, 0) * Math.max(crateWeightKg, 0) + Math.max(looseWeightKg, 0);
 }
 
 export function getPurchaseTotalWeightKg(
@@ -90,7 +91,7 @@ export function getFishVarietySortKey(varietyName: string): number {
 export function sortFishVarieties(varieties: FishVariety[]): FishVariety[] {
   return [...varieties].sort((a, b) => {
     const catalogOrder = (a.item_name ?? a.name).localeCompare(b.item_name ?? b.name)
-      || (a.grade_sort_order ?? 999) - (b.grade_sort_order ?? 999);
+      || (b.grade_sort_order ?? -1) - (a.grade_sort_order ?? -1);
     if (a.item_name || b.item_name) return catalogOrder || a.id - b.id;
 
     const orderDifference = getFishVarietySortKey(a.name) - getFishVarietySortKey(b.name);

@@ -45,6 +45,7 @@ export async function createBill(
   }> = [],
   markAsPaid: boolean = false,
   replaceBillId?: number,
+  correctionReason?: string,
 ): Promise<Bill | null> {
   try {
     const rpcItems = items.map(item => ({
@@ -52,17 +53,30 @@ export async function createBill(
       crate_weight: item.crate_weight ?? DEFAULT_CRATE_WEIGHT_KG,
       sale_ids: item.sale_ids ?? [],
     }));
-    const { data, error } = await supabase.rpc('create_customer_bill', {
-      p_customer_id: customerId,
-      p_bill_date: billDate,
-      p_items: rpcItems,
-      p_other_charges: otherCharges,
-      p_discount: discount,
-      p_notes: notes || null,
-      p_payments: paymentsToRecord,
-      p_mark_as_paid: markAsPaid,
-      p_replace_bill_id: replaceBillId || null,
-    });
+    const { data, error } = replaceBillId
+      ? await supabase.rpc('revise_customer_bill', {
+          p_bill_id: replaceBillId,
+          p_reason: correctionReason?.trim() || '',
+          p_customer_id: customerId,
+          p_bill_date: billDate,
+          p_items: rpcItems,
+          p_other_charges: otherCharges,
+          p_discount: discount,
+          p_notes: notes || null,
+          p_payments: paymentsToRecord,
+          p_mark_as_paid: markAsPaid,
+        })
+      : await supabase.rpc('create_customer_bill', {
+          p_customer_id: customerId,
+          p_bill_date: billDate,
+          p_items: rpcItems,
+          p_other_charges: otherCharges,
+          p_discount: discount,
+          p_notes: notes || null,
+          p_payments: paymentsToRecord,
+          p_mark_as_paid: markAsPaid,
+          p_replace_bill_id: null,
+        });
 
     if (error) throw error;
     const createdBill = Array.isArray(data) ? data[0] : data;
@@ -186,20 +200,11 @@ export async function getBillById(id: number): Promise<Bill | null> {
   }
 }
 
-// Delete bill
-
-export async function deleteBill(id: number): Promise<boolean> {
-  try {
-    await deleteBillStrict(id);
-    return true;
-  } catch (err) {
-    console.error('Error deleting bill:', err);
-    return false;
-  }
-}
-
-export async function deleteBillStrict(id: number): Promise<void> {
-  const { data, error } = await supabase.rpc('delete_customer_bill', { p_bill_id: id });
+export async function releaseCustomerBillForCorrection(id: number, reason: string): Promise<void> {
+  const { data, error } = await supabase.rpc('release_customer_bill_for_correction', {
+    p_bill_id: id,
+    p_reason: reason.trim(),
+  });
   if (error) throw error;
-  if (data !== true) throw new Error('Bill was not found');
+  if (!data) throw new Error('Bill was not found');
 }

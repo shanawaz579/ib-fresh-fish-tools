@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { Bill, Customer } from '../../types';
 import { useBusinessConfig } from '../../context/BusinessConfigContext';
 
 type Filter = 'all' | 'unpaid' | 'paid';
-type Props = { bills: Bill[]; customers: Customer[]; loading: boolean; onSelectCustomer: (id: number) => void; onDelete: (id: number) => void };
+type Props = { bills: Bill[]; customers: Customer[]; loading: boolean; onSelectCustomer: (id: number) => void; onCorrect: (bill: Bill) => void };
 
-export default function DailyBillsPanel({ bills, customers, loading, onSelectCustomer, onDelete }: Props) {
+export default function DailyBillsPanel({ bills, customers, loading, onSelectCustomer, onCorrect }: Props) {
   const { formatMoney } = useBusinessConfig();
   const [filter, setFilter] = useState<Filter>('all');
   const [query, setQuery] = useState('');
@@ -43,7 +43,7 @@ export default function DailyBillsPanel({ bills, customers, loading, onSelectCus
             <View style={styles.amountCopy}><Text style={styles.amount}>{formatMoney(Number(bill.total), 0)}</Text><Text style={[styles.status, paid ? styles.paid : styles.unpaid]}>{paid ? 'Paid' : 'To collect'}</Text></View>
             <Text style={styles.chevron}>›</Text>
             </TouchableOpacity>
-            {bill.is_active ? <TouchableOpacity style={styles.deleteButton} onPress={() => Alert.alert('Delete bill?', `${bill.bill_number} and its item details will be removed. Source sales return to unbilled. Active receipts must be voided first.`, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete bill', style: 'destructive', onPress: () => onDelete(bill.id) }])}><Text style={styles.deleteText}>Delete</Text></TouchableOpacity> : <Text style={styles.lockedText}>Historical bill</Text>}
+            {bill.is_active ? <TouchableOpacity style={styles.deleteButton} onPress={() => onCorrect(bill)}><Text style={styles.deleteText}>Correct bill</Text></TouchableOpacity> : <Text style={styles.lockedText}>Historical bill</Text>}
           </View>
         );
       })}

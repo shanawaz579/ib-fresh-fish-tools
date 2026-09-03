@@ -76,7 +76,7 @@ export default function BillCustomerPanel(props: Props) {
             <Text style={styles.existingText}>{props.existingBill.bill_number} · {formatMoney(Number(props.existingBill.total), 0)}</Text>
           </View>
           <TouchableOpacity onPress={() => props.onViewExisting(props.existingBill!.id)}><Text style={styles.viewLink}>View</Text></TouchableOpacity>
-          <TouchableOpacity onPress={() => props.onEditExisting(props.existingBill!.id)}><Text style={styles.editLink}>Edit</Text></TouchableOpacity>
+          <TouchableOpacity onPress={() => props.onEditExisting(props.existingBill!.id)}><Text style={styles.editLink}>Correct bill</Text></TouchableOpacity>
         </View>
       ) : null}
 

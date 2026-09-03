@@ -62,6 +62,7 @@ export default function StockAdjustmentModal(props: Props) {
   const options = useMemo<SearchableOption[]>(() => props.varieties.map((variant) => ({
     id: variant.id,
     label: variant.name,
+    group: variant.item_name,
     detail: variant.variant_code,
     searchText: [variant.item_name, variant.grade_code].filter(Boolean).join(' '),
   })), [props.varieties]);

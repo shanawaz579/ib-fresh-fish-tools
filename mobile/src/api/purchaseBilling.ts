@@ -19,7 +19,9 @@ export type CreatePurchaseBillParams = {
   bill_date: string;
   items: PurchaseBillItem[];
   commission_per_kg: number;
-  advance_amount: number;
+  payment_amount: number;
+  payment_mode: 'cash' | 'upi' | 'bank_transfer' | 'cheque' | 'other';
+  payment_reference?: string;
   other_charges_addition: number;
   other_charges_deduction: number;
   notes?: string;
@@ -28,12 +30,14 @@ export type CreatePurchaseBillParams = {
 
 export async function createPurchaseBill(params: CreatePurchaseBillParams): Promise<{ success: boolean; bill_id?: number; error?: string }> {
   try {
-    const { data, error } = await supabase.rpc('create_purchase_bill', {
+    const { data, error } = await supabase.rpc('create_purchase_bill_with_payment', {
       p_supplier_id: params.supplier_id,
       p_bill_date: params.bill_date,
       p_items: params.items,
       p_commission_per_kg: params.commission_per_kg,
-      p_advance_amount: params.advance_amount,
+      p_payment_amount: params.payment_amount,
+      p_payment_mode: params.payment_mode,
+      p_payment_reference: params.payment_reference?.trim() || null,
       p_other_charges_addition: params.other_charges_addition,
       p_other_charges_deduction: params.other_charges_deduction,
       p_notes: params.notes || null,
@@ -50,6 +54,37 @@ export async function createPurchaseBill(params: CreatePurchaseBillParams): Prom
   }
 }
 
+export async function revisePurchaseBill(
+  purchaseBillId: number,
+  reason: string,
+  params: CreatePurchaseBillParams,
+): Promise<{ success: boolean; bill_id?: number; error?: string }> {
+  try {
+    const { data, error } = await supabase.rpc('revise_purchase_bill_with_source_changes', {
+      p_purchase_bill_id: purchaseBillId,
+      p_reason: reason.trim(),
+      p_supplier_id: params.supplier_id,
+      p_bill_date: params.bill_date,
+      p_items: params.items,
+      p_commission_per_kg: params.commission_per_kg,
+      p_payment_amount: params.payment_amount,
+      p_payment_mode: params.payment_mode,
+      p_payment_reference: params.payment_reference?.trim() || null,
+      p_other_charges_addition: params.other_charges_addition,
+      p_other_charges_deduction: params.other_charges_deduction,
+      p_notes: params.notes || null,
+      p_location: params.location || null,
+    });
+    if (error) throw error;
+    const revisedBill = Array.isArray(data) ? data[0] : data;
+    if (!revisedBill?.id) throw new Error('Database did not return the corrected purchase bill');
+    return { success: true, bill_id: revisedBill.id };
+  } catch (error) {
+    console.error('Error revising purchase bill:', error);
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export async function getPurchaseBills(): Promise<PurchaseBillSummary[]> {
   try {
     const { data, error } = await supabase
@@ -58,7 +93,8 @@ export async function getPurchaseBills(): Promise<PurchaseBillSummary[]> {
         *,
         suppliers (
           id,
-          name
+          name,
+          supplier_type
         )
       `)
       .order('bill_date', { ascending: false });
@@ -86,7 +122,8 @@ export async function getPurchaseBillDetails(billId: number): Promise<any> {
         *,
         suppliers (
           id,
-          name
+          name,
+          supplier_type
         )
       `)
       .eq('id', billId)
@@ -116,6 +153,7 @@ export async function getPurchaseBillDetails(billId: number): Promise<any> {
     const billDetails = {
       ...billData,
       supplier_name: billData.suppliers?.name,
+      supplier_type: billData.suppliers?.supplier_type,
       items: itemsData || [],
       payments: paymentsData || [],
     };
@@ -305,10 +343,14 @@ export async function voidPurchaseBillPayment(paymentId: number, reason: string)
   }
 }
 
-export async function deletePurchaseBillStrict(purchaseBillId: number): Promise<void> {
-  const { data, error } = await supabase.rpc('delete_purchase_bill', {
+export async function releasePurchaseBillForCorrection(
+  purchaseBillId: number,
+  reason: string,
+): Promise<void> {
+  const { data, error } = await supabase.rpc('release_purchase_bill_for_correction', {
     p_purchase_bill_id: purchaseBillId,
+    p_reason: reason.trim(),
   });
   if (error) throw error;
-  if (data !== true) throw new Error('Purchase bill was not found');
+  if (!data) throw new Error('Purchase bill was not found');
 }

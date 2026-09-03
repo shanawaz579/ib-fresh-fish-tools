@@ -7,6 +7,7 @@ export type SearchableOption = {
   label: string;
   detail?: string;
   searchText?: string;
+  group?: string;
 };
 
 type Props = {
@@ -69,18 +70,23 @@ export default function SearchableSelectModal(props: Props) {
             keyExtractor={(option) => String(option.id)}
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={<Text style={styles.sheetEmptyText}>{props.emptyMessage}</Text>}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.optionRow}
-                onPress={() => {
-                  props.onSelect(item.id);
-                  close();
-                }}
-              >
-                <Text style={styles.optionLabel}>{item.label}</Text>
-                {item.detail ? <Text style={styles.optionDetail}>{item.detail}</Text> : null}
-              </TouchableOpacity>
-            )}
+            renderItem={({ item, index }) => {
+              const previousGroup = index > 0 ? filteredOptions[index - 1].group : undefined;
+              const showGroup = Boolean(item.group && item.group !== previousGroup);
+              return <>
+                {showGroup ? <Text style={styles.optionGroup}>{item.group}</Text> : null}
+                <TouchableOpacity
+                  style={styles.optionRow}
+                  onPress={() => {
+                    props.onSelect(item.id);
+                    close();
+                  }}
+                >
+                  <Text style={styles.optionLabel}>{item.label}</Text>
+                  {item.detail ? <Text style={styles.optionDetail}>{item.detail}</Text> : null}
+                </TouchableOpacity>
+              </>;
+            }}
           />
         </View>
       </View>

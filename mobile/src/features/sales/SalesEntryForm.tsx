@@ -18,6 +18,8 @@ type Props = {
   kg: string;
   drafts: DraftItem[];
   submitting: boolean;
+  editing: boolean;
+  editingDraft: boolean;
   getStock: (id: number) => { available: { crates: number; kg: number } };
   onCustomerChange: (id: number | null) => void;
   onCustomerCreated: (customer: Customer) => void;
@@ -29,6 +31,7 @@ type Props = {
   onRemoveDraft: (index: number) => void;
   onAdd: () => void;
   onSave: () => void;
+  onCancelEdit: () => void;
 };
 
 export default function SalesEntryForm(props: Props) {
@@ -57,6 +60,7 @@ export default function SalesEntryForm(props: Props) {
     return {
       id: variant.id,
       label: variant.name,
+      group: variant.item_name,
       detail: `${[stock.crates > 0 ? `${stock.crates} cr` : '', stock.kg > 0 ? `${stock.kg} kg` : ''].filter(Boolean).join(' · ')} available`,
       searchText: [variant.variant_code, variant.item_name, variant.grade_code].filter(Boolean).join(' '),
     };
@@ -64,17 +68,43 @@ export default function SalesEntryForm(props: Props) {
 
   return (
     <View style={styles.formContainer}>
-      <View style={styles.formHeader}><Text style={styles.formTitle}>New sale</Text>{selectedCustomer ? <TouchableOpacity onPress={() => props.onCustomerChange(null)}><Text style={styles.changeCustomerText}>Change customer</Text></TouchableOpacity> : null}</View>
+      <View style={styles.formHeader}>
+        <View><Text style={styles.formTitle}>{props.editing ? 'Edit sale' : 'New sale'}</Text>{props.editing ? <Text style={styles.editingHint}>Update the same form, then save changes</Text> : null}</View>
+        {props.editing ? <TouchableOpacity onPress={props.onCancelEdit}><Text style={styles.cancelFormEdit}>Cancel</Text></TouchableOpacity> : selectedCustomer ? <TouchableOpacity onPress={() => props.onCustomerChange(null)}><Text style={styles.changeCustomerText}>Change customer</Text></TouchableOpacity> : null}
+      </View>
 
       <Text style={styles.label}>Customer *</Text>
-      <TouchableOpacity style={styles.selectField} onPress={() => setShowCustomers(true)}>
+      <TouchableOpacity style={[styles.selectField, props.editing && styles.lockedField]} disabled={props.editing} onPress={() => setShowCustomers(true)}>
         <View style={styles.selectIdentity}><Text style={selectedCustomer ? styles.selectValue : styles.selectPlaceholder}>{selectedCustomer?.name ?? 'Search and select customer'}</Text>{selectedCustomer?.business_type ? <Text style={styles.selectDetail}>{selectedCustomer.business_type}</Text> : null}</View>
         <Text style={styles.selectChevron}>›</Text>
       </TouchableOpacity>
 
       {selectedCustomer ? (
         <>
-          <Text style={styles.subsectionTitle}>Add item and grade</Text>
+          {props.drafts.length > 0 ? (
+            <View style={styles.tempItemsContainer}>
+              <View style={styles.tempItemsHeader}>
+                <Text style={styles.tempItemsTitle}>{props.editing ? 'Items in this sale' : 'Sale items'}</Text>
+                <Text style={styles.tempItemCount}>{props.drafts.length} item{props.drafts.length === 1 ? '' : 's'}</Text>
+              </View>
+              {props.drafts.map((item, index) => (
+                <View key={item.varietyId} style={styles.tempItem}>
+                  <View style={styles.tempItemInfo}>
+                    <Text style={styles.tempItemName}>{item.varietyName}</Text>
+                    <Text style={styles.tempItemQty}>{[item.crates > 0 ? `${item.crates} cr` : '', item.kg > 0 ? `${item.kg} kg` : ''].filter(Boolean).join(' · ')}</Text>
+                  </View>
+                  <TouchableOpacity style={styles.editTempButton} onPress={() => props.onEditDraft(index)}>
+                    <Text style={styles.editTempText}>Edit</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.removeTempButton} onPress={() => props.onRemoveDraft(index)}>
+                    <Text style={styles.removeTempText}>×</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          <Text style={styles.subsectionTitle}>{props.editing ? 'Add another item' : 'Add item and grade'}</Text>
           {frequent.length > 0 ? <View style={styles.quickPickSection}><Text style={styles.quickPickTitle}>Quick picks</Text><View style={styles.quickPickRow}>{frequent.map((variant) => <TouchableOpacity key={variant.id} style={[styles.quickPickChip, props.varietyId === variant.id && styles.quickPickChipActive]} onPress={() => props.onVarietyChange(variant.id)}><Text style={[styles.quickPickText, props.varietyId === variant.id && styles.quickPickTextActive]} numberOfLines={1}>{variant.variant_code || variant.name}</Text></TouchableOpacity>)}</View></View> : null}
           <TouchableOpacity style={styles.selectField} onPress={() => setShowItems(true)}>
             <View style={styles.selectIdentity}><Text style={selectedVariant ? styles.selectValue : styles.selectPlaceholder}>{selectedVariant?.name ?? 'Search available stock'}</Text>{selectedStock ? <Text style={styles.selectDetail}>Available: {[selectedStock.crates > 0 ? `${selectedStock.crates} cr` : '', selectedStock.kg > 0 ? `${selectedStock.kg} kg` : ''].filter(Boolean).join(' · ')}</Text> : null}</View>
@@ -86,10 +116,9 @@ export default function SalesEntryForm(props: Props) {
             <View style={styles.inputContainer}><View style={styles.labelRow}><Text style={styles.label}>Kg</Text>{selectedStock ? <Text style={styles.availableText}>Avl {selectedStock.kg}</Text> : null}</View><TextInput style={styles.input} value={props.kg} onChangeText={props.onKgChange} keyboardType="decimal-pad" placeholder="0" /></View>
           </View>
           <Text style={styles.quantityHint}>Enter crates, kg, or both. At least one is required.</Text>
-          <TouchableOpacity style={styles.addItemButton} onPress={props.onAdd}><Text style={styles.addItemButtonText}>+ Add to sale</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.addItemButton} onPress={props.onAdd}><Text style={styles.addItemButtonText}>{props.editingDraft ? 'Update item' : '+ Add to sale'}</Text></TouchableOpacity>
 
-          {props.drafts.length > 0 ? <View style={styles.tempItemsContainer}>{props.drafts.map((item, index) => <View key={item.varietyId} style={styles.tempItem}><View style={styles.tempItemInfo}><Text style={styles.tempItemName}>{item.varietyName}</Text><Text style={styles.tempItemQty}>{[item.crates > 0 ? `${item.crates} cr` : '', item.kg > 0 ? `${item.kg} kg` : ''].filter(Boolean).join(' · ')}</Text></View><TouchableOpacity onPress={() => props.onEditDraft(index)}><Text style={styles.editTempText}>Edit</Text></TouchableOpacity><TouchableOpacity onPress={() => props.onRemoveDraft(index)}><Text style={styles.removeDraftText}>Remove</Text></TouchableOpacity></View>)}</View> : null}
-          <TouchableOpacity style={[styles.saveAllButton, (props.submitting || props.drafts.length === 0) && styles.submitButtonDisabled]} onPress={props.onSave} disabled={props.submitting || props.drafts.length === 0}>{props.submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveAllButtonText}>Save sale ({props.drafts.length})</Text>}</TouchableOpacity>
+          <TouchableOpacity style={[styles.saveAllButton, (props.submitting || props.editingDraft || props.drafts.length === 0) && styles.submitButtonDisabled]} onPress={props.onSave} disabled={props.submitting || props.editingDraft || props.drafts.length === 0}>{props.submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveAllButtonText}>{props.editingDraft ? 'Update the item first' : props.editing ? `Save changes (${props.drafts.length})` : `Save sale (${props.drafts.length})`}</Text>}</TouchableOpacity>
         </>
       ) : null}
 

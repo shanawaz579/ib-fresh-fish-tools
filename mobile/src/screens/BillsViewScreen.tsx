@@ -9,7 +9,8 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { getCustomers, getBillsByCustomer, deleteBill } from '../api/stock';
+import { getCustomers, getBillsByCustomer, releaseCustomerBillForCorrection } from '../api/stock';
+import BillCorrectionModal from '../components/BillCorrectionModal';
 import type { Customer, Bill } from '../types';
 import { formatBusinessDate } from '../utils/date';
 import { useBusinessConfig } from '../context/BusinessConfigContext';
@@ -20,6 +21,8 @@ export default function BillsViewScreen() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [bills, setBills] = useState<Bill[]>([]);
   const [loading, setLoading] = useState(false);
+  const [correctionTarget, setCorrectionTarget] = useState<Bill | null>(null);
+  const [correcting, setCorrecting] = useState(false);
 
   useEffect(() => {
     loadCustomers();
@@ -67,46 +70,22 @@ export default function BillsViewScreen() {
     }
   };
 
-  const handleDeleteBill = (bill: Bill) => {
-    const badge = getStatusBadge(bill);
-    const hasItems = bill.items && bill.items.length > 0;
-
-    let warningMessage = `Are you sure you want to delete bill ${bill.bill_number}?\n\n`;
-    warningMessage += `Status: ${badge.text}\n`;
-    warningMessage += `Amount: ${formatMoney(bill.total, 0)}\n`;
-
-    if (bill.is_active) {
-      warningMessage += `\n⚠️ WARNING: This is the ACTIVE bill for this customer!`;
+  const handleCorrection = async (reason: string) => {
+    if (!correctionTarget) return;
+    setCorrecting(true);
+    try {
+      await releaseCustomerBillForCorrection(correctionTarget.id, reason);
+      setCorrectionTarget(null);
+      if (selectedCustomerId) await loadBills(selectedCustomerId);
+      Alert.alert('Ready to correct', 'The original remains in correction history. Its sales are available for rebilling.');
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Please try again.';
+      Alert.alert(message.includes('Void active receipts') ? 'Payment must be voided first' : 'Unable to correct bill', message);
+    } finally {
+      setCorrecting(false);
     }
-
-    if (hasItems) {
-      warningMessage += `\n\nThis bill has ${bill.items.length} item(s).`;
-    }
-
-    warningMessage += `\n\nThis action cannot be undone.`;
-
-    Alert.alert(
-      'Delete Bill',
-      warningMessage,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const success = await deleteBill(bill.id);
-            if (success) {
-              Alert.alert('Success', 'Bill deleted successfully');
-              if (selectedCustomerId) {
-                loadBills(selectedCustomerId);
-              }
-            } else {
-              Alert.alert('Error', 'Failed to delete bill');
-            }
-          },
-        },
-      ]
-    );
   };
 
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
@@ -202,9 +181,9 @@ export default function BillsViewScreen() {
                       </Text>
                       <TouchableOpacity
                         style={styles.deleteButton}
-                        onPress={() => handleDeleteBill(bill)}
+                        onPress={() => setCorrectionTarget(bill)}
                       >
-                        <Text style={styles.deleteIcon}>🗑️</Text>
+                        <Text style={styles.deleteIcon}>↺</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -276,6 +255,14 @@ export default function BillsViewScreen() {
           </View>
         )}
       </ScrollView>
+      <BillCorrectionModal
+        visible={Boolean(correctionTarget)}
+        billNumber={correctionTarget?.bill_number}
+        documentLabel="sales bill"
+        saving={correcting}
+        onClose={() => setCorrectionTarget(null)}
+        onConfirm={handleCorrection}
+      />
     </View>
   );
 }

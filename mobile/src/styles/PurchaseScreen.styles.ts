@@ -106,6 +106,7 @@ export default StyleSheet.create({
   sheetCreateText: { color: '#0F766E', fontSize: 13, fontWeight: '800' },
   resultMeta: { color: '#6B7280', fontSize: 11, marginVertical: 9 },
   optionRow: { backgroundColor: '#FFFFFF', borderRadius: 9, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 7 },
+  optionGroup: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 0.8, marginBottom: 6, marginTop: 8, textTransform: 'uppercase' },
   optionLabel: { color: '#111827', fontSize: 14, fontWeight: '700' },
   optionDetail: { color: '#6B7280', fontSize: 11, marginTop: 3 },
   sheetEmptyText: { color: '#6B7280', textAlign: 'center', paddingVertical: 28 },

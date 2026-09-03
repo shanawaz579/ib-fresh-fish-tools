@@ -25,6 +25,8 @@ import BusinessSettingsScreen from '../screens/BusinessSettingsScreen';
 import ExpensesScreen from '../screens/ExpensesScreen';
 import CashbookScreen from '../screens/CashbookScreen';
 import ProfitabilityScreen from '../screens/ProfitabilityScreen';
+import PaymentRegisterScreen from '../screens/PaymentRegisterScreen';
+import type { PurchaseBillDetails } from '../domain/purchaseBillDetails';
 
 export type RootStackParamList = {
   Login: undefined;
@@ -49,6 +51,10 @@ export type RootStackParamList = {
     location?: string;
     purchases: any[];
     date: string;
+    correction?: {
+      reason: string;
+      bill: PurchaseBillDetails;
+    };
   };
   Payments: undefined;
   BillsView: undefined;
@@ -59,6 +65,7 @@ export type RootStackParamList = {
   Expenses: undefined;
   Cashbook: undefined;
   Profitability: undefined;
+  PaymentRegister: undefined;
   PurchaseBillDetails: {
     billId: number;
   };
@@ -118,6 +125,7 @@ function Navigation() {
           <Stack.Screen name="Expenses" component={ExpensesScreen} />
           <Stack.Screen name="Cashbook" component={CashbookScreen} />
           <Stack.Screen name="Profitability" component={ProfitabilityScreen} />
+          <Stack.Screen name="PaymentRegister" component={PaymentRegisterScreen} />
         </>
       ) : isPacker ? (
         // Packer users only get Packing screen

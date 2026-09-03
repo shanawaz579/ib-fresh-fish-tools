@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
 import type { BillOtherCharge } from '../../types';
 import OtherChargesSection from '../../components/OtherChargesSection';
 import { useBusinessConfig } from '../../context/BusinessConfigContext';
@@ -12,6 +11,7 @@ type Props = {
   previousBalance: number;
   itemsTotal: number;
   chargesTotal: number;
+  currentBillTotal: number;
   quickPaymentsTotal: number;
   total: number;
   otherCharges: BillOtherCharge[];
@@ -29,6 +29,8 @@ type Props = {
   onMarkAsPaidChange: (value: boolean) => void;
   submitting: boolean;
   editing: boolean;
+  correctionReason: string;
+  onCorrectionReasonChange: (value: string) => void;
   allRatesSet: boolean;
   onSubmit: () => void;
 };
@@ -48,6 +50,13 @@ export default function BillReviewPanel(props: Props) {
   const [paymentOpen, setPaymentOpen] = useState(props.quickPayments.length > 0);
   const [notesOpen, setNotesOpen] = useState(Boolean(props.notes));
   const missingRate = !props.allRatesSet;
+  const missingCorrectionReason = props.editing && props.correctionReason.trim().length < 5;
+  const methods: Array<{ value: PaymentMethod; label: string }> = [
+    { value: 'cash', label: 'Cash' },
+    { value: 'upi', label: 'UPI' },
+    { value: 'bank_transfer', label: 'Bank' },
+    { value: 'cheque', label: 'Cheque' },
+  ];
 
   return (
     <View style={styles.card}>
@@ -68,9 +77,9 @@ export default function BillReviewPanel(props: Props) {
               <TouchableOpacity style={styles.removeButton} onPress={() => props.onRemovePayment(index)}><Text style={styles.removeText}>Remove</Text></TouchableOpacity>
             </View>
           ))}
+          <View style={styles.paymentMethods}>{methods.map(method => <TouchableOpacity key={method.value} style={[styles.methodChip, props.newPaymentMethod === method.value && styles.methodChipActive]} onPress={() => props.onPaymentMethodChange(method.value)}><Text style={[styles.methodText, props.newPaymentMethod === method.value && styles.methodTextActive]}>{method.label}</Text></TouchableOpacity>)}</View>
           <View style={styles.paymentEntry}>
-            <View style={styles.amountInputWrap}><Text style={styles.currency}>{configuration.preferences.currency_symbol}</Text><TextInput style={styles.amountInput} value={props.newPaymentAmount} onChangeText={props.onPaymentAmountChange} placeholder="Amount" keyboardType="decimal-pad" /></View>
-            <View style={styles.methodPicker}><Picker selectedValue={props.newPaymentMethod} onValueChange={props.onPaymentMethodChange} style={styles.picker}><Picker.Item label="Cash" value="cash" /><Picker.Item label="UPI" value="upi" /><Picker.Item label="Bank" value="bank_transfer" /><Picker.Item label="Cheque" value="cheque" /></Picker></View>
+            <View style={styles.amountInputWrap}><Text style={styles.currency}>{configuration.preferences.currency_symbol}</Text><TextInput style={styles.amountInput} value={props.newPaymentAmount} onChangeText={props.onPaymentAmountChange} placeholder="Amount received" keyboardType="decimal-pad" /></View>
             <TouchableOpacity style={styles.addButton} onPress={props.onAddPayment}><Text style={styles.addButtonText}>Add</Text></TouchableOpacity>
           </View>
         </View>
@@ -79,12 +88,28 @@ export default function BillReviewPanel(props: Props) {
       <Disclosure title="Bill note" meta={props.notes ? 'Note added' : 'Optional'} open={notesOpen} onPress={() => setNotesOpen(value => !value)} />
       {notesOpen ? <TextInput style={styles.notesInput} multiline value={props.notes} onChangeText={props.onNotesChange} placeholder="Add a note visible on this bill" textAlignVertical="top" /> : null}
 
+      {props.editing ? (
+        <View style={styles.correctionBox}>
+          <Text style={styles.correctionTitle}>WHY IS THIS BILL BEING CORRECTED? *</Text>
+          <Text style={styles.correctionMeta}>The original bill remains in audit history. Payments must be voided before changing financial values.</Text>
+          <TextInput
+            style={styles.correctionInput}
+            multiline
+            value={props.correctionReason}
+            onChangeText={props.onCorrectionReasonChange}
+            placeholder="Example: wrong selling rate entered"
+            textAlignVertical="top"
+          />
+        </View>
+      ) : null}
+
       <View style={styles.summary}>
-        {props.previousBalance > 0 ? <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Previous balance</Text><Text style={styles.summaryValue}>{formatMoney(props.previousBalance, 0)}</Text></View> : null}
         <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Items</Text><Text style={styles.summaryValue}>{formatMoney(props.itemsTotal, 0)}</Text></View>
         {props.chargesTotal !== 0 ? <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Charges / deductions</Text><Text style={styles.summaryValue}>{props.chargesTotal > 0 ? '+' : '−'}{formatMoney(Math.abs(props.chargesTotal), 0)}</Text></View> : null}
+        <View style={styles.currentBillRow}><Text style={styles.currentBillLabel}>THIS BILL</Text><Text style={styles.currentBillValue}>{formatMoney(props.currentBillTotal, 0)}</Text></View>
+        {props.previousBalance !== 0 ? <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Balance brought forward</Text><Text style={styles.summaryValue}>{formatMoney(props.previousBalance, 0)}</Text></View> : null}
         {props.quickPaymentsTotal > 0 ? <View style={styles.summaryRow}><Text style={styles.paymentSummaryLabel}>Payment now</Text><Text style={styles.paymentSummaryValue}>−{formatMoney(props.quickPaymentsTotal, 0)}</Text></View> : null}
-        <View style={styles.totalRow}><View><Text style={styles.totalLabel}>TOTAL PAYABLE</Text><Text style={styles.totalHint}>Including previous balance</Text></View><Text style={styles.totalValue}>{formatMoney(props.total, 0)}</Text></View>
+        <View style={styles.totalRow}><View><Text style={styles.totalLabel}>{props.total < 0 ? 'CUSTOMER CREDIT' : 'TOTAL DUE'}</Text><Text style={styles.totalHint}>After balance and payment</Text></View><Text style={styles.totalValue}>{formatMoney(Math.abs(props.total), 0)}</Text></View>
       </View>
 
       <TouchableOpacity style={styles.paidRow} onPress={() => props.onMarkAsPaidChange(!props.markAsPaid)}>
@@ -93,7 +118,8 @@ export default function BillReviewPanel(props: Props) {
       </TouchableOpacity>
 
       {missingRate ? <Text style={styles.rateWarning}>Enter a selling rate for every item to continue.</Text> : null}
-      <TouchableOpacity style={[styles.submitButton, (props.submitting || missingRate) && styles.submitDisabled]} disabled={props.submitting || missingRate} onPress={props.onSubmit}>
+      {missingCorrectionReason ? <Text style={styles.rateWarning}>Enter a correction reason of at least 5 characters.</Text> : null}
+      <TouchableOpacity style={[styles.submitButton, (props.submitting || missingRate || missingCorrectionReason) && styles.submitDisabled]} disabled={props.submitting || missingRate || missingCorrectionReason} onPress={props.onSubmit}>
         {props.submitting ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.submitText}>{props.editing ? 'Save bill changes' : `Create bill · ${formatMoney(props.total, 0)}`}</Text>}
       </TouchableOpacity>
     </View>
@@ -121,15 +147,25 @@ const styles = StyleSheet.create({
   amountInputWrap: { alignItems: 'center', backgroundColor: '#FFFFFF', borderColor: '#CBD5E1', borderRadius: 9, borderWidth: 1, flex: 1.25, flexDirection: 'row', height: 44, paddingHorizontal: 9 },
   currency: { color: '#64748B', fontWeight: '700' },
   amountInput: { color: '#0F172A', flex: 1, fontSize: 14, paddingHorizontal: 5 },
-  methodPicker: { backgroundColor: '#FFFFFF', borderColor: '#CBD5E1', borderRadius: 9, borderWidth: 1, flex: 1.35, height: 44, justifyContent: 'center', overflow: 'hidden' },
-  picker: { height: 44 },
+  paymentMethods: { flexDirection: 'row', gap: 6, marginTop: 10 },
+  methodChip: { alignItems: 'center', backgroundColor: '#FFF', borderColor: '#CBD5E1', borderRadius: 8, borderWidth: 1, flex: 1, paddingVertical: 8 },
+  methodChipActive: { backgroundColor: '#0F766E', borderColor: '#0F766E' },
+  methodText: { color: '#64748B', fontSize: 10, fontWeight: '800' },
+  methodTextActive: { color: '#FFF' },
   addButton: { alignItems: 'center', backgroundColor: '#0F766E', borderRadius: 9, justifyContent: 'center', paddingHorizontal: 13 },
   addButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
   notesInput: { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1', borderRadius: 10, borderWidth: 1, color: '#0F172A', minHeight: 76, padding: 11 },
+  correctionBox: { backgroundColor: '#FFF7ED', borderColor: '#FED7AA', borderRadius: 12, borderWidth: 1, marginTop: 12, padding: 12 },
+  correctionTitle: { color: '#9A3412', fontSize: 10, fontWeight: '900', letterSpacing: 0.6 },
+  correctionMeta: { color: '#C2410C', fontSize: 10, lineHeight: 15, marginTop: 4 },
+  correctionInput: { backgroundColor: '#FFFFFF', borderColor: '#FDBA74', borderRadius: 9, borderWidth: 1, color: '#0F172A', marginTop: 9, minHeight: 70, padding: 10 },
   summary: { backgroundColor: '#F8FAFC', borderRadius: 13, marginTop: 14, padding: 13 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
   summaryLabel: { color: '#64748B', fontSize: 13 },
   summaryValue: { color: '#334155', fontSize: 13, fontWeight: '700' },
+  currentBillRow: { borderTopColor: '#E2E8F0', borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginBottom: 10, paddingTop: 9 },
+  currentBillLabel: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 0.7 },
+  currentBillValue: { color: '#0F766E', fontSize: 15, fontWeight: '900' },
   paymentSummaryLabel: { color: '#047857', fontSize: 13 },
   paymentSummaryValue: { color: '#047857', fontSize: 13, fontWeight: '800' },
   totalRow: { alignItems: 'center', borderTopColor: '#CBD5E1', borderTopWidth: 1, flexDirection: 'row', justifyContent: 'space-between', marginTop: 3, paddingTop: 12 },

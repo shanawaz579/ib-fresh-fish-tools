@@ -12,7 +12,8 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { deletePurchaseBillStrict, getPurchaseBills } from '../api/stock';
+import { getPurchaseBillDetails, getPurchaseBills } from '../api/stock';
+import BillCorrectionModal from '../components/BillCorrectionModal';
 import {
   groupPurchaseBills,
   type PurchaseBillSummary,
@@ -28,7 +29,8 @@ export default function PurchaseBillsViewScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<PurchaseBillViewMode>('date');
-  const [deletingBillId, setDeletingBillId] = useState<number | null>(null);
+  const [correctionTarget, setCorrectionTarget] = useState<PurchaseBillSummary | null>(null);
+  const [correctingBillId, setCorrectingBillId] = useState<number | null>(null);
 
   useEffect(() => {
     loadBills();
@@ -61,36 +63,53 @@ export default function PurchaseBillsViewScreen() {
 
   const groupedBills = useMemo(() => groupPurchaseBills(bills, viewMode), [bills, viewMode]);
 
-  const deleteBill = (bill: PurchaseBillSummary) => {
-    Alert.alert(
-      'Delete purchase bill?',
-      `${bill.bill_number} and its item details will be removed. Source purchases return to unbilled. Active supplier payments must be voided first.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete bill',
-          style: 'destructive',
-          onPress: async () => {
-            setDeletingBillId(bill.id);
-            try {
-              await deletePurchaseBillStrict(bill.id);
-              await loadBills();
-              Alert.alert('Bill deleted', 'Source purchases are available for rebilling.');
-            } catch (error) {
-              const message = error && typeof error === 'object' && 'message' in error
-                ? String(error.message)
-                : 'Please try again.';
-              Alert.alert(
-                message.includes('Void active supplier payments') ? 'Payment must be voided first' : 'Unable to delete bill',
-                message,
-              );
-            } finally {
-              setDeletingBillId(null);
-            }
-          },
-        },
-      ],
-    );
+  const correctBill = async (reason: string) => {
+    if (!correctionTarget) return;
+    setCorrectingBillId(correctionTarget.id);
+    try {
+      const details = await getPurchaseBillDetails(correctionTarget.id);
+      const purchases = details.items.map((item: {
+        purchase_id: number;
+        fish_variety_id: number;
+        fish_variety_name: string;
+        quantity_crates: number;
+        quantity_kg: number;
+        actual_weight: number;
+      }) => ({
+        id: item.purchase_id,
+        supplier_id: details.supplier_id,
+        supplier_type: details.supplier_type,
+        fish_variety_id: item.fish_variety_id,
+        fish_variety_name: item.fish_variety_name,
+        quantity_crates: item.quantity_crates,
+        quantity_kg: item.quantity_kg,
+        default_kg_per_crate: item.quantity_crates > 0
+          ? (Number(item.actual_weight) - Number(item.quantity_kg)) / item.quantity_crates
+          : undefined,
+        purchase_date: details.bill_date,
+        billing_status: 'billed',
+      }));
+      setCorrectionTarget(null);
+      navigation.navigate('PurchaseBillGeneration', {
+        supplier_id: details.supplier_id,
+        supplier_name: details.supplier_name,
+        farmer_name: details.secondary_name,
+        location: details.location,
+        purchases,
+        date: details.bill_date,
+        correction: { reason, bill: details },
+      });
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Please try again.';
+      Alert.alert(
+        'Unable to correct bill',
+        message,
+      );
+    } finally {
+      setCorrectingBillId(null);
+    }
   };
 
   if (loading) {
@@ -235,12 +254,12 @@ export default function PurchaseBillsViewScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteBillButton}
-                    disabled={deletingBillId === bill.id}
-                    onPress={() => deleteBill(bill)}
+                    disabled={correctingBillId === bill.id}
+                    onPress={() => setCorrectionTarget(bill)}
                   >
-                    {deletingBillId === bill.id
-                      ? <ActivityIndicator size="small" color="#DC2626" />
-                      : <Text style={styles.deleteBillText}>Delete bill</Text>}
+                    {correctingBillId === bill.id
+                      ? <ActivityIndicator size="small" color="#B45309" />
+                      : <Text style={styles.deleteBillText}>Correct bill</Text>}
                   </TouchableOpacity>
                 </View>
               ))}
@@ -248,6 +267,15 @@ export default function PurchaseBillsViewScreen() {
           ))
         )}
       </ScrollView>
+      <BillCorrectionModal
+        visible={Boolean(correctionTarget)}
+        billNumber={correctionTarget?.bill_number}
+        documentLabel="purchase bill"
+        saving={correctingBillId !== null}
+        paymentsCarriedForward
+        onClose={() => setCorrectionTarget(null)}
+        onConfirm={correctBill}
+      />
     </View>
   );
 }

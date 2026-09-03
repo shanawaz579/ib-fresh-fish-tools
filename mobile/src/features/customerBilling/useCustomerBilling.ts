@@ -5,7 +5,6 @@ import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
 import {
   createBill,
-  deleteBill,
   getBillById,
   getBillPreviewData,
   getBillsByDate,
@@ -47,6 +46,7 @@ export function useCustomerBilling() {
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [editingBillId, setEditingBillId] = useState<number | null>(null);
+  const [correctionReason, setCorrectionReason] = useState('');
 
   // Quick payments state (payments to record before generating bill)
   const [quickPayments, setQuickPayments] = useState<Array<{
@@ -230,6 +230,11 @@ export function useCustomerBilling() {
       return;
     }
 
+    if (editingBillId && correctionReason.trim().length < 5) {
+      Alert.alert('Correction reason required', 'Enter at least 5 characters explaining what was wrong.');
+      return;
+    }
+
     // Validate that all rates are set
     const missingRates = billItems.some(item => item.rate_per_kg === 0);
     if (missingRates) {
@@ -272,6 +277,7 @@ export function useCustomerBilling() {
         quickPayments,
         markAsPaid,
         editingBillId || undefined,
+        correctionReason,
       );
 
       if (bill) {
@@ -301,6 +307,7 @@ export function useCustomerBilling() {
     setMarkAsPaid(false);
     setNotes('');
     setEditingBillId(null);
+    setCorrectionReason('');
     setCustomerOutstanding({
       total_outstanding: 0,
       unpaid_bills_count: 0,
@@ -343,37 +350,15 @@ export function useCustomerBilling() {
     setOtherCharges(bill.other_charges || []);
     setNotes(bill.notes || '');
     setEditingBillId(billId);
+    setCorrectionReason('');
     setPreviewPreviousBalance(bill.previous_balance);
     setPreviewPayments(bill.payments || []);
     setPreviewBalanceDue(bill.balance_due);
 
-    Alert.alert('Edit Mode', 'Bill loaded for editing. The original remains safe until you save.');
+    Alert.alert('Correction mode', 'Update the bill and enter a reason. The original values will remain in audit history until you save successfully.');
   };
 
-  const handleDeleteBill = async (billId: number, billNumber: string) => {
-    Alert.alert(
-      'Confirm Delete',
-      `Are you sure you want to delete bill ${billNumber}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const success = await deleteBill(billId);
-            if (success) {
-              Alert.alert('Success', 'Bill deleted successfully');
-              await loadData();
-            } else {
-              Alert.alert('Error', 'Failed to delete bill');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const { itemsTotal, chargesTotal, subtotal, quickPaymentsTotal, total } = calculateTotals();
+  const { itemsTotal, chargesTotal, subtotal, currentBillTotal, quickPaymentsTotal, total } = calculateTotals();
   const selectedCustomer = customers.find(c => c.id === selectedCustomerId);
 
   const handleCustomerCreated = async (customer: Customer) => {
@@ -393,8 +378,8 @@ export function useCustomerBilling() {
     showPreview, setShowPreview, previewBill, previewCustomerName,
     handlePrintBill, handleShareBill, handleCustomerSelect, updateItemField, calculateItemAmount,
     handleAddQuickPayment, handleRemoveQuickPayment, handleGenerateBill, resetForm,
-    handleViewBill, handleEditBill, handleDeleteBill, loadData,
-    itemsTotal, chargesTotal, subtotal, quickPaymentsTotal, total, selectedCustomer,
-    editingBillId, handleCustomerCreated,
+    handleViewBill, handleEditBill, loadData,
+    itemsTotal, chargesTotal, subtotal, currentBillTotal, quickPaymentsTotal, total, selectedCustomer,
+    editingBillId, correctionReason, setCorrectionReason, handleCustomerCreated,
   };
 }
