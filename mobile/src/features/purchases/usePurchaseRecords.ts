@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import {
   addSupplier,
   createPurchaseBatch,
+  deleteUnbilledPurchaseGroup,
   getFishVarieties,
   getFrequentPurchaseVarietyIds,
   getSuppliers,
@@ -13,6 +14,7 @@ import { useBusinessDate } from '../../hooks/useBusinessDate';
 import type { FishVariety, Purchase, Supplier, SupplierCreateInput } from '../../types';
 
 export type PurchaseDraftItem = {
+  purchaseId?: number;
   varietyId: number;
   varietyName: string;
   crates: number;
@@ -57,6 +59,7 @@ export function usePurchaseRecords() {
   const [draftItems, setDraftItems] = useState<PurchaseDraftItem[]>([]);
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [editingGroup, setEditingGroup] = useState<PurchaseGroup | null>(null);
+  const [editingDraftPurchaseId, setEditingDraftPurchaseId] = useState<number | null>(null);
 
   const loadData = useCallback(async (asRefresh = false) => {
     asRefresh ? setRefreshing(true) : setLoading(true);
@@ -113,7 +116,7 @@ export function usePurchaseRecords() {
     setDraftItems((current) => {
       const existing = current.find((item) => item.varietyId === variety.id);
       if (!existing) {
-        return [...current, { varietyId: variety.id, varietyName: variety.name, crates, kg }];
+        return [...current, { purchaseId: editingDraftPurchaseId ?? undefined, varietyId: variety.id, varietyName: variety.name, crates, kg }];
       }
       return current.map((item) => item.varietyId === variety.id
         ? { ...item, crates: item.crates + crates, kg: item.kg + kg }
@@ -122,6 +125,7 @@ export function usePurchaseRecords() {
     setFishVarietyId(null);
     setQuantityCrates('');
     setQuantityKg('');
+    setEditingDraftPurchaseId(null);
   };
 
   const editDraftItem = (index: number) => {
@@ -129,6 +133,7 @@ export function usePurchaseRecords() {
     setFishVarietyId(draft.varietyId);
     setQuantityCrates(String(draft.crates));
     setQuantityKg(String(draft.kg));
+    setEditingDraftPurchaseId(draft.purchaseId ?? null);
     setDraftItems((current) => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
@@ -170,6 +175,21 @@ export function usePurchaseRecords() {
 
     setSubmitting(true);
     try {
+      if (editingGroup) {
+        if (draftItems.some(item => !item.purchaseId)) {
+          Alert.alert('Edit existing items', 'Use Edit on an existing purchase line before changing it.');
+          return;
+        }
+        const unbilled = editingGroup.purchases.filter(purchase => purchase.billing_status === 'unbilled');
+        await updateUnbilledPurchaseGroup({
+          purchaseIds: unbilled.map(purchase => purchase.id),
+          items: draftItems.map(item => ({
+            id: item.purchaseId!, fishVarietyId: item.varietyId,
+            quantityCrates: item.crates, quantityKg: item.kg,
+          })),
+        });
+        setEditingGroup(null);
+      } else {
       await createPurchaseBatch({
         supplierId: selectedSupplier.id,
         farmerName,
@@ -181,6 +201,7 @@ export function usePurchaseRecords() {
           quantityKg: item.kg,
         })),
       });
+      }
       const savedCount = draftItems.length;
       setDraftItems([]);
       setFarmerName('');
@@ -195,6 +216,52 @@ export function usePurchaseRecords() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const startEditingGroup = (group: PurchaseGroup) => {
+    const unbilled = group.purchases.filter(purchase => purchase.billing_status === 'unbilled');
+    setEditingGroup(group);
+    setSupplierId(group.supplierId);
+    setFarmerName(group.supplierType === 'farmer' ? '' : group.farmerName);
+    setLocation(group.location ?? '');
+    setDraftItems(unbilled.map(purchase => ({
+      purchaseId: purchase.id,
+      varietyId: purchase.fish_variety_id,
+      varietyName: purchase.fish_variety_name ?? 'Unknown item',
+      crates: purchase.quantity_crates,
+      kg: Number(purchase.quantity_kg),
+    })));
+    setFishVarietyId(null);
+    setQuantityCrates('');
+    setQuantityKg('');
+    setEditingDraftPurchaseId(null);
+  };
+
+  const cancelEditingGroup = () => {
+    setEditingGroup(null);
+    setDraftItems([]);
+    setSupplierId(null);
+    setFarmerName('');
+    setLocation('');
+    setFishVarietyId(null);
+    setQuantityCrates('');
+    setQuantityKg('');
+    setEditingDraftPurchaseId(null);
+  };
+
+  const deleteGroup = (group: PurchaseGroup) => {
+    const unbilled = group.purchases.filter(purchase => purchase.billing_status === 'unbilled');
+    Alert.alert('Delete purchase?', 'All unbilled items in this purchase will be removed and stock will be reversed.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await deleteUnbilledPurchaseGroup(unbilled.map(purchase => purchase.id));
+          await loadData();
+        } catch (error) {
+          Alert.alert('Unable to delete purchase', error instanceof Error ? error.message : 'Please try again.');
+        }
+      } },
+    ]);
   };
 
   const saveGroupEdit = async (items: Array<{
@@ -256,10 +323,10 @@ export function usePurchaseRecords() {
     supplierId, setSupplierId, farmerName, setFarmerName, location, setLocation,
     fishVarietyId, setFishVarietyId, quantityCrates, setQuantityCrates,
     quantityKg, setQuantityKg, draftItems, collapsedGroups, editingGroup,
+    editingDraftPurchaseId,
     refresh: () => loadData(true), addDraftItem, editDraftItem, removeDraftItem,
     createSupplier, refreshVarieties, saveBatch, toggleGroup,
-    startEditingGroup: setEditingGroup,
-    cancelEditingGroup: () => setEditingGroup(null),
+    startEditingGroup, cancelEditingGroup, deleteGroup,
     saveGroupEdit,
   };
 }

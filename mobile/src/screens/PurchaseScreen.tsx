@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -6,12 +6,12 @@ import {
   Text,
   TouchableOpacity,
   View,
+  type LayoutChangeEvent,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DateNavigator from '../components/DateNavigator';
 import PurchaseEntryForm from '../features/purchases/PurchaseEntryForm';
-import PurchaseGroupEditModal from '../features/purchases/PurchaseGroupEditModal';
 import PurchaseGroupCard from '../features/purchases/PurchaseGroupCard';
 import { usePurchaseRecords } from '../features/purchases/usePurchaseRecords';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -22,6 +22,8 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 export default function PurchaseScreen() {
   const navigation = useNavigation<NavigationProp>();
   const purchase = usePurchaseRecords();
+  const scrollRef = useRef<ScrollView>(null);
+  const [formOffset, setFormOffset] = useState(0);
 
   return (
     <View style={styles.container}>
@@ -36,6 +38,7 @@ export default function PurchaseScreen() {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.content}
         refreshControl={(
           <RefreshControl
@@ -54,6 +57,7 @@ export default function PurchaseScreen() {
           accentColor="#0F766E"
         />
 
+        <View onLayout={(event: LayoutChangeEvent) => setFormOffset(event.nativeEvent.layout.y)}>
         <PurchaseEntryForm
           suppliers={purchase.suppliers}
           varieties={purchase.varieties}
@@ -66,6 +70,8 @@ export default function PurchaseScreen() {
           quantityKg={purchase.quantityKg}
           draftItems={purchase.draftItems}
           submitting={purchase.submitting}
+          editing={purchase.editingGroup !== null}
+          editingLine={purchase.editingDraftPurchaseId !== null}
           onSupplierChange={purchase.setSupplierId}
           onFarmerNameChange={purchase.setFarmerName}
           onLocationChange={purchase.setLocation}
@@ -78,7 +84,9 @@ export default function PurchaseScreen() {
           onEditItem={purchase.editDraftItem}
           onRemoveItem={purchase.removeDraftItem}
           onSave={purchase.saveBatch}
+          onCancelEdit={purchase.cancelEditingGroup}
         />
+        </View>
 
         <Text style={styles.listTitle}>Purchases for this date</Text>
         {purchase.loading ? (
@@ -93,7 +101,11 @@ export default function PurchaseScreen() {
             group={group}
             collapsed={purchase.collapsedGroups.has(group.key)}
             onToggle={() => purchase.toggleGroup(group.key)}
-            onEdit={() => purchase.startEditingGroup(group)}
+            onEdit={() => {
+              purchase.startEditingGroup(group);
+              requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: formOffset, animated: true }));
+            }}
+            onDelete={() => purchase.deleteGroup(group)}
             onBill={(purchases) => navigation.navigate('PurchaseBillGeneration', {
               supplier_id: group.supplierId,
               supplier_name: group.supplierName,
@@ -106,13 +118,6 @@ export default function PurchaseScreen() {
         ))}
       </ScrollView>
 
-      <PurchaseGroupEditModal
-        group={purchase.editingGroup}
-        varieties={purchase.varieties}
-        saving={purchase.submitting}
-        onCancel={purchase.cancelEditingGroup}
-        onSave={purchase.saveGroupEdit}
-      />
     </View>
   );
 }

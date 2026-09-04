@@ -12,7 +12,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
-import { getPurchaseBillDetails, getPurchaseBills } from '../api/stock';
+import { getPurchaseBillDetails, getPurchaseBills, releasePurchaseBillForCorrection } from '../api/stock';
 import BillCorrectionModal from '../components/BillCorrectionModal';
 import {
   groupPurchaseBills,
@@ -29,8 +29,9 @@ export default function PurchaseBillsViewScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [viewMode, setViewMode] = useState<PurchaseBillViewMode>('date');
-  const [correctionTarget, setCorrectionTarget] = useState<PurchaseBillSummary | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PurchaseBillSummary | null>(null);
   const [correctingBillId, setCorrectingBillId] = useState<number | null>(null);
+  const [deletingBillId, setDeletingBillId] = useState<number | null>(null);
 
   useEffect(() => {
     loadBills();
@@ -63,11 +64,10 @@ export default function PurchaseBillsViewScreen() {
 
   const groupedBills = useMemo(() => groupPurchaseBills(bills, viewMode), [bills, viewMode]);
 
-  const correctBill = async (reason: string) => {
-    if (!correctionTarget) return;
-    setCorrectingBillId(correctionTarget.id);
+  const editBill = async (bill: PurchaseBillSummary) => {
+    setCorrectingBillId(bill.id);
     try {
-      const details = await getPurchaseBillDetails(correctionTarget.id);
+      const details = await getPurchaseBillDetails(bill.id);
       const purchases = details.items.map((item: {
         purchase_id: number;
         fish_variety_id: number;
@@ -89,7 +89,6 @@ export default function PurchaseBillsViewScreen() {
         purchase_date: details.bill_date,
         billing_status: 'billed',
       }));
-      setCorrectionTarget(null);
       navigation.navigate('PurchaseBillGeneration', {
         supplier_id: details.supplier_id,
         supplier_name: details.supplier_name,
@@ -97,7 +96,7 @@ export default function PurchaseBillsViewScreen() {
         location: details.location,
         purchases,
         date: details.bill_date,
-        correction: { reason, bill: details },
+        correction: { reason: '', bill: details },
       });
     } catch (error) {
       const message = error && typeof error === 'object' && 'message' in error
@@ -109,6 +108,22 @@ export default function PurchaseBillsViewScreen() {
       );
     } finally {
       setCorrectingBillId(null);
+    }
+  };
+
+  const deleteBill = async (reason: string) => {
+    if (!deleteTarget) return;
+    setDeletingBillId(deleteTarget.id);
+    try {
+      await releasePurchaseBillForCorrection(deleteTarget.id, reason);
+      setDeleteTarget(null);
+      await loadBills();
+      Alert.alert('Bill deleted', 'Purchases were returned to unbilled and the original was retained in correction history.');
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Please try again.';
+      Alert.alert(message.includes('Void active supplier payments') ? 'Payment must be voided first' : 'Unable to delete bill', message);
+    } finally {
+      setDeletingBillId(null);
     }
   };
 
@@ -255,11 +270,20 @@ export default function PurchaseBillsViewScreen() {
                   <TouchableOpacity
                     style={styles.deleteBillButton}
                     disabled={correctingBillId === bill.id}
-                    onPress={() => setCorrectionTarget(bill)}
+                    onPress={() => editBill(bill)}
                   >
                     {correctingBillId === bill.id
                       ? <ActivityIndicator size="small" color="#B45309" />
-                      : <Text style={styles.deleteBillText}>Correct bill</Text>}
+                      : <Text style={styles.deleteBillText}>Edit</Text>}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteBillButton}
+                    disabled={deletingBillId === bill.id}
+                    onPress={() => setDeleteTarget(bill)}
+                  >
+                    {deletingBillId === bill.id
+                      ? <ActivityIndicator size="small" color="#DC2626" />
+                      : <Text style={styles.deleteActionText}>Delete</Text>}
                   </TouchableOpacity>
                 </View>
               ))}
@@ -268,13 +292,13 @@ export default function PurchaseBillsViewScreen() {
         )}
       </ScrollView>
       <BillCorrectionModal
-        visible={Boolean(correctionTarget)}
-        billNumber={correctionTarget?.bill_number}
+        visible={Boolean(deleteTarget)}
+        billNumber={deleteTarget?.bill_number}
         documentLabel="purchase bill"
-        saving={correctingBillId !== null}
-        paymentsCarriedForward
-        onClose={() => setCorrectionTarget(null)}
-        onConfirm={correctBill}
+        action="delete"
+        saving={deletingBillId !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={deleteBill}
       />
     </View>
   );
@@ -409,6 +433,11 @@ const styles = StyleSheet.create({
     paddingTop: 10,
   },
   deleteBillText: {
+    color: '#B45309',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  deleteActionText: {
     color: '#DC2626',
     fontSize: 12,
     fontWeight: '700',

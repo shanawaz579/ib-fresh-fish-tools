@@ -328,6 +328,12 @@ export async function deletePurchase(id: number): Promise<boolean> {
   }
 }
 
+export async function deleteUnbilledPurchaseGroup(ids: number[]): Promise<void> {
+  if (ids.length === 0) throw new Error('No purchase lines selected');
+  const { error } = await supabase.from('purchases').delete().in('id', ids);
+  if (error) throw error;
+}
+
 // Delete a sale
 
 export async function deleteSale(id: number): Promise<boolean> {

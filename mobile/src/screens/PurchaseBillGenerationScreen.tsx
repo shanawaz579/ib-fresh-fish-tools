@@ -66,6 +66,7 @@ export default function PurchaseBillGenerationScreen() {
   const [otherChargesAddition, setOtherChargesAddition] = useState('');
   const [otherChargesDeduction, setOtherChargesDeduction] = useState('');
   const [notes, setNotes] = useState('');
+  const [correctionReason, setCorrectionReason] = useState(correction?.reason || '');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -127,6 +128,7 @@ export default function PurchaseBillGenerationScreen() {
       setOtherChargesAddition(deductionAmount('other_charges_addition'));
       setOtherChargesDeduction(deductionAmount('other_charges_deduction'));
       setNotes(correction.bill.notes || '');
+      setCorrectionReason(correction.reason || '');
     }
   }, [correction, deductionRate, preferences.default_crate_weight_kg, purchases]);
 
@@ -260,8 +262,8 @@ export default function PurchaseBillGenerationScreen() {
       Alert.alert('Check commission', 'Enter a commission rate greater than zero or turn commission off.');
       return;
     }
-    if (isCorrection && (!correction || correction.reason.trim().length < 5)) {
-      Alert.alert('Correction reason required', 'Return to the bills list and enter why this bill is being corrected.');
+    if (isCorrection && correctionReason.trim().length < 5) {
+      Alert.alert('Correction reason required', 'Enter at least 5 characters explaining what was wrong.');
       return;
     }
 
@@ -272,7 +274,7 @@ export default function PurchaseBillGenerationScreen() {
     }
 
     Alert.alert(
-      isCorrection ? 'Save corrected bill?' : 'Generate Bill',
+      isCorrection ? 'Save bill changes?' : 'Generate Bill',
       `Total Amount: ${formatMoney(totals.total, 2)}\n\n${isCorrection ? `This will replace ${correction?.bill.bill_number} and preserve the original in correction history.` : 'Bill will be created and you can add payments later from the bills list.'}`,
       [
         {
@@ -313,7 +315,7 @@ export default function PurchaseBillGenerationScreen() {
                 location,
               };
               const result = isCorrection && correction
-                ? await revisePurchaseBill(correction.bill.id, correction.reason, billParams)
+                ? await revisePurchaseBill(correction.bill.id, correctionReason, billParams)
                 : await createPurchaseBill(billParams);
 
               setSubmitting(false);
@@ -321,7 +323,7 @@ export default function PurchaseBillGenerationScreen() {
               if (result.success) {
                 Alert.alert(
                   'Success',
-                  `${isCorrection ? 'Purchase bill corrected successfully!' : 'Purchase bill created successfully!'}\n\nTotal: ${formatMoney(totals.total, 2)}\n\nYou can now add payments from the bills list.`,
+                  `${isCorrection ? 'Purchase bill updated successfully!' : 'Purchase bill created successfully!'}\n\nTotal: ${formatMoney(totals.total, 2)}\n\nYou can now add payments from the bills list.`,
                   [
                     {
                       text: 'OK',
@@ -351,14 +353,14 @@ export default function PurchaseBillGenerationScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backButton}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{isCorrection ? 'Correct Purchase Bill' : 'Generate Purchase Bill'}</Text>
+        <Text style={styles.headerTitle}>{isCorrection ? 'Edit Purchase Bill' : 'Generate Purchase Bill'}</Text>
       </View>
 
       <ScrollView style={styles.content}>
         {isCorrection ? (
           <View style={styles.correctionCard}>
-            <Text style={styles.correctionTitle}>CORRECTING {correction?.bill.bill_number}</Text>
-            <Text style={styles.correctionText}>All original values are prefilled. Reason: {correction?.reason}</Text>
+            <Text style={styles.correctionTitle}>EDITING {correction?.bill.bill_number}</Text>
+            <Text style={styles.correctionText}>All original items, quantities, rates and charges are prefilled below.</Text>
           </View>
         ) : null}
         {/* Primary supplier and source farmer */}
@@ -598,6 +600,21 @@ export default function PurchaseBillGenerationScreen() {
         </View>
 
         {/* Notes Section */}
+        {isCorrection ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Reason for change *</Text>
+            <TextInput
+              style={styles.notesInput}
+              placeholder="Example: incorrect rate entered"
+              multiline
+              numberOfLines={2}
+              value={correctionReason}
+              onChangeText={setCorrectionReason}
+            />
+          </View>
+        ) : null}
+
+        {/* Notes Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notes (Optional)</Text>
           <TextInput
@@ -628,7 +645,7 @@ export default function PurchaseBillGenerationScreen() {
           {submitting ? (
             <ActivityIndicator color="#FFF" />
           ) : (
-            <Text style={styles.generateButtonText}>{isCorrection ? 'Save Corrected Bill' : 'Generate Bill'}</Text>
+            <Text style={styles.generateButtonText}>{isCorrection ? 'Save Bill Changes' : 'Generate Bill'}</Text>
           )}
         </TouchableOpacity>
 

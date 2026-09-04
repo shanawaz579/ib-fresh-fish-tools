@@ -19,6 +19,8 @@ type Props = {
   quantityKg: string;
   draftItems: PurchaseDraftItem[];
   submitting: boolean;
+  editing: boolean;
+  editingLine: boolean;
   onSupplierChange: (id: number | null) => void;
   onFarmerNameChange: (name: string) => void;
   onLocationChange: (value: string) => void;
@@ -31,6 +33,7 @@ type Props = {
   onEditItem: (index: number) => void;
   onRemoveItem: (index: number) => void;
   onSave: () => void;
+  onCancelEdit: () => void;
 };
 
 export default function PurchaseEntryForm(props: Props) {
@@ -71,10 +74,13 @@ export default function PurchaseEntryForm(props: Props) {
 
   return (
     <View style={styles.formCard}>
-      <Text style={styles.sectionTitle}>New purchase</Text>
+      <View style={styles.formTitleRow}>
+        <Text style={styles.sectionTitle}>{props.editing ? 'Edit purchase' : 'New purchase'}</Text>
+        {props.editing ? <TouchableOpacity onPress={props.onCancelEdit}><Text style={styles.cancelEditText}>Cancel</Text></TouchableOpacity> : null}
+      </View>
 
       <Text style={styles.label}>Primary supplier — this party will be paid *</Text>
-      <TouchableOpacity style={styles.selectField} onPress={() => setShowSupplierPicker(true)}>
+      <TouchableOpacity style={[styles.selectField, props.editing && styles.lockedField]} disabled={props.editing} onPress={() => setShowSupplierPicker(true)}>
         <View style={styles.selectIdentity}>
           <Text style={selectedSupplier ? styles.selectValue : styles.selectPlaceholder}>
             {selectedSupplier?.name ?? 'Search and select supplier'}
@@ -100,6 +106,7 @@ export default function PurchaseEntryForm(props: Props) {
             style={styles.input}
             value={props.farmerName}
             onChangeText={props.onFarmerNameChange}
+            editable={!props.editing}
             placeholder="Enter farmer name"
             autoCapitalize="words"
           />
@@ -111,11 +118,28 @@ export default function PurchaseEntryForm(props: Props) {
         style={styles.input}
         value={props.location}
         onChangeText={props.onLocationChange}
+        editable={!props.editing}
         placeholder="Village, farm or collection point"
       />
 
+      {props.draftItems.length > 0 ? (
+        <View style={styles.draftList}>
+          {props.draftItems.map((item, index) => (
+            <View key={item.purchaseId ?? item.varietyId} style={styles.draftRow}>
+              <View style={styles.draftIdentity}>
+                <Text style={styles.draftName}>{item.varietyName}</Text>
+                <Text style={styles.draftQuantity}>{[item.crates > 0 ? `${item.crates} cr` : '', item.kg > 0 ? `${item.kg} kg` : ''].filter(Boolean).join(' · ')}</Text>
+              </View>
+              <TouchableOpacity onPress={() => props.onEditItem(index)} hitSlop={8}><Text style={styles.editText}>Edit</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => props.onRemoveItem(index)} hitSlop={8}><Text style={styles.deleteText}>Remove</Text></TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
       <View style={styles.divider} />
-      <Text style={styles.subsectionTitle}>Add item and grade</Text>
+      <Text style={styles.subsectionTitle}>{props.editing ? 'Edit an item' : 'Add item and grade'}</Text>
+      {props.editing && !props.editingLine ? <Text style={styles.quantityHint}>Tap Edit on an item above to change its item, crates or kg.</Text> : null}
       {frequentVarieties.length > 0 ? (
         <View style={styles.frequentSection}>
           <Text style={styles.frequentTitle}>Frequently used</Text>
@@ -126,6 +150,7 @@ export default function PurchaseEntryForm(props: Props) {
                 <TouchableOpacity
                   key={variant.id}
                   style={[styles.frequentChip, selected && styles.frequentChipSelected]}
+                  disabled={props.editing && !props.editingLine}
                   onPress={() => props.onVarietyChange(variant.id)}
                 >
                   <Text style={[styles.frequentChipText, selected && styles.frequentChipTextSelected]} numberOfLines={1}>
@@ -137,7 +162,7 @@ export default function PurchaseEntryForm(props: Props) {
           </View>
         </View>
       ) : null}
-      <TouchableOpacity style={styles.selectField} onPress={() => setShowItemPicker(true)}>
+      <TouchableOpacity style={styles.selectField} disabled={props.editing && !props.editingLine} onPress={() => setShowItemPicker(true)}>
         <View style={styles.selectIdentity}>
           <Text style={selectedVariety ? styles.selectValue : styles.selectPlaceholder} numberOfLines={1}>
             {selectedVariety?.name ?? 'Search item or grade'}
@@ -158,6 +183,7 @@ export default function PurchaseEntryForm(props: Props) {
             onChangeText={props.onCratesChange}
             placeholder="0"
             keyboardType="number-pad"
+            editable={!props.editing || props.editingLine}
           />
         </View>
         <View style={styles.fieldColumn}>
@@ -168,38 +194,15 @@ export default function PurchaseEntryForm(props: Props) {
             onChangeText={props.onKgChange}
             placeholder="0"
             keyboardType="decimal-pad"
+            editable={!props.editing || props.editingLine}
           />
         </View>
       </View>
       <Text style={styles.quantityHint}>Enter crates, kg, or both. At least one is required.</Text>
 
-      <TouchableOpacity style={styles.addItemButton} onPress={props.onAddItem}>
-        <Text style={styles.addItemButtonText}>+ Add to purchase</Text>
+      <TouchableOpacity style={[styles.addItemButton, props.editing && !props.editingLine && styles.disabledButton]} disabled={props.editing && !props.editingLine} onPress={props.onAddItem}>
+        <Text style={styles.addItemButtonText}>{props.editing ? 'Update item' : '+ Add to purchase'}</Text>
       </TouchableOpacity>
-
-      {props.draftItems.length > 0 ? (
-        <View style={styles.draftList}>
-          {props.draftItems.map((item, index) => (
-            <View key={item.varietyId} style={styles.draftRow}>
-              <View style={styles.draftIdentity}>
-                <Text style={styles.draftName}>{item.varietyName}</Text>
-                <Text style={styles.draftQuantity}>
-                  {[
-                    item.crates > 0 ? `${item.crates} cr` : '',
-                    item.kg > 0 ? `${item.kg} kg` : '',
-                  ].filter(Boolean).join(' · ')}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={() => props.onEditItem(index)} hitSlop={8}>
-                <Text style={styles.editText}>Edit</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => props.onRemoveItem(index)} hitSlop={8}>
-                <Text style={styles.deleteText}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-        </View>
-      ) : null}
 
       <TouchableOpacity
         style={[styles.saveButton, (props.submitting || props.draftItems.length === 0) && styles.disabledButton]}
@@ -209,7 +212,7 @@ export default function PurchaseEntryForm(props: Props) {
         {props.submitting ? (
           <ActivityIndicator color="#FFFFFF" />
         ) : (
-          <Text style={styles.saveButtonText}>Save purchase ({props.draftItems.length})</Text>
+          <Text style={styles.saveButtonText}>{props.editing ? `Save changes (${props.draftItems.length})` : `Save purchase (${props.draftItems.length})`}</Text>
         )}
       </TouchableOpacity>
 

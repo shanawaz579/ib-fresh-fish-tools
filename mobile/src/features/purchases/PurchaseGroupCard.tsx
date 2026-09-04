@@ -10,9 +10,10 @@ type Props = {
   onToggle: () => void;
   onEdit: () => void;
   onBill: (purchases: Purchase[]) => void;
+  onDelete: () => void;
 };
 
-export default function PurchaseGroupCard({ group, collapsed, onToggle, onEdit, onBill }: Props) {
+export default function PurchaseGroupCard({ group, collapsed, onToggle, onEdit, onBill, onDelete }: Props) {
   const unbilled = group.purchases.filter((purchase) => purchase.billing_status === 'unbilled');
   const totalCrates = group.purchases.reduce((sum, purchase) => sum + purchase.quantity_crates, 0);
   const totalKg = group.purchases.reduce((sum, purchase) => sum + Number(purchase.quantity_kg), 0);
@@ -42,6 +43,11 @@ export default function PurchaseGroupCard({ group, collapsed, onToggle, onEdit, 
           {unbilled.length > 0 ? (
             <TouchableOpacity style={styles.editGroupButton} onPress={onEdit}>
               <Text style={styles.editGroupButtonText}>Edit</Text>
+            </TouchableOpacity>
+          ) : null}
+          {unbilled.length > 0 ? (
+            <TouchableOpacity style={styles.editGroupButton} onPress={onDelete}>
+              <Text style={styles.deleteText}>Delete</Text>
             </TouchableOpacity>
           ) : null}
           {unbilled.length > 0 ? (
