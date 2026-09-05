@@ -152,9 +152,8 @@ export default StyleSheet.create({
   stockChip: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderRadius: 9, borderWidth: 1, flex: 1, minHeight: 58, paddingHorizontal: 10, paddingVertical: 8 },
   stockChipSpacer: { flex: 1 },
   stockChipName: { color: '#064E3B', fontSize: 11, fontWeight: '800' },
-  stockChipMetrics: { alignItems: 'baseline', flexDirection: 'row', justifyContent: 'space-between', marginTop: 5 },
-  stockChipTotal: { color: '#047857', fontSize: 12, fontWeight: '900' },
-  stockChipQty: { color: '#6B7280', fontSize: 9, fontWeight: '700' },
+  stockChipMetrics: { marginTop: 5 },
+  stockChipQty: { color: '#047857', fontSize: 12, fontWeight: '900' },
   stockMoreButton: { alignItems: 'center', alignSelf: 'center', flexDirection: 'row', gap: 5, marginTop: 10, paddingHorizontal: 14, paddingVertical: 6 },
   stockMoreText: { color: '#2563EB', fontSize: 11, fontWeight: '800' },
   stockMoreIcon: { color: '#2563EB', fontSize: 12, fontWeight: '900' },
@@ -306,6 +305,9 @@ export default StyleSheet.create({
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
+  },
+  saleSubmitSpacing: {
+    marginTop: 16,
   },
   saveAllButtonText: {
     color: '#fff',

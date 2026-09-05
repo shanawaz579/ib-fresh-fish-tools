@@ -10,59 +10,79 @@ import {
   Alert,
 } from 'react-native';
 import { getSalesByDate, getPackingStatusByDate, togglePackingStatus, clearPackingStatusByDate, getCustomers } from '../api/stock';
-import type { Sale, Customer } from '../types';
+import type { Sale } from '../types';
 import { useAuth } from '../context/AuthContext';
-import DateNavigator from '../components/DateNavigator';
-import { getTotalWeightKg } from '../domain/fish';
 import { useBusinessDate } from '../hooks/useBusinessDate';
+import { addDays, formatBusinessDate, toLocalDateString } from '../utils/date';
+import { useNavigation } from '@react-navigation/native';
+import { extractFishSize } from '../domain/fish';
 
 interface PackingItem {
   saleId: number;
   fishVarietyName: string;
   quantityCrates: number;
   quantityKg: number;
-  totalWeight: number;
-  loaded: boolean;
 }
 
 interface CustomerGroup {
   customerId: number;
   customerName: string;
   items: PackingItem[];
-  totalBoxes: number;
+  totalCrates: number;
+  totalKg: number;
+}
+
+const PACKING_GRADE_ORDER = ['OB', 'B', 'M', 'S'];
+
+function sortPackingItems(items: PackingItem[]) {
+  const groupTotals = items.reduce((groups, item) => {
+    const fishName = extractFishSize(item.fishVarietyName).name.toLocaleLowerCase();
+    const current = groups.get(fishName) ?? { crates: 0, kg: 0 };
+    current.crates += item.quantityCrates;
+    current.kg += item.quantityKg;
+    groups.set(fishName, current);
+    return groups;
+  }, new Map<string, { crates: number; kg: number }>());
+
+  items.sort((a, b) => {
+    const aFish = extractFishSize(a.fishVarietyName);
+    const bFish = extractFishSize(b.fishVarietyName);
+    const aKey = aFish.name.toLocaleLowerCase();
+    const bKey = bFish.name.toLocaleLowerCase();
+    const aTotal = groupTotals.get(aKey) ?? { crates: 0, kg: 0 };
+    const bTotal = groupTotals.get(bKey) ?? { crates: 0, kg: 0 };
+
+    if (aKey !== bKey) {
+      return bTotal.crates - aTotal.crates || bTotal.kg - aTotal.kg || aFish.name.localeCompare(bFish.name);
+    }
+
+    const aGrade = PACKING_GRADE_ORDER.indexOf(aFish.size);
+    const bGrade = PACKING_GRADE_ORDER.indexOf(bFish.size);
+    return (aGrade === -1 ? PACKING_GRADE_ORDER.length : aGrade)
+      - (bGrade === -1 ? PACKING_GRADE_ORDER.length : bGrade)
+      || a.fishVarietyName.localeCompare(b.fishVarietyName)
+      || a.saleId - b.saleId;
+  });
 }
 
 const translations = {
   en: {
     title: 'Packing List',
     customer: 'Customer',
-    boxes: 'Boxes',
-    total: 'Total Boxes',
+    crates: 'cr',
     loaded: 'Loaded',
-    noSales: 'No sales for today',
+    noSales: 'No sales to pack for this day',
     logout: 'Logout',
     inProgress: 'In Progress',
     completed: 'Completed',
   },
 };
 
-// Colors for different customers
-const CUSTOMER_COLORS = [
-  '#3B82F6', // Blue
-  '#10B981', // Green
-  '#F59E0B', // Orange
-  '#8B5CF6', // Purple
-  '#EF4444', // Red
-  '#06B6D4', // Cyan
-  '#EC4899', // Pink
-  '#F97316', // Orange-red
-];
-
 export default function PackingScreen() {
-  const { signOut, user } = useAuth();
-  const { date, goToPreviousDay, goToNextDay, goToToday } = useBusinessDate();
+  const navigation = useNavigation();
+  const { signOut, user, isPacker } = useAuth();
+  const { date, setDate } = useBusinessDate();
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);
-  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadedItems, setLoadedItems] = useState<Set<number>>(new Set());
@@ -74,14 +94,6 @@ export default function PackingScreen() {
   useEffect(() => {
     loadData();
   }, [date]);
-
-  useEffect(() => {
-    // Auto-expand all in-progress customers
-    const inProgressCustomers = customerGroups
-      .filter(g => g.items.some(item => !loadedItems.has(item.saleId)))
-      .map(g => g.customerId);
-    setExpandedCustomers(new Set(inProgressCustomers));
-  }, [customerGroups, loadedItems]);
 
   const loadData = async (isRefreshing = false) => {
     if (isRefreshing) {
@@ -95,8 +107,6 @@ export default function PackingScreen() {
       getPackingStatusByDate(date),
       getCustomers(),
     ]);
-    setCustomers(customersData);
-
     // Update loadedItems state from database
     setLoadedItems(new Set(
       Array.from(packingStatusMap.entries())
@@ -113,27 +123,27 @@ export default function PackingScreen() {
           customerId,
           customerName: sale.customer_name || 'Unknown Customer',
           items: [],
-          totalBoxes: 0,
+          totalCrates: 0,
+          totalKg: 0,
         };
       }
-
-      const totalWeight = getTotalWeightKg(sale.quantity_crates, sale.quantity_kg);
 
       acc[customerId].items.push({
         saleId: sale.id,
         fishVarietyName: sale.fish_variety_name || 'Unknown Fish',
         quantityCrates: sale.quantity_crates,
         quantityKg: sale.quantity_kg,
-        totalWeight,
-        loaded: packingStatusMap.get(sale.id) || false,
       });
 
-      acc[customerId].totalBoxes += sale.quantity_crates;
+      acc[customerId].totalCrates += sale.quantity_crates;
+      acc[customerId].totalKg += sale.quantity_kg;
 
       return acc;
     }, {});
 
-    // Sort customer groups: Wholesale Market first, then others, both sorted by total boxes descending
+    Object.values(grouped).forEach(group => sortPackingItems(group.items));
+
+    // Sort customer groups: Wholesale Market first, then others, both sorted by quantity descending.
     const sortedGroups = Object.values(grouped).sort((a, b) => {
       const customerA = customersData.find(c => c.id === a.customerId);
       const customerB = customersData.find(c => c.id === b.customerId);
@@ -145,8 +155,8 @@ export default function PackingScreen() {
       if (isWholesaleA && !isWholesaleB) return -1;
       if (!isWholesaleA && isWholesaleB) return 1;
 
-      // Within each group, sort by total boxes (descending)
-      return b.totalBoxes - a.totalBoxes;
+      // Largest packing jobs first.
+      return b.totalCrates - a.totalCrates || b.totalKg - a.totalKg;
     });
 
     setCustomerGroups(sortedGroups);
@@ -211,6 +221,14 @@ export default function PackingScreen() {
     return group.items.every(item => loadedItems.has(item.saleId));
   };
 
+  const today = toLocalDateString();
+  const yesterday = addDays(today, -1);
+  const inProgressGroups = customerGroups.filter(group => !isCustomerCompleted(group));
+  const completedGroups = customerGroups.filter(isCustomerCompleted);
+  const packedLines = customerGroups.reduce((total, group) => total + group.items.filter(item => loadedItems.has(item.saleId)).length, 0);
+  const totalLines = customerGroups.reduce((total, group) => total + group.items.length, 0);
+  const formatQuantity = (crates: number, kg: number) => [crates > 0 ? `${crates} cr` : '', kg > 0 ? `${kg} kg` : ''].filter(Boolean).join(' · ') || '0';
+
   const handleLogout = () => {
     Alert.alert(
       t.logout,
@@ -249,18 +267,25 @@ export default function PackingScreen() {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Text style={styles.title}>📦 {t.title}</Text>
+        <View style={styles.headerIdentity}>
+          {!isPacker && navigation.canGoBack() ? <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}><Text style={styles.backText}>←</Text></TouchableOpacity> : null}
+          <View><Text style={styles.title}>{t.title}</Text><Text style={styles.subtitle}>Prepare and confirm customer loads</Text></View>
+        </View>
         <View style={styles.headerButtons}>
           <TouchableOpacity onPress={handleResetPackingStatus} style={styles.resetButton}>
             <Text style={styles.resetText}>Reset</Text>
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+          {isPacker ? <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <Text style={styles.logoutText}>{t.logout}</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> : null}
         </View>
       </View>
 
-      <DateNavigator date={date} onPrevious={goToPreviousDay} onNext={goToNextDay} onToday={goToToday} />
+      <View style={styles.daySelector}>
+        <TouchableOpacity style={[styles.dayOption, date === today && styles.dayOptionActive]} onPress={() => setDate(today)}><Text style={[styles.dayOptionText, date === today && styles.dayOptionTextActive]}>Today</Text></TouchableOpacity>
+        <TouchableOpacity style={[styles.dayOption, date === yesterday && styles.dayOptionActive]} onPress={() => setDate(yesterday)}><Text style={[styles.dayOptionText, date === yesterday && styles.dayOptionTextActive]}>Yesterday</Text></TouchableOpacity>
+        <Text style={styles.selectedDate}>{formatBusinessDate(date)}</Text>
+      </View>
 
       <ScrollView
         style={styles.content}
@@ -277,13 +302,17 @@ export default function PackingScreen() {
           </View>
         ) : (
           <>
+            <View style={styles.progressCard}>
+              <View><Text style={styles.progressLabel}>PACKING PROGRESS</Text><Text style={styles.progressValue}>{packedLines} of {totalLines} items loaded</Text></View>
+              <View style={styles.progressCount}><Text style={styles.progressCountValue}>{inProgressGroups.length}</Text><Text style={styles.progressCountLabel}>PENDING</Text></View>
+            </View>
             {/* In Progress Section */}
-            {customerGroups.filter(g => !isCustomerCompleted(g)).length > 0 && (
+            {inProgressGroups.length > 0 && (
               <>
                 <View style={styles.sectionHeader}>
-                  <Text style={styles.sectionTitle}>📦 {t.inProgress}</Text>
+                  <Text style={styles.sectionTitle}>{t.inProgress}</Text><Text style={styles.sectionMeta}>{inProgressGroups.length} customers</Text>
                 </View>
-                {customerGroups.map((group, index) => {
+                {customerGroups.map((group) => {
                   if (isCustomerCompleted(group)) return null;
 
                   const isExpanded = expandedCustomers.has(group.customerId);
@@ -291,23 +320,17 @@ export default function PackingScreen() {
                   return (
                     <View
                       key={`progress-${group.customerId}`}
-                      style={[
-                        styles.customerCard,
-                        { borderLeftColor: CUSTOMER_COLORS[index % CUSTOMER_COLORS.length] }
-                      ]}
+                      style={styles.customerCard}
                     >
                       <TouchableOpacity
-                        style={[
-                          styles.customerHeader,
-                          { backgroundColor: CUSTOMER_COLORS[index % CUSTOMER_COLORS.length] }
-                        ]}
+                        style={styles.customerHeader}
                         onPress={() => toggleCustomerExpanded(group.customerId)}
                       >
                         <Text style={styles.customerName}>
                           {group.customerName}
                         </Text>
                         <Text style={styles.customerTotal}>
-                          {group.totalBoxes} Boxes
+                          {formatQuantity(group.totalCrates, group.totalKg)}
                         </Text>
                         <Text style={styles.expandIcon}>
                           {isExpanded ? '▼' : '▶'}
@@ -317,7 +340,7 @@ export default function PackingScreen() {
                       {isExpanded && group.items.map((item) => (
                         <View key={item.saleId} style={styles.itemCard}>
                           <Text style={styles.fishName}>{item.fishVarietyName}</Text>
-                          <Text style={styles.boxCount}>{item.quantityCrates} Boxes</Text>
+                          <Text style={styles.boxCount}>{formatQuantity(item.quantityCrates, item.quantityKg)}</Text>
                           <TouchableOpacity
                             style={[
                               styles.checkbox,
@@ -338,21 +361,21 @@ export default function PackingScreen() {
             )}
 
             {/* Completed Section */}
-            {customerGroups.filter(g => isCustomerCompleted(g)).length > 0 && (
+            {completedGroups.length > 0 && (
               <>
                 <TouchableOpacity
                   style={styles.sectionHeader}
                   onPress={() => setCompletedSectionExpanded(!completedSectionExpanded)}
                 >
                   <Text style={styles.sectionTitle}>
-                    ✅ {t.completed} ({customerGroups.filter(g => isCustomerCompleted(g)).length})
+                    ✓ {t.completed} ({completedGroups.length})
                   </Text>
                   <Text style={styles.sectionExpandIcon}>
                     {completedSectionExpanded ? '▼' : '▶'}
                   </Text>
                 </TouchableOpacity>
 
-                {completedSectionExpanded && customerGroups.map((group, index) => {
+                {completedSectionExpanded && customerGroups.map((group) => {
                   if (!isCustomerCompleted(group)) return null;
 
                   const isExpanded = expandedCustomers.has(group.customerId);
@@ -363,14 +386,12 @@ export default function PackingScreen() {
                       style={[
                         styles.customerCard,
                         styles.completedCard,
-                        { borderLeftColor: CUSTOMER_COLORS[index % CUSTOMER_COLORS.length] }
                       ]}
                     >
                       <TouchableOpacity
                         style={[
                           styles.customerHeader,
                           styles.completedHeader,
-                          { backgroundColor: CUSTOMER_COLORS[index % CUSTOMER_COLORS.length] }
                         ]}
                         onPress={() => toggleCustomerExpanded(group.customerId)}
                       >
@@ -378,7 +399,7 @@ export default function PackingScreen() {
                           {group.customerName}
                         </Text>
                         <Text style={styles.customerTotal}>
-                          {group.totalBoxes} Boxes
+                          {formatQuantity(group.totalCrates, group.totalKg)}
                         </Text>
                         <Text style={styles.expandIcon}>
                           {isExpanded ? '▼' : '▶'}
@@ -388,7 +409,7 @@ export default function PackingScreen() {
                       {isExpanded && group.items.map((item) => (
                         <View key={item.saleId} style={[styles.itemCard, styles.completedItem]}>
                           <Text style={[styles.fishName, styles.completedText]}>{item.fishVarietyName}</Text>
-                          <Text style={[styles.boxCount, styles.completedText]}>{item.quantityCrates} Boxes</Text>
+                          <Text style={[styles.boxCount, styles.completedText]}>{formatQuantity(item.quantityCrates, item.quantityKg)}</Text>
                           <TouchableOpacity
                             style={[styles.checkbox, styles.checkboxChecked]}
                             onPress={() => toggleLoaded(item.saleId)}

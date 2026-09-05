@@ -118,7 +118,7 @@ export default function SalesEntryForm(props: Props) {
           <Text style={styles.quantityHint}>Enter crates, kg, or both. At least one is required.</Text>
           <TouchableOpacity style={styles.addItemButton} onPress={props.onAdd}><Text style={styles.addItemButtonText}>{props.editingDraft ? 'Update item' : '+ Add to sale'}</Text></TouchableOpacity>
 
-          <TouchableOpacity style={[styles.saveAllButton, (props.submitting || props.editingDraft || props.drafts.length === 0) && styles.submitButtonDisabled]} onPress={props.onSave} disabled={props.submitting || props.editingDraft || props.drafts.length === 0}>{props.submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveAllButtonText}>{props.editingDraft ? 'Update the item first' : props.editing ? `Save changes (${props.drafts.length})` : `Save sale (${props.drafts.length})`}</Text>}</TouchableOpacity>
+          <TouchableOpacity style={[styles.saveAllButton, styles.saleSubmitSpacing, (props.submitting || props.editingDraft || props.drafts.length === 0) && styles.submitButtonDisabled]} onPress={props.onSave} disabled={props.submitting || props.editingDraft || props.drafts.length === 0}>{props.submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveAllButtonText}>{props.editingDraft ? 'Update the item first' : props.editing ? `Save changes (${props.drafts.length})` : `Save sale (${props.drafts.length})`}</Text>}</TouchableOpacity>
         </>
       ) : null}
 

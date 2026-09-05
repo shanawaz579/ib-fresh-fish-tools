@@ -17,8 +17,9 @@ import {
 import type { Sale, Customer } from '../types';
 import type { StockSnapshot } from '../domain/stockLedger';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
 import DateNavigator from '../components/DateNavigator';
-import { extractFishSize, getFishVarietySortKey, getTotalWeightKg } from '../domain/fish';
+import { extractFishSize, getTotalWeightKg } from '../domain/fish';
 import { useBusinessDate } from '../hooks/useBusinessDate';
 
 type Language = 'en' | 'te';
@@ -39,9 +40,12 @@ interface CustomerSalesGroup {
   totalKg: number;
 }
 
+const DASHBOARD_GRADE_ORDER = ['OB', 'B', 'M', 'S'];
+
 const translations = {
   en: {
     title: 'Stock Dashboard',
+    subtitle: 'Daily stock at a glance',
     fish: 'Fish',
     sales: 'Sales',
     availableTotal: 'Available/Total',
@@ -54,6 +58,9 @@ const translations = {
     noStock: 'No stock data for today',
     totalPurchases: 'Total Purchases',
     totalSales: 'Total Sales',
+    availableStock: 'Available stock',
+    inwardToday: 'Inward today',
+    soldToday: 'Sold today',
     netBalance: 'Net Balance',
     stockOverview: 'Stock Overview',
     criticalStock: 'Critical Stock',
@@ -66,6 +73,7 @@ const translations = {
   },
   te: {
     title: 'స్టాక్ డాష్‌బోర్డ్',
+    subtitle: 'రోజువారీ స్టాక్ ఒకే చూపులో',
     fish: 'చేప',
     sales: 'అమ్మకాలు',
     availableTotal: 'అందుబాటులో/మొత్తం',
@@ -78,6 +86,9 @@ const translations = {
     noStock: 'ఈరోజు స్టాక్ డేటా లేదు',
     totalPurchases: 'మొత్తం కొనుగోలు',
     totalSales: 'మొత్తం అమ్మకాలు',
+    availableStock: 'అందుబాటులో ఉన్న స్టాక్',
+    inwardToday: 'ఈరోజు లోపలికి',
+    soldToday: 'ఈరోజు అమ్మకాలు',
     netBalance: 'నికర బ్యాలెన్స్',
     stockOverview: 'స్టాక్ సమీక్ష',
     criticalStock: 'క్రిటికల్ స్టాక్',
@@ -91,6 +102,7 @@ const translations = {
 };
 
 export default function DashboardScreen() {
+  const navigation = useNavigation();
   const { user, isAdmin, signOut } = useAuth();
   const [language, setLanguage] = useState<Language>('en');
   const { date, goToPreviousDay, goToNextDay, goToToday } = useBusinessDate();
@@ -151,15 +163,39 @@ export default function DashboardScreen() {
   };
 
   // Calculate stock summary
-  const stockSummary: StockSummary[] = stockSnapshot
-    .map((snapshot) => ({
+  const stockSummary: StockSummary[] = stockSnapshot.map((snapshot) => ({
       varietyId: snapshot.itemVariantId,
       varietyName: snapshot.variantName,
       purchased: { crates: snapshot.inwardCrates, kg: snapshot.inwardKg },
       sold: { crates: snapshot.outwardCrates, kg: snapshot.outwardKg },
       balance: { crates: snapshot.closingCrates, kg: snapshot.closingKg },
-    }))
-    .sort((a, b) => getFishVarietySortKey(a.varietyName) - getFishVarietySortKey(b.varietyName));
+    }));
+
+  const groupTotals = stockSummary.reduce((groups, item) => {
+    const groupName = extractFishSize(item.varietyName).name.toLocaleLowerCase();
+    const current = groups.get(groupName) ?? { crates: 0, kg: 0 };
+    current.crates += item.balance.crates;
+    current.kg += item.balance.kg;
+    groups.set(groupName, current);
+    return groups;
+  }, new Map<string, { crates: number; kg: number }>());
+
+  stockSummary.sort((a, b) => {
+    const aFish = extractFishSize(a.varietyName);
+    const bFish = extractFishSize(b.varietyName);
+    const aGroup = groupTotals.get(aFish.name.toLocaleLowerCase()) ?? { crates: 0, kg: 0 };
+    const bGroup = groupTotals.get(bFish.name.toLocaleLowerCase()) ?? { crates: 0, kg: 0 };
+    const groupOrder = bGroup.crates - aGroup.crates
+      || bGroup.kg - aGroup.kg
+      || aFish.name.localeCompare(bFish.name);
+    if (aFish.name.toLocaleLowerCase() !== bFish.name.toLocaleLowerCase()) return groupOrder;
+
+    const aGrade = DASHBOARD_GRADE_ORDER.indexOf(aFish.size);
+    const bGrade = DASHBOARD_GRADE_ORDER.indexOf(bFish.size);
+    return (aGrade === -1 ? DASHBOARD_GRADE_ORDER.length : aGrade)
+      - (bGrade === -1 ? DASHBOARD_GRADE_ORDER.length : bGrade)
+      || a.varietyName.localeCompare(b.varietyName);
+  });
 
   // Calculate totals
   const totals = stockSummary.reduce(
@@ -187,6 +223,11 @@ export default function DashboardScreen() {
     if ((balance.crates > 0 && balance.crates < 10) || (balance.kg > 0 && balance.kg < 50)) return 'low';
     return 'good';
   };
+
+  const formatQuantity = (crates: number, kg: number) => [
+    `${crates} ${t.cr}`,
+    `${kg.toFixed(1)} ${t.kg}`,
+  ].join(' · ');
 
   // Group sales by customer
   const customerSalesGroups: CustomerSalesGroup[] = sales.reduce((acc, sale) => {
@@ -245,10 +286,8 @@ export default function DashboardScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <Text style={styles.title}>{t.title}</Text>
-          {!isAdmin && user?.email && (
-            <Text style={styles.userEmail}>{user.email}</Text>
-          )}
+          {navigation.canGoBack() ? <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}><Text style={styles.backButtonText}>←</Text></TouchableOpacity> : null}
+          <View style={styles.headerCopy}><Text style={styles.title}>{t.title}</Text><Text style={styles.headerSubtitle}>{t.subtitle}</Text></View>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity onPress={toggleLanguage} style={styles.languageButton}>
@@ -266,6 +305,7 @@ export default function DashboardScreen() {
 
       <ScrollView
         style={styles.content}
+        contentContainerStyle={styles.contentContainer}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3B82F6']} tintColor="#3B82F6" />
         }
@@ -274,26 +314,21 @@ export default function DashboardScreen() {
           <ActivityIndicator size="large" color="#3B82F6" style={styles.loader} />
         ) : (
           <>
-            {/* Summary Cards */}
+            {/* Proprietor summary */}
             <View style={styles.summaryContainer}>
-              <View style={[styles.summaryCard, styles.salesCard]}>
-                <Text style={styles.summaryLabel}>{t.totalSales}</Text>
-                <Text style={styles.summaryValue}>{totals.soldCrates}</Text>
-                <Text style={styles.summarySubValue}>{totals.soldKg.toFixed(1)} {t.kg}</Text>
-              </View>
-
-              <View style={[styles.summaryCard, styles.balanceCard]}>
-                <Text style={styles.summaryLabel}>{t.netBalance}</Text>
-                <Text style={[styles.summaryValue, totals.balanceCrates < 0 && styles.negativeValue]}>
-                  {totals.balanceCrates}
-                </Text>
-                <Text style={styles.summarySubValue}>{totals.balanceKg.toFixed(1)} {t.kg}</Text>
+              <View style={styles.summaryCard}>
+                <Text style={styles.summaryLabel}>{t.availableStock}</Text>
+                <Text style={[styles.summaryValue, (totals.balanceCrates < 0 || totals.balanceKg < 0) && styles.negativeValue]}>{formatQuantity(totals.balanceCrates, totals.balanceKg)}</Text>
+                <View style={styles.summaryFlowRow}>
+                  <View style={styles.summaryFlowItem}><Text style={styles.summaryFlowLabel}>{t.inwardToday}</Text><Text style={styles.summaryFlowIn}>+ {formatQuantity(totals.purchasedCrates, totals.purchasedKg)}</Text></View>
+                  <View style={[styles.summaryFlowItem, styles.summaryFlowDivider]}><Text style={styles.summaryFlowLabel}>{t.soldToday}</Text><Text style={styles.summaryFlowOut}>− {formatQuantity(totals.soldCrates, totals.soldKg)}</Text></View>
+                </View>
               </View>
             </View>
 
             {/* Stock Overview */}
             <View style={styles.stockOverviewContainer}>
-              <Text style={styles.sectionTitle}>{t.stockOverview}</Text>
+              <View style={styles.sectionHeading}><View><Text style={styles.sectionTitle}>{t.stockOverview}</Text><Text style={styles.sectionSubtitle}>{t.availableStock} · {t.soldToday}</Text></View><View style={styles.itemCountBadge}><Text style={styles.itemCountText}>{stockSummary.length}</Text></View></View>
 
               {stockSummary.length === 0 ? (
                 <Text style={styles.emptyText}>{t.noStock}</Text>
@@ -305,10 +340,10 @@ export default function DashboardScreen() {
                       <Text style={styles.tableHeaderText}>{t.fish}</Text>
                     </View>
                     <View style={styles.dataColumn}>
-                      <Text style={[styles.tableHeaderText, styles.tableHeaderRight]}>Available</Text>
+                      <Text style={[styles.tableHeaderText, styles.tableHeaderRight]}>{t.availableStock}</Text>
                     </View>
                     <View style={styles.dataColumn}>
-                      <Text style={[styles.tableHeaderText, styles.tableHeaderRight]}>{t.sales}</Text>
+                      <Text style={[styles.tableHeaderText, styles.tableHeaderRight]}>{t.soldToday}</Text>
                     </View>
                   </View>
 
@@ -322,7 +357,6 @@ export default function DashboardScreen() {
                         style={[
                           styles.tableRow,
                           status === 'critical' && styles.criticalRow,
-                          status === 'low' && styles.lowRow,
                         ]}
                       >
                         {/* Fish Name Column */}
@@ -349,7 +383,7 @@ export default function DashboardScreen() {
                             styles.dataValue,
                             item.balance.crates < 0 ? styles.balanceNegative : styles.balancePositive,
                           ]}>
-                            {item.balance.crates}
+                            {item.balance.crates} {t.cr}
                           </Text>
                           {item.balance.kg !== 0 && (
                             <Text style={[
@@ -364,7 +398,7 @@ export default function DashboardScreen() {
                         {/* Sales Column */}
                         <View style={styles.dataColumn}>
                           <Text style={[styles.dataValue, styles.salesColor]}>
-                            {item.sold.crates}
+                            {item.sold.crates > 0 ? `${item.sold.crates} ${t.cr}` : '—'}
                           </Text>
                           {item.sold.kg > 0 && (
                             <Text style={styles.dataSubValue}>

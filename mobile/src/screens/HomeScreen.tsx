@@ -50,7 +50,7 @@ export default function HomeScreen({ navigation }: Props) {
   const hasDailyWork = modules.purchases || modules.sales || modules.packing;
   const hasAccounts = modules.customer_billing || modules.supplier_billing || modules.expenses;
   const hasOverview = modules.inventory || modules.customer_billing || modules.supplier_billing || modules.cashbook;
-  const hasReports = modules.customer_billing || modules.supplier_billing || modules.profitability;
+  const hasReports = modules.sales || modules.purchases || modules.customer_billing || modules.supplier_billing || modules.profitability;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -104,6 +104,7 @@ export default function HomeScreen({ navigation }: Props) {
           {hasReports ? <View style={styles.secondarySection}>
             <Text style={styles.secondaryTitle}>REPORTS & HISTORY</Text>
             <View style={styles.secondaryGrid}>
+              {(modules.sales || modules.purchases) ? <SecondaryRow icon="⌕" label="Item activity" hint="Items by customer or supplier" onPress={() => navigation.navigate('ItemsByCustomer')} /> : null}
               {modules.customer_billing ? <SecondaryRow icon="▤" label="Sales bill history" hint="Find and correct customer bills" last={!modules.supplier_billing && !modules.profitability} onPress={() => navigation.navigate('BillsView')} /> : null}
               {modules.supplier_billing ? <SecondaryRow icon="▤" label="Purchase bill history" hint="Review supplier bills" last={!modules.profitability} onPress={() => navigation.navigate('PurchaseBillsView')} /> : null}
               {modules.profitability ? <SecondaryRow icon="↗" label="Profitability" hint="Revenue, costs and profit" last onPress={() => navigation.navigate('Profitability')} /> : null}

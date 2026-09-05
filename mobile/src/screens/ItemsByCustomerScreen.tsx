@@ -1,392 +1,48 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
-import { getSalesByDate } from '../api/stock';
-import type { Sale } from '../types';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DateNavigator from '../components/DateNavigator';
-import { extractFishSize } from '../domain/fish';
-import { useBusinessDate } from '../hooks/useBusinessDate';
-
-interface CustomerPurchase {
-  customerId: number;
-  customerName: string;
-  quantityCrates: number;
-  quantityKg: number;
-}
-
-interface ItemGroup {
-  varietyId: number;
-  varietyName: string;
-  totalCrates: number;
-  totalKg: number;
-  customers: CustomerPurchase[];
-}
+import SearchableSelectModal, { type SearchableOption } from '../components/SearchableSelectModal';
+import { useItemActivity } from '../features/itemActivity/useItemActivity';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import styles from '../styles/ItemActivityScreen.styles';
 
 export default function ItemsByCustomerScreen() {
-  const { date, goToPreviousDay, goToNextDay, goToToday } = useBusinessDate();
-  const [itemGroups, setItemGroups] = useState<ItemGroup[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const activity = useItemActivity();
+  const [showItems, setShowItems] = useState(false);
+  const [showParties, setShowParties] = useState(false);
+  const selectedItem = activity.varieties.find(item => item.id === activity.selectedVarietyId);
+  const selectedParty = activity.parties.find(party => party.id === activity.selectedPartyId);
+  const itemOptions = useMemo<SearchableOption[]>(() => activity.varieties.map(item => ({ id:item.id,label:item.name,group:item.item_name,detail:item.variant_code,searchText:[item.item_name,item.item_code,item.grade_code].filter(Boolean).join(' ') })), [activity.varieties]);
+  const partyOptions = useMemo<SearchableOption[]>(() => [{ id:0,label:`All ${activity.mode === 'sales' ? 'customers' : 'suppliers'}` }, ...activity.parties.map(party => ({ id:party.id,label:party.name }))], [activity.mode, activity.parties]);
+  const quantity = (crates:number, kg:number) => [crates ? `${crates} cr` : '', kg ? `${kg} kg` : ''].filter(Boolean).join(' · ') || '0';
 
-  useEffect(() => {
-    loadData();
-  }, [date]);
-
-  const loadData = async (isRefreshing = false) => {
-    if (isRefreshing) {
-      setRefreshing(true);
-    } else {
-      setLoading(true);
-    }
-
-    const salesData = await getSalesByDate(date);
-
-    // Group sales by fish variety
-    const grouped: { [key: number]: ItemGroup } = {};
-
-    salesData.forEach((sale: Sale) => {
-      const varietyId = sale.fish_variety_id;
-      const varietyName = sale.fish_variety_name || 'Unknown Fish';
-
-      if (!grouped[varietyId]) {
-        grouped[varietyId] = {
-          varietyId,
-          varietyName,
-          totalCrates: 0,
-          totalKg: 0,
-          customers: [],
-        };
-      }
-
-      grouped[varietyId].totalCrates += sale.quantity_crates;
-      grouped[varietyId].totalKg += sale.quantity_kg;
-
-      grouped[varietyId].customers.push({
-        customerId: sale.customer_id,
-        customerName: sale.customer_name || 'Unknown Customer',
-        quantityCrates: sale.quantity_crates,
-        quantityKg: sale.quantity_kg,
-      });
-    });
-
-    // Convert to array and sort by variety name
-    const itemGroupsArray = Object.values(grouped).sort((a, b) =>
-      a.varietyName.localeCompare(b.varietyName)
-    );
-
-    setItemGroups(itemGroupsArray);
-
-    if (isRefreshing) {
-      setRefreshing(false);
-    } else {
-      setLoading(false);
-    }
-  };
-
-  const onRefresh = () => {
-    loadData(true);
-  };
-
-  const toggleItemExpanded = (varietyId: number) => {
-    setExpandedItems(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(varietyId)) {
-        newSet.delete(varietyId);
-      } else {
-        newSet.add(varietyId);
-      }
-      return newSet;
-    });
-  };
-
-  return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>📋 Items by Customer</Text>
+  return <View style={styles.container}>
+    <View style={styles.header}><TouchableOpacity style={styles.back} onPress={() => navigation.goBack()}><Text style={styles.backText}>←</Text></TouchableOpacity><View><Text style={styles.title}>Item activity</Text><Text style={styles.subtitle}>See who bought or supplied each item</Text></View></View>
+    <DateNavigator date={activity.date} onPrevious={activity.goToPreviousDay} onNext={activity.goToNextDay} onToday={activity.goToToday} accentColor="#0F766E" />
+    <ScrollView refreshControl={<RefreshControl refreshing={activity.refreshing} onRefresh={activity.refresh} />} contentContainerStyle={styles.content}>
+      <View style={styles.tabs}>{(['sales','purchases'] as const).map(mode => <TouchableOpacity key={mode} style={[styles.tab,activity.mode===mode&&styles.tabActive]} onPress={() => activity.selectMode(mode)}><Text style={[styles.tabText,activity.mode===mode&&styles.tabTextActive]}>{mode==='sales'?'Sales':'Purchases'}</Text></TouchableOpacity>)}</View>
+      {activity.quickVarietyIds.length ? <View><Text style={styles.quickLabel}>QUICK ITEMS</Text><View style={styles.quickRow}>{activity.quickVarietyIds.map(id => { const item=activity.varieties.find(row=>row.id===id); return item?<TouchableOpacity key={id} style={[styles.quickChip,id===activity.selectedVarietyId&&styles.quickChipActive]} onPress={()=>activity.setSelectedVarietyId(id)}><Text style={[styles.quickText,id===activity.selectedVarietyId&&styles.quickTextActive]} numberOfLines={1}>{item.variant_code||item.name}</Text></TouchableOpacity>:null; })}</View></View>:null}
+      <View style={styles.filters}>
+        <TouchableOpacity style={styles.filter} onPress={()=>setShowItems(true)}><Text style={styles.filterLabel}>ITEM & GRADE</Text><Text style={selectedItem?styles.filterValue:styles.filterPlaceholder}>{selectedItem?.name??'Choose an item'}</Text></TouchableOpacity>
+        <TouchableOpacity style={styles.filter} onPress={()=>setShowParties(true)}><Text style={styles.filterLabel}>{activity.mode==='sales'?'CUSTOMER':'SUPPLIER'}</Text><Text style={styles.filterValue}>{selectedParty?.name??`All ${activity.mode==='sales'?'customers':'suppliers'}`}</Text></TouchableOpacity>
       </View>
-
-      <DateNavigator date={date} onPrevious={goToPreviousDay} onNext={goToNextDay} onToday={goToToday} />
-
-      <ScrollView
-        style={styles.content}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#3B82F6']} tintColor="#3B82F6" />
-        }
-      >
-        {loading ? (
-          <ActivityIndicator size="large" color="#3B82F6" style={styles.loader} />
-        ) : itemGroups.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No sales for this date</Text>
-          </View>
-        ) : (
-          itemGroups.map((item) => {
-            const isExpanded = expandedItems.has(item.varietyId);
-            const { name, size } = extractFishSize(item.varietyName);
-
-            return (
-              <View key={item.varietyId} style={styles.itemCard}>
-                <TouchableOpacity
-                  style={styles.itemHeader}
-                  onPress={() => toggleItemExpanded(item.varietyId)}
-                  activeOpacity={0.7}
-                >
-                  <View style={styles.itemHeaderLeft}>
-                    <View style={styles.fishNameContainer}>
-                      <Text style={styles.fishName}>{name}</Text>
-                      {size && (
-                        <View style={[
-                          styles.sizeBadge,
-                          size === 'OB' && styles.sizeBadgeOverBig,
-                          size === 'B' && styles.sizeBadgeBig,
-                          size === 'M' && styles.sizeBadgeMedium,
-                          size === 'S' && styles.sizeBadgeSmall,
-                        ]}>
-                          <Text style={styles.sizeBadgeText}>{size}</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={styles.customerCount}>
-                      {item.customers.length} customer{item.customers.length !== 1 ? 's' : ''}
-                    </Text>
-                  </View>
-                  <View style={styles.itemHeaderRight}>
-                    <Text style={styles.totalCrates}>{item.totalCrates}</Text>
-                    {item.totalKg > 0 && (
-                      <Text style={styles.totalKg}>{item.totalKg.toFixed(1)} Kg</Text>
-                    )}
-                  </View>
-                  <Text style={styles.expandIcon}>{isExpanded ? '▼' : '▶'}</Text>
-                </TouchableOpacity>
-
-                {isExpanded && (
-                  <View style={styles.customerList}>
-                    {item.customers.map((customer, index) => (
-                      <View
-                        key={`${customer.customerId}-${index}`}
-                        style={[
-                          styles.customerRow,
-                          index === item.customers.length - 1 && styles.customerRowLast,
-                        ]}
-                      >
-                        <Text style={styles.customerName}>{customer.customerName}</Text>
-                        <View style={styles.customerQuantity}>
-                          <Text style={styles.customerCrates}>{customer.quantityCrates}</Text>
-                          {customer.quantityKg > 0 && (
-                            <Text style={styles.customerKg}>{customer.quantityKg} Kg</Text>
-                          )}
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                )}
-              </View>
-            );
-          })
-        )}
-      </ScrollView>
-    </View>
-  );
+      {activity.loading?<ActivityIndicator color="#0F766E" style={styles.loader}/>:!activity.selectedVarietyId?<View style={styles.empty}><Text style={styles.emptyIcon}>↟</Text><Text style={styles.emptyTitle}>Choose an item</Text><Text style={styles.emptyText}>Select an item to see its {activity.mode==='sales'?'customer':'supplier'} activity.</Text></View>:<>
+        <View style={styles.summary}>
+          <View style={styles.summaryMetric}><Text style={styles.summaryLabel}>AVAILABLE / TOTAL CRATES</Text><Text style={styles.summaryValue}>{activity.stockSummary.availableCrates} / {activity.stockSummary.totalCrates} cr</Text></View>
+          <View style={[styles.summaryMetric,styles.summaryMetricBorder]}><Text style={styles.summaryLabel}>AVAILABLE / TOTAL KG</Text><Text style={styles.summaryValue}>{activity.stockSummary.availableKg} / {activity.stockSummary.totalKg} kg</Text></View>
+          <View style={[styles.summaryMetric,styles.summaryMetricBorder,styles.summaryRight]}><Text style={styles.summaryLabel}>{activity.mode==='sales'?'CUSTOMERS':'SUPPLIERS'}</Text><Text style={styles.summaryCount}>{activity.partySummaries.length}</Text></View>
+        </View>
+        <Text style={styles.sectionTitle}>{activity.mode==='sales'?'Customer breakdown':'Supplier breakdown'}</Text>
+        {activity.partySummaries.map(party=><TouchableOpacity key={party.id} style={styles.partyRow} onPress={()=>activity.setSelectedPartyId(party.id)}><View style={styles.partyInitial}><Text style={styles.partyInitialText}>{party.name.slice(0,1).toUpperCase()}</Text></View><View style={styles.partyCopy}><Text style={styles.partyName}>{party.name}</Text><Text style={styles.partyMeta}>{party.lines} transaction{party.lines===1?'':'s'}</Text></View><Text style={styles.partyQuantity}>{quantity(party.crates,party.kg)}</Text></TouchableOpacity>)}
+        {!activity.partySummaries.length?<Text style={styles.noRows}>No matching activity for this date.</Text>:null}
+        <Text style={styles.sectionTitle}>Transactions</Text>
+        {activity.rows.map(row=><View key={row.id} style={styles.transaction}><View><Text style={styles.transactionParty}>{row.partyName}</Text><Text style={styles.transactionStatus}>{row.status}</Text></View><Text style={styles.transactionQty}>{quantity(row.crates,row.kg)}</Text></View>)}
+      </>}
+    </ScrollView>
+    <SearchableSelectModal visible={showItems} title="Select item and grade" searchPlaceholder="Search item, code or grade" options={itemOptions} emptyMessage="No activity items found" onSelect={id=>activity.setSelectedVarietyId(Number(id))} onClose={()=>setShowItems(false)}/>
+    <SearchableSelectModal visible={showParties} title={activity.mode==='sales'?'Filter customer':'Filter supplier'} searchPlaceholder="Search name" options={partyOptions} emptyMessage="No parties found" onSelect={id=>activity.setSelectedPartyId(Number(id)||null)} onClose={()=>setShowParties(false)}/>
+  </View>;
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-  },
-  header: {
-    backgroundColor: '#3B82F6',
-    padding: 20,
-    paddingTop: 60,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  dateButton: {
-    padding: 12,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 8,
-    marginHorizontal: 8,
-  },
-  dateButtonText: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#374151',
-  },
-  dateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
-    marginHorizontal: 12,
-  },
-  todayButton: {
-    padding: 12,
-    backgroundColor: '#3B82F6',
-    borderRadius: 8,
-    marginLeft: 8,
-  },
-  todayButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  loader: {
-    marginTop: 40,
-  },
-  emptyContainer: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#6B7280',
-  },
-  itemCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-    overflow: 'hidden',
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FAFAFA',
-  },
-  itemHeaderLeft: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  fishNameContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  fishName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  sizeBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    minWidth: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sizeBadgeBig: {
-    backgroundColor: '#DBEAFE',
-    borderWidth: 1,
-    borderColor: '#3B82F6',
-  },
-  sizeBadgeOverBig: {
-    backgroundColor: '#F3E8FF',
-    borderWidth: 1,
-    borderColor: '#9333EA',
-  },
-  sizeBadgeMedium: {
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-  },
-  sizeBadgeSmall: {
-    backgroundColor: '#D1FAE5',
-    borderWidth: 1,
-    borderColor: '#10B981',
-  },
-  sizeBadgeText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#374151',
-  },
-  customerCount: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  itemHeaderRight: {
-    alignItems: 'flex-end',
-    marginRight: 12,
-  },
-  totalCrates: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#3B82F6',
-  },
-  totalKg: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginTop: 2,
-  },
-  expandIcon: {
-    fontSize: 14,
-    color: '#6B7280',
-    width: 20,
-    textAlign: 'center',
-  },
-  customerList: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 16,
-  },
-  customerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingLeft: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  customerRowLast: {
-    borderBottomWidth: 0,
-    paddingBottom: 16,
-  },
-  customerName: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
-    flex: 1,
-  },
-  customerQuantity: {
-    alignItems: 'flex-end',
-  },
-  customerCrates: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  customerKg: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    marginTop: 2,
-  },
-});
