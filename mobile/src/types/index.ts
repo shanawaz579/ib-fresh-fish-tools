@@ -366,6 +366,8 @@ export type Customer = {
   contact_person?: string;
   business_type?: string;
   notes?: string;
+  opening_balance?: number;
+  opening_balance_date?: string;
 };
 
 export type Bill = {
@@ -459,7 +461,7 @@ export type CustomerLedger = {
 export type LedgerTransaction = {
   id: number;
   date: string;
-  type: 'bill' | 'payment';
+  type: 'opening_balance' | 'bill' | 'payment';
   reference: string;
   debit?: number;
   credit?: number;

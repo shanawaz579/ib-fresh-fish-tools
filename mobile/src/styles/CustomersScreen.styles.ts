@@ -70,6 +70,10 @@ export default StyleSheet.create({
     color: '#6B7280',
     marginBottom: 2,
   },
+  balanceSummary: { color: '#047857', fontSize: 13, fontWeight: '700', marginTop: 4 },
+  cardActions: { alignItems: 'flex-end', gap: 8 },
+  balanceButton: { backgroundColor: '#ECFDF5', borderRadius: 6, paddingHorizontal: 12, paddingVertical: 8 },
+  balanceButtonText: { color: '#047857', fontSize: 13, fontWeight: '700' },
   editButton: {
     backgroundColor: '#DBEAFE',
     paddingHorizontal: 16,
@@ -162,4 +166,12 @@ export default StyleSheet.create({
   disabledButton: {
     opacity: 0.5,
   },
+  balanceCustomerName: { color: '#111827', fontSize: 18, fontWeight: '800', marginBottom: 4 },
+  helperText: { color: '#6B7280', fontSize: 13, lineHeight: 19, marginBottom: 14 },
+  typeRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  typeButton: { alignItems: 'center', backgroundColor: '#F3F4F6', borderColor: '#E5E7EB', borderRadius: 8, borderWidth: 1, flex: 1, padding: 11 },
+  typeButtonActive: { backgroundColor: '#ECFDF5', borderColor: '#10B981' },
+  typeButtonText: { color: '#4B5563', fontSize: 13, fontWeight: '700' },
+  typeButtonTextActive: { color: '#047857' },
+  lockNote: { color: '#92400E', fontSize: 12, lineHeight: 18, marginBottom: 8 },
 });

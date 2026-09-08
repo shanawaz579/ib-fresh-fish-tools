@@ -16,6 +16,9 @@ import DateNavigator from '../components/DateNavigator';
 import { useSalesRecords } from '../features/sales/useSalesRecords';
 import AvailableStockStrip from '../features/sales/AvailableStockStrip';
 import SalesEntryForm from '../features/sales/SalesEntryForm';
+import ExistingSaleModal from '../features/sales/ExistingSaleModal';
+import QuickCustomerPaymentModal from '../features/sales/QuickCustomerPaymentModal';
+import type { Sale } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -23,6 +26,8 @@ export default function SalesScreen() {
   const navigation = useNavigation<NavigationProp>();
   const scrollRef = useRef<ScrollView>(null);
   const [formOffset, setFormOffset] = useState(0);
+  const [existingSalePrompt, setExistingSalePrompt] = useState<{ customerId: number; customerName: string; sales: Sale[] } | null>(null);
+  const [paymentTarget, setPaymentTarget] = useState<{ customerId: number; customerName: string } | null>(null);
   const {
     date, goToPreviousDay, goToNextDay, goToToday,
     varieties, customers, frequentVarietyIds, loading, refreshing, submitting,
@@ -33,6 +38,29 @@ export default function SalesScreen() {
     handleEditTempItem, handleSaveAll, handleDelete, handleEditCustomer,
     handleCancelEdit, getStockForVariety, handleCustomerChange, handleCustomerCreated, refreshVarieties,
   } = useSalesRecords();
+
+  const selectCustomer = (nextCustomerId: number | null) => {
+    if (!nextCustomerId || editingCustomerId !== null) { handleCustomerChange(nextCustomerId); return; }
+    const existingSales = Object.values(sortedGroupedSales).flat().filter(sale => sale.customer_id === nextCustomerId);
+    if (!existingSales.length) { handleCustomerChange(nextCustomerId); return; }
+    setExistingSalePrompt({
+      customerId: nextCustomerId,
+      customerName: existingSales[0]?.customer_name || customers.find(customer => customer.id === nextCustomerId)?.name || 'This customer',
+      sales: existingSales,
+    });
+  };
+
+  const editExistingSale = () => {
+    if (!existingSalePrompt) return;
+    const { customerId: existingCustomerId, customerName, sales: existingSales } = existingSalePrompt;
+    setExistingSalePrompt(null);
+    if (existingSales.every(sale => sale.billing_status === 'unbilled')) {
+      handleEditCustomer(existingCustomerId, existingSales);
+      requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: formOffset, animated: true }));
+      return;
+    }
+    navigation.navigate('BillGeneration', { customer_id: existingCustomerId, customer_name: customerName, date });
+  };
 
   return (
     <ScrollView
@@ -76,7 +104,7 @@ export default function SalesScreen() {
         editing={editingCustomerId !== null}
         editingDraft={editingDraftVarietyId !== null}
         getStock={getStockForVariety}
-        onCustomerChange={handleCustomerChange}
+        onCustomerChange={selectCustomer}
         onCustomerCreated={handleCustomerCreated}
         onVarietyChange={setFishVarietyId}
         onCratesChange={setQuantityCrates}
@@ -208,7 +236,17 @@ export default function SalesScreen() {
                           >
                             <Text style={styles.editButtonText}>Edit</Text>
                           </TouchableOpacity>
-                        ) : null}
+                        ) : (
+                          <TouchableOpacity
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              setPaymentTarget({ customerId, customerName });
+                            }}
+                            style={styles.paymentButton}
+                          >
+                            <Text style={styles.paymentButtonText}>Payment</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   </View>
@@ -239,6 +277,21 @@ export default function SalesScreen() {
           })
         )}
       </View>
+
+      <ExistingSaleModal
+        visible={Boolean(existingSalePrompt)}
+        customerName={existingSalePrompt?.customerName}
+        billed={Boolean(existingSalePrompt && !existingSalePrompt.sales.every(sale => sale.billing_status === 'unbilled'))}
+        onClose={() => setExistingSalePrompt(null)}
+        onEdit={editExistingSale}
+      />
+      <QuickCustomerPaymentModal
+        visible={Boolean(paymentTarget)}
+        customerId={paymentTarget?.customerId}
+        customerName={paymentTarget?.customerName}
+        date={date}
+        onClose={() => setPaymentTarget(null)}
+      />
     </ScrollView>
   );
 }

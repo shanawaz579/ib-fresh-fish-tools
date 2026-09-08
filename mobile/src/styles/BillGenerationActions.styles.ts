@@ -1,6 +1,8 @@
 import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
+  addCorrectionItem: { alignItems: 'center', backgroundColor: '#ECFDF5', borderColor: '#6EE7B7', borderRadius: 10, borderWidth: 1, marginBottom: 12, paddingVertical: 11 },
+  addCorrectionItemText: { color: '#047857', fontSize: 13, fontWeight: '800' },
   quickPaymentsContainer: {
     marginTop: 16,
     backgroundColor: '#F0FDF4',

@@ -10,10 +10,11 @@ import {
   getBillsByDate,
   getCustomerOutstanding,
   getCustomers,
+  getFishVarieties,
   getLastRateForVariety,
   getSalesByDate,
 } from '../../api/stock';
-import type { Bill, BillOtherCharge, Customer, Sale } from '../../types';
+import type { Bill, BillOtherCharge, Customer, FishVariety, Sale } from '../../types';
 import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg } from '../../domain/fish';
 import {
   buildBillItemsFromSales,
@@ -33,10 +34,16 @@ export function useCustomerBilling() {
   const route = useRoute<BillGenerationScreenRouteProp>();
   const params = route.params;
 
-  const { date, goToPreviousDay, goToNextDay, goToToday } = useBusinessDate(params?.date);
+  const {
+    date,
+    goToPreviousDay: navigateToPreviousDay,
+    goToNextDay: navigateToNextDay,
+    goToToday: navigateToToday,
+  } = useBusinessDate(params?.date);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
+  const [varieties, setVarieties] = useState<FishVariety[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingItems, setLoadingItems] = useState(false);
 
@@ -122,14 +129,16 @@ export function useCustomerBilling() {
 
   const loadData = async () => {
     setLoading(true);
-    const [customersData, salesData, billsData] = await Promise.all([
+    const [customersData, salesData, billsData, varietyData] = await Promise.all([
       getCustomers(),
       getSalesByDate(date),
       getBillsByDate(date),
+      getFishVarieties(),
     ]);
     setCustomers(customersData);
     setSales(salesData);
     setBills(billsData);
+    setVarieties(varietyData);
     setLoading(false);
   };
 
@@ -149,6 +158,10 @@ export function useCustomerBilling() {
   };
 
   const handleCustomerSelect = async (customerId: number | null) => {
+    if (editingBillId && customerId !== selectedCustomerId) {
+      Alert.alert('Finish editing first', 'Save or cancel this correction before changing the customer.');
+      return;
+    }
     if (!customerId) {
       setSelectedCustomerId(null);
       setBillItems([]);
@@ -183,6 +196,45 @@ export function useCustomerBilling() {
     }
 
     setBillItems(updated);
+  };
+
+  const updateItemQuantity = (index: number, field: 'quantity_crates' | 'quantity_kg', value: string) => {
+    if (!editingBillId) return;
+    const updated = [...billItems];
+    const numeric = field === 'quantity_crates' ? Number.parseInt(value, 10) || 0 : Number.parseFloat(value) || 0;
+    updated[index] = { ...updated[index], [field]: Math.max(0, numeric) };
+    updated[index].total_weight = getTotalWeightKg(updated[index].quantity_crates, updated[index].quantity_kg, updated[index].crate_weight);
+    setBillItems(updated);
+  };
+
+  const selectCorrectionItem = async (index: number | null, varietyId: number) => {
+    if (!editingBillId) return;
+    const variety = varieties.find(item => item.id === varietyId);
+    if (!variety) return;
+    if (billItems.some((item, itemIndex) => item.fish_variety_id === varietyId && itemIndex !== index)) {
+      Alert.alert('Item already added', 'Each item and grade can appear only once in a sales bill.');
+      return;
+    }
+    const lastRate = await getLastRateForVariety(varietyId);
+    if (index === null) {
+      setBillItems(current => [...current, {
+        sale_ids: [], fish_variety_id: variety.id, fish_variety_name: variety.name,
+        quantity_crates: 0, quantity_kg: 0,
+        crate_weight: variety.default_kg_per_crate || defaultCrateWeight || DEFAULT_CRATE_WEIGHT_KG,
+        total_weight: 0, rate_per_kg: lastRate?.rate_per_kg || 0,
+      }]);
+      return;
+    }
+    const crateWeight = variety.default_kg_per_crate || billItems[index].crate_weight;
+    setBillItems(current => current.map((item, itemIndex) => itemIndex === index ? {
+      ...item, fish_variety_id: variety.id, fish_variety_name: variety.name,
+      crate_weight: crateWeight, rate_per_kg: lastRate?.rate_per_kg || item.rate_per_kg,
+      total_weight: getTotalWeightKg(item.quantity_crates, item.quantity_kg, crateWeight),
+    } : item));
+  };
+
+  const removeCorrectionItem = (index: number) => {
+    if (editingBillId) setBillItems(current => current.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const calculateItemAmount = (item: BillItemForm): number => {
@@ -236,9 +288,17 @@ export function useCustomerBilling() {
     }
 
     // Validate that all rates are set
-    const missingRates = billItems.some(item => item.rate_per_kg === 0);
-    if (missingRates) {
-      Alert.alert('Error', 'Please set rate per kg for all items');
+    const invalidRates = billItems.some(item => item.rate_per_kg <= 0 || item.rate_per_kg > 999);
+    if (invalidRates) {
+      Alert.alert('Invalid selling rate', 'Enter a selling rate from 1 to 999 for every item.');
+      return;
+    }
+    if (billItems.some(item => item.quantity_crates < 0 || item.quantity_kg < 0 || (item.quantity_crates === 0 && item.quantity_kg === 0))) {
+      Alert.alert('Invalid quantity', 'Every item needs crates, kilograms, or both.');
+      return;
+    }
+    if (billItems.some(item => item.quantity_crates > 0 && item.crate_weight <= 0)) {
+      Alert.alert('Invalid crate weight', 'Enter kilograms per crate for every item with crates.');
       return;
     }
 
@@ -280,21 +340,19 @@ export function useCustomerBilling() {
         correctionReason,
       );
 
-      if (bill) {
-        const statusMsg = markAsPaid
-          ? `Bill ${bill.bill_number} saved as PAID!`
-          : `Bill ${bill.bill_number} saved!${quickPayments.length > 0 ? `\n${quickPayments.length} payment(s) recorded.` : ''}`;
+      const statusMsg = markAsPaid
+        ? `Bill ${bill.bill_number} saved as PAID!`
+        : `Bill ${bill.bill_number} saved!${quickPayments.length > 0 ? `\n${quickPayments.length} payment(s) recorded.` : ''}`;
 
-        Alert.alert('Success', statusMsg);
-        resetForm();
-        await loadData();
-        setSubmitting(false);
-      } else {
-        Alert.alert('Error', 'Failed to generate bill');
-        setSubmitting(false);
-      }
+      Alert.alert('Success', statusMsg);
+      resetForm();
+      await loadData();
     } catch (err) {
-      Alert.alert('Error', 'Failed to generate bill');
+      const message = err && typeof err === 'object' && 'message' in err
+        ? String(err.message)
+        : 'Please try again.';
+      Alert.alert(editingBillId ? 'Unable to update bill' : 'Unable to create bill', message);
+    } finally {
       setSubmitting(false);
     }
   };
@@ -325,7 +383,14 @@ export function useCustomerBilling() {
 
   const handleEditBill = async (billId: number) => {
     const bill = await getBillById(billId);
-    if (!bill) return;
+    if (!bill) {
+      Alert.alert('Unable to edit bill', 'The bill details could not be loaded. Check the connection and try again.');
+      return;
+    }
+    if (!bill.items?.length) {
+      Alert.alert('Unable to edit bill', 'This bill has no linked sale items. It was not changed.');
+      return;
+    }
 
     // Load bill data into form for editing
     setSelectedCustomerId(bill.customer_id);
@@ -369,14 +434,26 @@ export function useCustomerBilling() {
     await handleCustomerSelect(customer.id);
   };
 
+  const guardDateChange = (changeDate: () => void) => {
+    if (editingBillId) {
+      Alert.alert('Finish editing first', 'Save or cancel this correction before changing the bill date.');
+      return;
+    }
+    changeDate();
+  };
+
   return {
-    date, goToPreviousDay, goToNextDay, goToToday,
-    customers, bills, loading, loadingItems, selectedCustomerId, billItems, notes, setNotes, submitting,
+    date,
+    goToPreviousDay: () => guardDateChange(navigateToPreviousDay),
+    goToNextDay: () => guardDateChange(navigateToNextDay),
+    goToToday: () => guardDateChange(navigateToToday),
+    customers, varieties, bills, loading, loadingItems, selectedCustomerId, billItems, notes, setNotes, submitting,
     quickPayments, newPaymentAmount, setNewPaymentAmount, newPaymentMethod, setNewPaymentMethod,
     markAsPaid, setMarkAsPaid, otherCharges, setOtherCharges, customerOutstanding,
     previewPreviousBalance, previewPayments, previewBalanceDue,
     showPreview, setShowPreview, previewBill, previewCustomerName,
-    handlePrintBill, handleShareBill, handleCustomerSelect, updateItemField, calculateItemAmount,
+    handlePrintBill, handleShareBill, handleCustomerSelect, updateItemField, updateItemQuantity,
+    selectCorrectionItem, removeCorrectionItem, calculateItemAmount,
     handleAddQuickPayment, handleRemoveQuickPayment, handleGenerateBill, resetForm,
     handleViewBill, handleEditBill, loadData,
     itemsTotal, chargesTotal, subtotal, currentBillTotal, quickPaymentsTotal, total, selectedCustomer,

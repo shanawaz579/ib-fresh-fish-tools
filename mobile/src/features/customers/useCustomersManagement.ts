@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
-import { addCustomer, deleteCustomer, getCustomers, updateCustomer } from '../../api/stock';
+import { addCustomer, deleteCustomer, getCustomers, setCustomerOpeningBalance, updateCustomer } from '../../api/stock';
 import type { Customer } from '../../types';
+import { toLocalDateString } from '../../utils/date';
 
 export interface CustomerFormData {
   name: string;
@@ -29,6 +30,12 @@ export function useCustomersManagement() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingData, setEditingData] = useState<CustomerFormData>(initialFormData);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [balanceCustomer, setBalanceCustomer] = useState<Customer | null>(null);
+  const [balanceAmount, setBalanceAmount] = useState('');
+  const [balanceType, setBalanceType] = useState<'receivable' | 'credit'>('receivable');
+  const [balanceDate, setBalanceDate] = useState(toLocalDateString());
+  const [balanceReason, setBalanceReason] = useState('');
+  const [savingBalance, setSavingBalance] = useState(false);
 
   useEffect(() => {
     loadCustomers();
@@ -169,9 +176,58 @@ export function useCustomersManagement() {
     setFormData(initialFormData);
   };
 
+  const handleStartBalance = (customer: Customer) => {
+    const current = Number(customer.opening_balance) || 0;
+    setBalanceCustomer(customer);
+    setBalanceAmount(current ? String(Math.abs(current)) : '');
+    setBalanceType(current < 0 ? 'credit' : 'receivable');
+    setBalanceDate(customer.opening_balance_date || toLocalDateString());
+    setBalanceReason('');
+  };
+
+  const closeBalance = () => {
+    setBalanceCustomer(null);
+    setBalanceAmount('');
+    setBalanceReason('');
+  };
+
+  const handleSaveBalance = async () => {
+    if (!balanceCustomer) return;
+    const amount = Number.parseFloat(balanceAmount || '0');
+    if (!Number.isFinite(amount) || amount < 0) {
+      Alert.alert('Invalid amount', 'Enter zero or a positive opening balance.');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(balanceDate)) {
+      Alert.alert('Invalid date', 'Use YYYY-MM-DD format.');
+      return;
+    }
+    if ((balanceCustomer.opening_balance || balanceCustomer.opening_balance_date) && balanceReason.trim().length < 5) {
+      Alert.alert('Reason required', 'Enter at least 5 characters explaining the correction.');
+      return;
+    }
+
+    setSavingBalance(true);
+    try {
+      const signedAmount = balanceType === 'credit' ? -amount : amount;
+      await setCustomerOpeningBalance(balanceCustomer.id, signedAmount, balanceDate, balanceReason);
+      closeBalance();
+      await loadCustomers();
+      Alert.alert('Opening balance saved', amount === 0 ? 'The opening balance was cleared.' : 'It will be included in the customer account.');
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error ? String(error.message) : 'Please try again.';
+      Alert.alert('Unable to save opening balance', message);
+    } finally {
+      setSavingBalance(false);
+    }
+  };
+
   return {
     customers, loading, refreshing, formData, setFormData, submitting,
     editingId, editingData, setEditingData, showAddForm, setShowAddForm,
     onRefresh, handleAddCustomer, handleStartEdit, handleSaveEdit, handleDelete, handleCancelEdit, closeAddForm,
+    balanceCustomer, balanceAmount, setBalanceAmount, balanceType, setBalanceType,
+    balanceDate, setBalanceDate, balanceReason, setBalanceReason, savingBalance,
+    handleStartBalance, handleSaveBalance, closeBalance,
   };
 }

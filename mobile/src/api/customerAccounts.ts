@@ -1,5 +1,5 @@
 import supabase from '../lib/supabase';
-import type { Bill, CustomerAccountSummary, CustomerLedger, LedgerTransaction, Payment } from '../types';
+import type { Bill, Customer, CustomerAccountSummary, CustomerLedger, LedgerTransaction, Payment } from '../types';
 import { toLocalDateString } from '../utils/date';
 
 const emptyAccountSummary: CustomerAccountSummary = {
@@ -69,7 +69,15 @@ export async function getBillPreviewData(customerId: number, billDate: string): 
       .eq('is_active', true)
       .single();
 
-    const previousBalance = previousBill?.total || 0;
+    const { data: customer } = previousBill ? { data: null } : await supabase
+      .from('customers')
+      .select('opening_balance, opening_balance_date')
+      .eq('id', customerId)
+      .single();
+    const openingBalance = customer?.opening_balance_date && customer.opening_balance_date <= billDate
+      ? Number(customer.opening_balance) || 0
+      : 0;
+    const previousBalance = previousBill?.total || openingBalance;
     const previousBillDate = previousBill?.bill_date || '1900-01-01';
 
     // Get payments since previous bill
@@ -175,6 +183,22 @@ export async function getPaymentsByCustomer(customerId: number): Promise<Payment
   }
 }
 
+export async function setCustomerOpeningBalance(
+  customerId: number,
+  signedBalance: number,
+  effectiveDate: string,
+  reason?: string,
+): Promise<Customer> {
+  const { data, error } = await supabase.rpc('set_customer_opening_balance', {
+    p_customer_id: customerId,
+    p_balance: signedBalance,
+    p_effective_date: effectiveDate,
+    p_reason: reason?.trim() || null,
+  });
+  if (error) throw error;
+  return (Array.isArray(data) ? data[0] : data) as Customer;
+}
+
 // Get payment allocations for a payment
 // Note: Payment allocations removed in simplified billing system
 // Payments are now independent and shown in bills they were made between
@@ -186,7 +210,7 @@ export async function getCustomerLedger(customerId: number, startDate?: string, 
     // Get customer info
     const { data: customer, error: custError } = await supabase
       .from('customers')
-      .select('name')
+      .select('name, opening_balance, opening_balance_date')
       .eq('id', customerId)
       .single();
 
@@ -224,12 +248,28 @@ export async function getCustomerLedger(customerId: number, startDate?: string, 
     let runningBalance = 0;
 
     const allTransactions = [
+      ...(customer.opening_balance && customer.opening_balance_date
+        && (!startDate || customer.opening_balance_date >= startDate)
+        && (!endDate || customer.opening_balance_date <= endDate)
+        ? [{ id: 0, type: 'opening_balance' as const, date: customer.opening_balance_date, amount: Number(customer.opening_balance) }]
+        : []),
       ...(bills || []).map(b => ({ ...b, type: 'bill' as const, date: b.bill_date })),
       ...(payments || []).map(p => ({ ...p, type: 'payment' as const, date: p.payment_date })),
     ].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id);
 
     for (const txn of allTransactions) {
-      if (txn.type === 'bill') {
+      if (txn.type === 'opening_balance') {
+        runningBalance += txn.amount;
+        transactions.push({
+          id: txn.id,
+          date: txn.date,
+          type: 'opening_balance',
+          reference: 'Opening balance',
+          debit: txn.amount > 0 ? txn.amount : undefined,
+          credit: txn.amount < 0 ? Math.abs(txn.amount) : undefined,
+          balance: runningBalance,
+        });
+      } else if (txn.type === 'bill') {
         const currentCharges = Number(txn.subtotal) - Number(txn.discount || 0);
         runningBalance += currentCharges;
         transactions.push({

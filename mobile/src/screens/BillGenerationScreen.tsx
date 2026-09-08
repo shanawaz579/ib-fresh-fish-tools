@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,6 +15,7 @@ import { releaseCustomerBillForCorrection } from '../api/stock';
 import type { Bill } from '../types';
 import { formatBusinessDate } from '../utils/date';
 import styles from '../styles/BillGenerationScreen.styles';
+import SearchableSelectModal, { type SearchableOption } from '../components/SearchableSelectModal';
 
 export default function BillGenerationScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -22,6 +23,11 @@ export default function BillGenerationScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const [deleteTarget, setDeleteTarget] = useState<Bill | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [selectingItemIndex, setSelectingItemIndex] = useState<number | 'new' | null>(null);
+  const itemOptions = useMemo<SearchableOption[]>(() => billing.varieties.map(item => ({
+    id: item.id, label: item.name, group: item.item_name, detail: item.variant_code,
+    searchText: [item.item_name, item.item_code, item.grade_code, item.grade_name].filter(Boolean).join(' '),
+  })), [billing.varieties]);
   const existingBill = billing.selectedCustomerId
     ? billing.bills.find(bill => bill.customer_id === billing.selectedCustomerId && bill.bill_date === billing.date && bill.id !== billing.editingBillId)
     : undefined;
@@ -96,6 +102,11 @@ export default function BillGenerationScreen() {
                 amount={billing.calculateItemAmount(item)}
                 onChangeCrateWeight={value => billing.updateItemField(index, 'crate_weight', value)}
                 onChangeRate={value => billing.updateItemField(index, 'rate_per_kg', value)}
+                editing={Boolean(billing.editingBillId)}
+                onChangeItem={() => setSelectingItemIndex(index)}
+                onChangeCrates={value => billing.updateItemQuantity(index, 'quantity_crates', value)}
+                onChangeKg={value => billing.updateItemQuantity(index, 'quantity_kg', value)}
+                onRemove={() => billing.removeCorrectionItem(index)}
               />
             )) : (
               <View style={styles.emptyState}><Text style={styles.emptyTitle}>No unbilled sales</Text><Text style={styles.emptyText}>There are no items to bill for this customer on {formatBusinessDate(billing.date)}.</Text></View>
@@ -104,6 +115,8 @@ export default function BillGenerationScreen() {
         ) : !billing.selectedCustomerId ? (
           <View style={styles.startHint}><Text style={styles.startHintIcon}>↑</Text><Text style={styles.startHintText}>Select a customer to load their sold items</Text></View>
         ) : null}
+
+        {billing.editingBillId ? <TouchableOpacity style={styles.addCorrectionItem} onPress={() => setSelectingItemIndex('new')}><Text style={styles.addCorrectionItemText}>+ Add item to bill</Text></TouchableOpacity> : null}
 
         {canEnterRates && !billing.loadingItems && billing.billItems.length > 0 ? (
           <BillReviewPanel
@@ -130,7 +143,7 @@ export default function BillGenerationScreen() {
             editing={Boolean(billing.editingBillId)}
             correctionReason={billing.correctionReason}
             onCorrectionReasonChange={billing.setCorrectionReason}
-            allRatesSet={billing.billItems.every(item => item.rate_per_kg > 0)}
+            allRatesSet={billing.billItems.every(item => item.rate_per_kg > 0 && item.rate_per_kg <= 999)}
             onSubmit={billing.handleGenerateBill}
           />
         ) : null}
@@ -148,6 +161,19 @@ export default function BillGenerationScreen() {
         saving={deleting}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDeleteBill}
+      />
+
+      <SearchableSelectModal
+        visible={selectingItemIndex !== null}
+        title={selectingItemIndex === 'new' ? 'Add item and grade' : 'Change item and grade'}
+        searchPlaceholder="Search item, code or grade"
+        options={itemOptions}
+        emptyMessage="No active catalog item found"
+        onSelect={async id => {
+          await billing.selectCorrectionItem(selectingItemIndex === 'new' ? null : selectingItemIndex, Number(id));
+          setSelectingItemIndex(null);
+        }}
+        onClose={() => setSelectingItemIndex(null)}
       />
 
     </View>

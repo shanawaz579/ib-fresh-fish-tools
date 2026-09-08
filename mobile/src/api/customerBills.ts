@@ -46,8 +46,7 @@ export async function createBill(
   markAsPaid: boolean = false,
   replaceBillId?: number,
   correctionReason?: string,
-): Promise<Bill | null> {
-  try {
+): Promise<Bill> {
     const rpcItems = items.map(item => ({
       ...item,
       crate_weight: item.crate_weight ?? DEFAULT_CRATE_WEIGHT_KG,
@@ -82,11 +81,9 @@ export async function createBill(
     const createdBill = Array.isArray(data) ? data[0] : data;
     if (!createdBill?.id) throw new Error('Database did not return the created bill');
 
-    return await getBillById(createdBill.id);
-  } catch (err: any) {
-    console.error('Error creating bill:', err?.message || err);
-    return null;
-  }
+    const bill = await getBillById(createdBill.id);
+    if (!bill) throw new Error('The bill was saved but could not be reloaded');
+    return bill;
 }
 
 // Get bills by date

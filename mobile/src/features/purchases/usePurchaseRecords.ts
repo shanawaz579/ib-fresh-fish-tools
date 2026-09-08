@@ -176,15 +176,11 @@ export function usePurchaseRecords() {
     setSubmitting(true);
     try {
       if (editingGroup) {
-        if (draftItems.some(item => !item.purchaseId)) {
-          Alert.alert('Edit existing items', 'Use Edit on an existing purchase line before changing it.');
-          return;
-        }
         const unbilled = editingGroup.purchases.filter(purchase => purchase.billing_status === 'unbilled');
         await updateUnbilledPurchaseGroup({
           purchaseIds: unbilled.map(purchase => purchase.id),
           items: draftItems.map(item => ({
-            id: item.purchaseId!, fishVarietyId: item.varietyId,
+            id: item.purchaseId, fishVarietyId: item.varietyId,
             quantityCrates: item.crates, quantityKg: item.kg,
           })),
         });

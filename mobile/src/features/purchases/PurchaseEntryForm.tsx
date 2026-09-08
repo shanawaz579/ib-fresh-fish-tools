@@ -126,10 +126,14 @@ export default function PurchaseEntryForm(props: Props) {
         <View style={styles.draftList}>
           {props.draftItems.map((item, index) => (
             <View key={item.purchaseId ?? item.varietyId} style={styles.draftRow}>
-              <View style={styles.draftIdentity}>
+              <TouchableOpacity
+                style={styles.draftIdentity}
+                disabled={!props.editing}
+                onPress={() => props.onEditItem(index)}
+              >
                 <Text style={styles.draftName}>{item.varietyName}</Text>
                 <Text style={styles.draftQuantity}>{[item.crates > 0 ? `${item.crates} cr` : '', item.kg > 0 ? `${item.kg} kg` : ''].filter(Boolean).join(' · ')}</Text>
-              </View>
+              </TouchableOpacity>
               <TouchableOpacity onPress={() => props.onEditItem(index)} hitSlop={8}><Text style={styles.editText}>Edit</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => props.onRemoveItem(index)} hitSlop={8}><Text style={styles.deleteText}>Remove</Text></TouchableOpacity>
             </View>
@@ -138,8 +142,7 @@ export default function PurchaseEntryForm(props: Props) {
       ) : null}
 
       <View style={styles.divider} />
-      <Text style={styles.subsectionTitle}>{props.editing ? 'Edit an item' : 'Add item and grade'}</Text>
-      {props.editing && !props.editingLine ? <Text style={styles.quantityHint}>Tap Edit on an item above to change its item, crates or kg.</Text> : null}
+      <Text style={styles.subsectionTitle}>{props.editing ? (props.editingLine ? 'Edit item' : 'Add another item') : 'Add item and grade'}</Text>
       {frequentVarieties.length > 0 ? (
         <View style={styles.frequentSection}>
           <Text style={styles.frequentTitle}>Frequently used</Text>
@@ -150,7 +153,6 @@ export default function PurchaseEntryForm(props: Props) {
                 <TouchableOpacity
                   key={variant.id}
                   style={[styles.frequentChip, selected && styles.frequentChipSelected]}
-                  disabled={props.editing && !props.editingLine}
                   onPress={() => props.onVarietyChange(variant.id)}
                 >
                   <Text style={[styles.frequentChipText, selected && styles.frequentChipTextSelected]} numberOfLines={1}>
@@ -162,7 +164,7 @@ export default function PurchaseEntryForm(props: Props) {
           </View>
         </View>
       ) : null}
-      <TouchableOpacity style={styles.selectField} disabled={props.editing && !props.editingLine} onPress={() => setShowItemPicker(true)}>
+      <TouchableOpacity style={styles.selectField} onPress={() => setShowItemPicker(true)}>
         <View style={styles.selectIdentity}>
           <Text style={selectedVariety ? styles.selectValue : styles.selectPlaceholder} numberOfLines={1}>
             {selectedVariety?.name ?? 'Search item or grade'}
@@ -183,7 +185,6 @@ export default function PurchaseEntryForm(props: Props) {
             onChangeText={props.onCratesChange}
             placeholder="0"
             keyboardType="number-pad"
-            editable={!props.editing || props.editingLine}
           />
         </View>
         <View style={styles.fieldColumn}>
@@ -194,25 +195,24 @@ export default function PurchaseEntryForm(props: Props) {
             onChangeText={props.onKgChange}
             placeholder="0"
             keyboardType="decimal-pad"
-            editable={!props.editing || props.editingLine}
           />
         </View>
       </View>
       <Text style={styles.quantityHint}>Enter crates, kg, or both. At least one is required.</Text>
 
-      <TouchableOpacity style={[styles.addItemButton, props.editing && !props.editingLine && styles.disabledButton]} disabled={props.editing && !props.editingLine} onPress={props.onAddItem}>
-        <Text style={styles.addItemButtonText}>{props.editing ? 'Update item' : '+ Add to purchase'}</Text>
+      <TouchableOpacity style={styles.addItemButton} onPress={props.onAddItem}>
+        <Text style={styles.addItemButtonText}>{props.editingLine ? 'Update item' : props.editing ? '+ Add item' : '+ Add to purchase'}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.saveButton, (props.submitting || props.draftItems.length === 0) && styles.disabledButton]}
+        style={[styles.saveButton, (props.submitting || props.draftItems.length === 0 || props.editingLine) && styles.disabledButton]}
         onPress={props.onSave}
-        disabled={props.submitting || props.draftItems.length === 0}
+        disabled={props.submitting || props.draftItems.length === 0 || props.editingLine}
       >
         {props.submitting ? (
           <ActivityIndicator color="#FFFFFF" />
         ) : (
-          <Text style={styles.saveButtonText}>{props.editing ? `Save changes (${props.draftItems.length})` : `Save purchase (${props.draftItems.length})`}</Text>
+          <Text style={styles.saveButtonText}>{props.editingLine ? 'Update item above first' : props.editing ? `Save changes (${props.draftItems.length})` : `Save purchase (${props.draftItems.length})`}</Text>
         )}
       </TouchableOpacity>
 

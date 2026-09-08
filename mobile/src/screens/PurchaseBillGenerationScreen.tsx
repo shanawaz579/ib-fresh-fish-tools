@@ -8,6 +8,7 @@ import {
   TextInput,
   Alert,
   ActivityIndicator,
+  Platform,
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -48,6 +49,7 @@ export default function PurchaseBillGenerationScreen() {
     grossAmount: number;
   }>>([]);
   const [varieties, setVarieties] = useState<FishVariety[]>([]);
+  const [loadingVarieties, setLoadingVarieties] = useState(false);
   const [selectingItemIndex, setSelectingItemIndex] = useState<number | null>(null);
 
   const [applyCommission, setApplyCommission] = useState(
@@ -71,11 +73,29 @@ export default function PurchaseBillGenerationScreen() {
 
   useEffect(() => {
     if (!isCorrection) return;
-    getFishVarieties().then(setVarieties).catch(error => {
-      console.error('Unable to load items for purchase correction:', error);
-      Alert.alert('Unable to load items', 'Please go back and try again.');
-    });
+    setLoadingVarieties(true);
+    getFishVarieties()
+      .then(setVarieties)
+      .finally(() => setLoadingVarieties(false));
   }, [isCorrection]);
+
+  const openItemSelector = async (index: number) => {
+    if (loadingVarieties) return;
+    if (varieties.length > 0) {
+      setSelectingItemIndex(index);
+      return;
+    }
+
+    setLoadingVarieties(true);
+    const catalogItems = await getFishVarieties();
+    setVarieties(catalogItems);
+    setLoadingVarieties(false);
+    if (catalogItems.length === 0) {
+      Alert.alert('Items unavailable', 'No active catalog items could be loaded. Check the connection and try again.');
+      return;
+    }
+    setSelectingItemIndex(index);
+  };
 
   const itemOptions = useMemo<SearchableOption[]>(() => varieties.map(variant => ({
     id: variant.id,
@@ -105,7 +125,7 @@ export default function PurchaseBillGenerationScreen() {
       return {
         purchaseId: p.id,
         fishVarietyId: original?.fish_variety_id ?? p.fish_variety_id,
-        varietyName: p.fish_variety_name || 'Unknown',
+        varietyName: original?.fish_variety_name ?? p.fish_variety_name ?? 'Unknown',
         crates,
         kgPerCrate,
         looseKg,
@@ -137,7 +157,7 @@ export default function PurchaseBillGenerationScreen() {
     const kgPerCrateNum = parseFloat(kgPerCrate) || 0;
     newItems[index].kgPerCrate = kgPerCrateNum;
 
-    const looseKg = purchases[index]?.quantity_kg || 0;
+    const looseKg = newItems[index].looseKg;
     newItems[index].actualWeight = getPurchaseTotalWeightKg(
       newItems[index].crates,
       looseKg,
@@ -180,7 +200,7 @@ export default function PurchaseBillGenerationScreen() {
     const variant = varieties.find(row => row.id === Number(variantId));
     if (!variant) return;
     const next = [...items];
-    const item = next[selectingItemIndex];
+    const item = { ...next[selectingItemIndex] };
     item.fishVarietyId = variant.id;
     item.varietyName = variant.name;
     if (variant.default_kg_per_crate && variant.default_kg_per_crate > 0) {
@@ -190,6 +210,7 @@ export default function PurchaseBillGenerationScreen() {
       item.billableWeight = item.actualWeight - item.deductionWeight;
       item.grossAmount = item.billableWeight * (Number.parseFloat(item.ratePerKg) || 0);
     }
+    next[selectingItemIndex] = item;
     setItems(next);
     setSelectingItemIndex(null);
   };
@@ -249,13 +270,17 @@ export default function PurchaseBillGenerationScreen() {
 
   const handleGenerateBill = async () => {
     // Validation
-    const hasEmptyRates = items.some(item => !item.ratePerKg || parseFloat(item.ratePerKg) === 0);
+    const hasEmptyRates = items.some(item => !item.ratePerKg || (parseFloat(item.ratePerKg) || 0) <= 0);
     if (hasEmptyRates) {
       Alert.alert('Error', 'Please enter rates for all items');
       return;
     }
     if (items.some(item => item.crates === 0 && item.looseKg === 0)) {
       Alert.alert('Quantity required', 'Every item needs crates, kilograms, or both.');
+      return;
+    }
+    if (items.some(item => item.crates > 0 && item.kgPerCrate <= 0)) {
+      Alert.alert('Weight required', 'Enter kilograms per crate for every item that has crates.');
       return;
     }
     if (applyCommission && (parseFloat(commissionPerKg) || 0) <= 0) {
@@ -273,22 +298,11 @@ export default function PurchaseBillGenerationScreen() {
       return;
     }
 
-    Alert.alert(
-      isCorrection ? 'Save bill changes?' : 'Generate Bill',
-      `Total Amount: ${formatMoney(totals.total, 2)}\n\n${isCorrection ? `This will replace ${correction?.bill.bill_number} and preserve the original in correction history.` : 'Bill will be created and you can add payments later from the bills list.'}`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Generate',
-          onPress: async () => {
-            setSubmitting(true);
+    const submitBill = async () => {
+      setSubmitting(true);
 
-            try {
-              // Prepare bill items
-              const billItems = items.map((item, index) => ({
+      try {
+        const billItems = items.map((item) => ({
                 purchase_id: item.purchaseId,
                 fish_variety_id: item.fishVarietyId,
                 fish_variety_name: item.varietyName,
@@ -298,10 +312,9 @@ export default function PurchaseBillGenerationScreen() {
                 billable_weight: item.billableWeight,
                 rate_per_kg: parseFloat(item.ratePerKg),
                 amount: item.grossAmount,
-              }));
+        }));
 
-              // Create bill
-              const billParams = {
+        const billParams = {
                 supplier_id,
                 bill_date: date,
                 items: billItems,
@@ -313,35 +326,37 @@ export default function PurchaseBillGenerationScreen() {
                 other_charges_deduction: parseFloat(otherChargesDeduction) || 0,
                 notes: notes,
                 location,
-              };
-              const result = isCorrection && correction
-                ? await revisePurchaseBill(correction.bill.id, correctionReason, billParams)
-                : await createPurchaseBill(billParams);
+        };
+        const result = isCorrection && correction
+          ? await revisePurchaseBill(correction.bill.id, correctionReason, billParams)
+          : await createPurchaseBill(billParams);
 
-              setSubmitting(false);
+        if (!result.success) throw new Error(result.error || 'The bill could not be saved');
+        const successMessage = `${isCorrection ? 'Purchase bill updated successfully!' : 'Purchase bill created successfully!'}\n\nTotal: ${formatMoney(totals.total, 2)}`;
+        if (Platform.OS === 'web') {
+          window.alert(successMessage);
+          navigation.goBack();
+        } else {
+          Alert.alert('Success', successMessage, [{ text: 'OK', onPress: () => navigation.goBack() }]);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (Platform.OS === 'web') window.alert(`Unable to save bill\n\n${message}`);
+        else Alert.alert('Unable to save bill', message);
+      } finally {
+        setSubmitting(false);
+      }
+    };
 
-              if (result.success) {
-                Alert.alert(
-                  'Success',
-                  `${isCorrection ? 'Purchase bill updated successfully!' : 'Purchase bill created successfully!'}\n\nTotal: ${formatMoney(totals.total, 2)}\n\nYou can now add payments from the bills list.`,
-                  [
-                    {
-                      text: 'OK',
-                      onPress: () => navigation.goBack(),
-                    },
-                  ]
-                );
-              } else {
-                Alert.alert('Error', `Failed to create bill: ${result.error}`);
-              }
-            } catch (error) {
-              setSubmitting(false);
-              Alert.alert('Error', `An error occurred: ${String(error)}`);
-            }
-          },
-        },
-      ]
-    );
+    const confirmationMessage = `Total Amount: ${formatMoney(totals.total, 2)}\n\n${isCorrection ? `This will replace ${correction?.bill.bill_number} and preserve the original in correction history.` : 'Bill will be created and you can add payments later from the bills list.'}`;
+    if (Platform.OS === 'web') {
+      if (window.confirm(`${isCorrection ? 'Save bill changes?' : 'Generate Bill'}\n\n${confirmationMessage}`)) void submitBill();
+      return;
+    }
+    Alert.alert(isCorrection ? 'Save bill changes?' : 'Generate Bill', confirmationMessage, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: isCorrection ? 'Save changes' : 'Generate', onPress: () => void submitBill() },
+    ]);
   };
 
   const totals = calculateTotals();
@@ -384,9 +399,9 @@ export default function PurchaseBillGenerationScreen() {
               {isCorrection ? (
                 <>
                   <Text style={styles.correctionFieldLabel}>ITEM & GRADE</Text>
-                  <TouchableOpacity style={styles.correctionSelect} onPress={() => setSelectingItemIndex(index)}>
+                  <TouchableOpacity style={styles.correctionSelect} disabled={loadingVarieties} onPress={() => void openItemSelector(index)}>
                     <Text style={styles.correctionSelectValue}>{item.varietyName}</Text>
-                    <Text style={styles.correctionSelectAction}>Change ›</Text>
+                    <Text style={styles.correctionSelectAction}>{loadingVarieties ? 'Loading…' : 'Change ›'}</Text>
                   </TouchableOpacity>
                   <View style={styles.correctionQuantityRow}>
                     <View style={styles.correctionQuantityField}>

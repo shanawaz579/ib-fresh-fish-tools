@@ -12,12 +12,17 @@ import {
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useCustomersManagement } from '../features/customers/useCustomersManagement';
+import { useBusinessConfig } from '../context/BusinessConfigContext';
 
 export default function CustomersScreen() {
+  const { formatMoney } = useBusinessConfig();
   const {
     customers, loading, refreshing, formData, setFormData, submitting,
     editingId, editingData, setEditingData, showAddForm, setShowAddForm,
     onRefresh, handleAddCustomer, handleStartEdit, handleSaveEdit, handleDelete, handleCancelEdit, closeAddForm,
+    balanceCustomer, balanceAmount, setBalanceAmount, balanceType, setBalanceType,
+    balanceDate, setBalanceDate, balanceReason, setBalanceReason, savingBalance,
+    handleStartBalance, handleSaveBalance, closeBalance,
   } = useCustomersManagement();
 
   return (
@@ -58,13 +63,20 @@ export default function CustomersScreen() {
                 {customer.business_type && (
                   <Text style={styles.customerDetail}>{customer.business_type}</Text>
                 )}
+                {customer.opening_balance ? (
+                  <Text style={styles.balanceSummary}>
+                    {Number(customer.opening_balance) > 0 ? 'Opening due' : 'Opening credit'} · {formatMoney(Math.abs(Number(customer.opening_balance)), 0)}
+                  </Text>
+                ) : null}
               </View>
-              <TouchableOpacity
-                onPress={() => handleStartEdit(customer)}
-                style={styles.editButton}
-              >
-                <Text style={styles.editButtonText}>Edit</Text>
-              </TouchableOpacity>
+              <View style={styles.cardActions}>
+                <TouchableOpacity onPress={() => handleStartBalance(customer)} style={styles.balanceButton}>
+                  <Text style={styles.balanceButtonText}>Balance</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => handleStartEdit(customer)} style={styles.editButton}>
+                  <Text style={styles.editButtonText}>Edit</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           ))
         )}
@@ -197,6 +209,42 @@ export default function CustomersScreen() {
                 </TouchableOpacity>
               </View>
             </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={Boolean(balanceCustomer)} animationType="slide" transparent onRequestClose={closeBalance}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>Opening balance</Text>
+            <Text style={styles.balanceCustomerName}>{balanceCustomer?.name}</Text>
+            <Text style={styles.helperText}>Use this once when bringing an existing customer account into the app.</Text>
+
+            <Text style={styles.label}>Balance type</Text>
+            <View style={styles.typeRow}>
+              <TouchableOpacity style={[styles.typeButton, balanceType === 'receivable' && styles.typeButtonActive]} onPress={() => setBalanceType('receivable')}>
+                <Text style={[styles.typeButtonText, balanceType === 'receivable' && styles.typeButtonTextActive]}>Customer owes us</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.typeButton, balanceType === 'credit' && styles.typeButtonActive]} onPress={() => setBalanceType('credit')}>
+                <Text style={[styles.typeButtonText, balanceType === 'credit' && styles.typeButtonTextActive]}>Advance credit</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.label}>Amount</Text>
+            <TextInput style={styles.input} value={balanceAmount} onChangeText={setBalanceAmount} keyboardType="decimal-pad" placeholder="0" />
+            <Text style={styles.label}>Effective date</Text>
+            <TextInput style={styles.input} value={balanceDate} onChangeText={setBalanceDate} placeholder="YYYY-MM-DD" autoCapitalize="none" />
+            {balanceCustomer?.opening_balance || balanceCustomer?.opening_balance_date ? (
+              <><Text style={styles.label}>Correction reason *</Text><TextInput style={styles.input} value={balanceReason} onChangeText={setBalanceReason} placeholder="Why is this changing?" /></>
+            ) : null}
+            <Text style={styles.lockNote}>After the first bill or payment, this balance is locked to protect account history.</Text>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity disabled={savingBalance} onPress={handleSaveBalance} style={[styles.modalButton, styles.saveButton, savingBalance && styles.disabledButton]}>
+                {savingBalance ? <ActivityIndicator color="#fff" /> : <Text style={styles.modalButtonText}>Save opening balance</Text>}
+              </TouchableOpacity>
+              <TouchableOpacity onPress={closeBalance} style={[styles.modalButton, styles.cancelButton]}><Text style={styles.cancelButtonText}>Cancel</Text></TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>

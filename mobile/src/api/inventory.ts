@@ -154,7 +154,7 @@ export async function updateUnbilledPurchase(params: {
 export async function updateUnbilledPurchaseGroup(params: {
   purchaseIds: number[];
   items: Array<{
-    id: number;
+    id?: number;
     fishVarietyId: number;
     quantityCrates: number;
     quantityKg: number;
@@ -163,7 +163,7 @@ export async function updateUnbilledPurchaseGroup(params: {
   const { error } = await supabase.rpc('update_purchase_group', {
     p_purchase_ids: params.purchaseIds,
     p_items: params.items.map((item) => ({
-      id: item.id,
+      id: item.id ?? null,
       fish_variety_id: item.fishVarietyId,
       quantity_crates: item.quantityCrates,
       quantity_kg: item.quantityKg,
