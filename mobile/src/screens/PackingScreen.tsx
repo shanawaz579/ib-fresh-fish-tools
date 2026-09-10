@@ -578,7 +578,7 @@ export default function PackingScreen() {
               />
             </View>
 
-            <Text style={styles.shareExpiryNote}>The link expires automatically after 24 hours. Creating a new link revokes the previous one.</Text>
+            <Text style={styles.shareExpiryNote}>The link expires automatically after 12 hours. Creating a new link revokes the previous one.</Text>
 
             <View style={styles.shareActions}>
               <TouchableOpacity style={styles.revokeLinkButton} onPress={handleRevokePackingShares} disabled={creatingShare}>
