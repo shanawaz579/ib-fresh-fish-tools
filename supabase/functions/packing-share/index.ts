@@ -8,7 +8,10 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+const packingPageUrl = 'https://ib-fresh-fish.expo.app/packing/index.html';
+
 const securityHeaders = {
+  'Access-Control-Allow-Origin': '*',
   'Cache-Control': 'no-store, max-age=0',
   'Referrer-Policy': 'no-referrer',
   'X-Content-Type-Options': 'nosniff',
@@ -87,7 +90,22 @@ Deno.serve(async (request) => {
 
   const url = new URL(request.url);
 
-  if (request.method === 'GET' && url.searchParams.get('format') !== 'json') return page();
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...securityHeaders,
+        'Access-Control-Allow-Headers': 'content-type',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      },
+    });
+  }
+
+  if (request.method === 'GET' && url.searchParams.get('format') !== 'json') {
+    const redirect = new URL(packingPageUrl);
+    redirect.searchParams.set('token', url.searchParams.get('token') ?? '');
+    return Response.redirect(redirect, 302);
+  }
 
   if (request.method === 'GET') {
     const token = url.searchParams.get('token') ?? '';

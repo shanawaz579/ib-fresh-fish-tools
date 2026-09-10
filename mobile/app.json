@@ -27,7 +27,8 @@
       "package": "com.ibfreshfish.mobile"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single"
     },
     "extra": {
       "eas": {
