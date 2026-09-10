@@ -8,8 +8,19 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
+  Share,
+  Switch,
 } from 'react-native';
-import { getSalesByDate, getPackingStatusByDate, togglePackingStatus, clearPackingStatusByDate, getCustomers } from '../api/stock';
+import {
+  clearPackingStatusByDate,
+  createPackingShare,
+  getCustomers,
+  getPackingStatusByDate,
+  getSalesByDate,
+  revokePackingShares,
+  togglePackingStatus,
+} from '../api/stock';
 import type { Sale } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useBusinessDate } from '../hooks/useBusinessDate';
@@ -80,7 +91,7 @@ const translations = {
 
 export default function PackingScreen() {
   const navigation = useNavigation();
-  const { signOut, user, isPacker } = useAuth();
+  const { signOut, user, isAdmin, isPacker } = useAuth();
   const { date, setDate } = useBusinessDate();
   const [customerGroups, setCustomerGroups] = useState<CustomerGroup[]>([]);
   const [loading, setLoading] = useState(false);
@@ -88,6 +99,10 @@ export default function PackingScreen() {
   const [loadedItems, setLoadedItems] = useState<Set<number>>(new Set());
   const [expandedCustomers, setExpandedCustomers] = useState<Set<number>>(new Set());
   const [completedSectionExpanded, setCompletedSectionExpanded] = useState(false);
+  const [shareDialogVisible, setShareDialogVisible] = useState(false);
+  const [selectedCustomerIds, setSelectedCustomerIds] = useState<Set<number>>(new Set());
+  const [allowSharedUpdates, setAllowSharedUpdates] = useState(true);
+  const [creatingShare, setCreatingShare] = useState(false);
 
   const t = translations.en;
 
@@ -263,6 +278,81 @@ export default function PackingScreen() {
     );
   };
 
+  const openShareDialog = () => {
+    if (date !== today) {
+      Alert.alert('Share today only', 'Temporary packing links can only be created for today.');
+      return;
+    }
+
+    setSelectedCustomerIds(new Set(customerGroups.map(group => group.customerId)));
+    setAllowSharedUpdates(true);
+    setShareDialogVisible(true);
+  };
+
+  const toggleSharedCustomer = (customerId: number) => {
+    setSelectedCustomerIds(current => {
+      const next = new Set(current);
+      if (next.has(customerId)) next.delete(customerId);
+      else next.add(customerId);
+      return next;
+    });
+  };
+
+  const toggleAllSharedCustomers = () => {
+    setSelectedCustomerIds(current => (
+      current.size === customerGroups.length
+        ? new Set()
+        : new Set(customerGroups.map(group => group.customerId))
+    ));
+  };
+
+  const handleCreatePackingShare = async () => {
+    if (selectedCustomerIds.size === 0) {
+      Alert.alert('Select customers', 'Select at least one customer to share.');
+      return;
+    }
+
+    setCreatingShare(true);
+    try {
+      const share = await createPackingShare(date, Array.from(selectedCustomerIds), allowSharedUpdates);
+      setShareDialogVisible(false);
+      await Share.share({
+        title: `Packing list — ${formatBusinessDate(date)}`,
+        message: `Packing list for ${formatBusinessDate(date)}\n${share.url}\n\nThis private link expires automatically.`,
+        url: share.url,
+      });
+    } catch (error) {
+      console.error('Unable to create packing link:', error);
+      Alert.alert('Unable to share', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setCreatingShare(false);
+    }
+  };
+
+  const handleRevokePackingShares = () => {
+    Alert.alert(
+      'Revoke packing link?',
+      'Anyone using the current link will lose access immediately.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const revoked = await revokePackingShares(date);
+              setShareDialogVisible(false);
+              Alert.alert(revoked > 0 ? 'Link revoked' : 'No active link', revoked > 0 ? 'The packing link no longer works.' : 'There was no active link for today.');
+            } catch (error) {
+              console.error('Unable to revoke packing link:', error);
+              Alert.alert('Unable to revoke', 'Please try again.');
+            }
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -272,6 +362,11 @@ export default function PackingScreen() {
           <View><Text style={styles.title}>{t.title}</Text><Text style={styles.subtitle}>Prepare and confirm customer loads</Text></View>
         </View>
         <View style={styles.headerButtons}>
+          {isAdmin ? (
+            <TouchableOpacity onPress={openShareDialog} style={styles.shareButton}>
+              <Text style={styles.shareText}>Share</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity onPress={handleResetPackingStatus} style={styles.resetButton}>
             <Text style={styles.resetText}>Reset</Text>
           </TouchableOpacity>
@@ -426,6 +521,76 @@ export default function PackingScreen() {
           </>
         )}
       </ScrollView>
+
+      <Modal
+        animationType="slide"
+        transparent
+        visible={shareDialogVisible}
+        onRequestClose={() => setShareDialogVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.shareSheet}>
+            <View style={styles.shareSheetHandle} />
+            <View style={styles.shareSheetHeader}>
+              <View style={styles.shareSheetTitleBlock}>
+                <Text style={styles.shareSheetEyebrow}>TEMPORARY TEAM ACCESS</Text>
+                <Text style={styles.shareSheetTitle}>Share packing list</Text>
+                <Text style={styles.shareSheetSubtitle}>Choose the customer loads visible to today’s packing team.</Text>
+              </View>
+              <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShareDialogVisible(false)}>
+                <Text style={styles.modalCloseText}>×</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.selectAllRow} onPress={toggleAllSharedCustomers}>
+              <View style={[styles.selectBox, selectedCustomerIds.size === customerGroups.length && styles.selectBoxChecked]}>
+                {selectedCustomerIds.size === customerGroups.length ? <Text style={styles.selectCheck}>✓</Text> : null}
+              </View>
+              <Text style={styles.selectAllLabel}>Select all customers</Text>
+              <Text style={styles.selectionCount}>{selectedCustomerIds.size}/{customerGroups.length}</Text>
+            </TouchableOpacity>
+
+            <ScrollView style={styles.shareCustomerList} contentContainerStyle={styles.shareCustomerListContent}>
+              {customerGroups.map(group => {
+                const selected = selectedCustomerIds.has(group.customerId);
+                return (
+                  <TouchableOpacity key={group.customerId} style={[styles.shareCustomerRow, selected && styles.shareCustomerRowSelected]} onPress={() => toggleSharedCustomer(group.customerId)}>
+                    <View style={[styles.selectBox, selected && styles.selectBoxChecked]}>
+                      {selected ? <Text style={styles.selectCheck}>✓</Text> : null}
+                    </View>
+                    <Text style={styles.shareCustomerName}>{group.customerName}</Text>
+                    <Text style={styles.shareCustomerQuantity}>{formatQuantity(group.totalCrates, group.totalKg)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={styles.sharePermissionRow}>
+              <View style={styles.sharePermissionCopy}>
+                <Text style={styles.sharePermissionTitle}>Allow packing updates</Text>
+                <Text style={styles.sharePermissionSubtitle}>Workers can only mark selected items packed or unpacked.</Text>
+              </View>
+              <Switch
+                value={allowSharedUpdates}
+                onValueChange={setAllowSharedUpdates}
+                trackColor={{ false: '#CBD5E1', true: '#FDBA74' }}
+                thumbColor={allowSharedUpdates ? '#B45309' : '#F8FAFC'}
+              />
+            </View>
+
+            <Text style={styles.shareExpiryNote}>The link expires automatically at 6:00 AM tomorrow. Creating a new link revokes the previous one.</Text>
+
+            <View style={styles.shareActions}>
+              <TouchableOpacity style={styles.revokeLinkButton} onPress={handleRevokePackingShares} disabled={creatingShare}>
+                <Text style={styles.revokeLinkText}>Revoke link</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.createLinkButton, (creatingShare || selectedCustomerIds.size === 0) && styles.createLinkButtonDisabled]} onPress={handleCreatePackingShare} disabled={creatingShare || selectedCustomerIds.size === 0}>
+                {creatingShare ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.createLinkText}>Create & share link</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

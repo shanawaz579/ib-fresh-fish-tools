@@ -10,7 +10,8 @@ BEGIN
     'bills','bill_items','bill_corrections','business_preferences','business_profile',
     'cash_adjustments','cash_day_closings','customers','expense_categories','expenses',
     'farmers','inventory_cost_events','inventory_costing_control','inventory_costing_runs',
-    'item_grades','items','item_variants','packing_status','payments','purchase_bill_items',
+    'item_grades','items','item_variants','packing_share_activity','packing_share_links',
+    'packing_status','payments','purchase_bill_items',
     'purchase_bill_payments','purchase_bills','purchases','sales','stock_locations',
     'stock_movements','suppliers','units'
   ]) required(name)
@@ -33,7 +34,10 @@ BEGIN
   IF to_regprocedure('working.save_sales_batch(bigint,date,jsonb)') IS NULL
      OR to_regprocedure('working.revise_customer_bill(bigint,text,bigint,date,jsonb,jsonb,numeric,text,jsonb,boolean)') IS NULL
      OR to_regprocedure('working.revise_purchase_bill_with_source_changes(bigint,text,bigint,date,jsonb,numeric,numeric,character varying,text,numeric,numeric,text,text)') IS NULL
-     OR to_regprocedure('working.record_customer_payment(bigint,date,numeric,character varying,text,text)') IS NULL THEN
+     OR to_regprocedure('working.record_customer_payment(bigint,date,numeric,character varying,text,text)') IS NULL
+     OR to_regprocedure('working.create_packing_share(date,bigint[],boolean)') IS NULL
+     OR to_regprocedure('working.get_packing_share(text)') IS NULL
+     OR to_regprocedure('working.update_shared_packing_status(text,bigint,boolean,text)') IS NULL THEN
     RAISE EXCEPTION 'One or more critical production RPCs are missing';
   END IF;
 
