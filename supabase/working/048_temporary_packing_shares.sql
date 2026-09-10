@@ -94,7 +94,7 @@ BEGIN
      AND created_by = auth.uid()
      AND revoked_at IS NULL;
 
-  raw_token := encode(gen_random_bytes(24), 'hex');
+  raw_token := encode(extensions.gen_random_bytes(24), 'hex');
 
   INSERT INTO working.packing_share_links (
     token_hash,
@@ -105,7 +105,7 @@ BEGIN
     created_by
   )
   VALUES (
-    encode(digest(raw_token, 'sha256'), 'hex'),
+    encode(extensions.digest(raw_token, 'sha256'), 'hex'),
     p_packing_date,
     normalized_customer_ids,
     COALESCE(p_allow_updates, TRUE),
@@ -140,7 +140,7 @@ BEGIN
   SELECT share.*
     INTO active_share
     FROM working.packing_share_links share
-   WHERE share.token_hash = encode(digest(p_token, 'sha256'), 'hex')
+   WHERE share.token_hash = encode(extensions.digest(p_token, 'sha256'), 'hex')
      AND share.revoked_at IS NULL
      AND share.expires_at > NOW();
 
@@ -216,7 +216,7 @@ BEGIN
   SELECT share.*
     INTO active_share
     FROM working.packing_share_links share
-   WHERE share.token_hash = encode(digest(COALESCE(p_token, ''), 'sha256'), 'hex')
+   WHERE share.token_hash = encode(extensions.digest(COALESCE(p_token, ''), 'sha256'), 'hex')
      AND share.revoked_at IS NULL
      AND share.expires_at > NOW()
    FOR UPDATE;
