@@ -109,7 +109,7 @@ BEGIN
     p_packing_date,
     normalized_customer_ids,
     COALESCE(p_allow_updates, TRUE),
-    (p_packing_date + 1 + TIME '06:00') AT TIME ZONE business_timezone,
+    NOW() + INTERVAL '24 hours',
     auth.uid()
   )
   RETURNING id, packing_share_links.expires_at
