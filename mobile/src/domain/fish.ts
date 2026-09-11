@@ -34,6 +34,26 @@ export function getPurchaseTotalWeightKg(
   return Math.max(crates, 0) * Math.max(crateWeightKg, 0) + Math.max(looseKg, 0);
 }
 
+export function normalizeCratesAndKg(
+  crates: number,
+  looseKg: number,
+  crateWeightKg = DEFAULT_CRATE_WEIGHT_KG,
+): { crates: number; kg: number } {
+  const safeCrates = Math.max(crates, 0);
+  const safeLooseKg = Math.max(looseKg, 0);
+  const safeCrateWeight = Math.max(crateWeightKg, 0);
+
+  if (safeCrateWeight === 0) return { crates: safeCrates, kg: safeLooseKg };
+
+  const additionalCrates = Math.floor(safeLooseKg / safeCrateWeight);
+  const remainingKg = Number((safeLooseKg - additionalCrates * safeCrateWeight).toFixed(3));
+
+  return {
+    crates: safeCrates + additionalCrates,
+    kg: remainingKg,
+  };
+}
+
 export function extractFishSize(varietyName: string): { name: string; size: string } {
   const structuredGrade = varietyName.match(/^(.*?)\s+-\s+(OB|B|M|S)$/i);
   if (structuredGrade) {

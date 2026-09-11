@@ -42,7 +42,7 @@ export default StyleSheet.create({
   customerGroup: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    marginBottom: 10,
+    marginBottom: 8,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -52,19 +52,19 @@ export default StyleSheet.create({
   },
   customerHeader: {
     backgroundColor: '#F3F4F6',
-    padding: 12,
+    padding: 10,
   },
   customerHeaderTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
   },
-  customerHeaderBottom: {
+  customerHeaderActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     paddingLeft: 22,
+    marginTop: 8,
   },
   customerHeaderLeft: {
     flexDirection: 'row',
@@ -79,25 +79,37 @@ export default StyleSheet.create({
     width: 16,
   },
   customerName: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#111827',
     flexShrink: 1,
+  },
+  customerIdentity: {
+    flex: 1,
+    minWidth: 0,
+  },
+  customerLocation: {
+    color: '#6B7280',
+    fontSize: 11,
+    marginTop: 1,
+  },
+  customerHeaderSummary: {
+    alignItems: 'flex-end',
+    flexShrink: 0,
+    gap: 4,
+    marginLeft: 8,
   },
   quantityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#EFF6FF',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
     gap: 6,
   },
-  quantityIcon: {
-    fontSize: 16,
-  },
   customerCount: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: '#1E40AF',
   },
@@ -109,9 +121,9 @@ export default StyleSheet.create({
   billingStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 7,
     gap: 4,
   },
   billingStatusBilled: {
@@ -173,11 +185,6 @@ export default StyleSheet.create({
     color: '#DC2626',
     fontSize: 14,
     fontWeight: '600',
-  },
-  customerHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
   },
   editButton: {
     backgroundColor: '#DBEAFE',

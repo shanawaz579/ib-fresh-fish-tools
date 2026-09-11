@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import SearchableSelectModal, { type SearchableOption } from '../../components/SearchableSelectModal';
+import { getCustomerLocation } from '../../domain/customers';
 import ItemCatalogCreateModal from '../purchases/ItemCatalogCreateModal';
 import type { Customer, FishVariety } from '../../types';
 import CustomerCreateModal from './CustomerCreateModal';
@@ -53,7 +54,7 @@ export default function SalesEntryForm(props: Props) {
   const customerOptions = useMemo<SearchableOption[]>(() => props.customers.map((customer) => ({
     id: customer.id,
     label: customer.name,
-    detail: [customer.business_type, customer.city, customer.phone].filter(Boolean).join(' · '),
+    detail: [getCustomerLocation(customer), customer.phone].filter(Boolean).join(' · '),
   })), [props.customers]);
   const itemOptions = useMemo<SearchableOption[]>(() => availableVarieties.map((variant) => {
     const stock = props.getStock(variant.id).available;
@@ -75,7 +76,7 @@ export default function SalesEntryForm(props: Props) {
 
       <Text style={styles.label}>Customer *</Text>
       <TouchableOpacity style={[styles.selectField, props.editing && styles.lockedField]} disabled={props.editing} onPress={() => setShowCustomers(true)}>
-        <View style={styles.selectIdentity}><Text style={selectedCustomer ? styles.selectValue : styles.selectPlaceholder}>{selectedCustomer?.name ?? 'Search and select customer'}</Text>{selectedCustomer?.business_type ? <Text style={styles.selectDetail}>{selectedCustomer.business_type}</Text> : null}</View>
+        <View style={styles.selectIdentity}><Text style={selectedCustomer ? styles.selectValue : styles.selectPlaceholder}>{selectedCustomer?.name ?? 'Search and select customer'}</Text>{selectedCustomer && getCustomerLocation(selectedCustomer) ? <Text style={styles.selectDetail}>{getCustomerLocation(selectedCustomer)}</Text> : null}</View>
         <Text style={styles.selectChevron}>›</Text>
       </TouchableOpacity>
 

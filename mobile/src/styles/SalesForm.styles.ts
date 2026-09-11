@@ -154,6 +154,7 @@ export default StyleSheet.create({
   stockChipName: { color: '#064E3B', fontSize: 11, fontWeight: '800' },
   stockChipMetrics: { marginTop: 5 },
   stockChipQty: { color: '#047857', fontSize: 12, fontWeight: '900' },
+  stockApproximationNote: { color: '#6B7280', fontSize: 10, marginTop: 7, paddingHorizontal: 16 },
   stockMoreButton: { alignItems: 'center', alignSelf: 'center', flexDirection: 'row', gap: 5, marginTop: 10, paddingHorizontal: 14, paddingVertical: 6 },
   stockMoreText: { color: '#2563EB', fontSize: 11, fontWeight: '800' },
   stockMoreIcon: { color: '#2563EB', fontSize: 12, fontWeight: '900' },

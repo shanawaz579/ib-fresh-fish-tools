@@ -18,6 +18,7 @@ import AvailableStockStrip from '../features/sales/AvailableStockStrip';
 import SalesEntryForm from '../features/sales/SalesEntryForm';
 import ExistingSaleModal from '../features/sales/ExistingSaleModal';
 import QuickCustomerPaymentModal from '../features/sales/QuickCustomerPaymentModal';
+import { getCustomerLocation } from '../domain/customers';
 import type { Sale } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -143,6 +144,14 @@ export default function SalesScreen() {
         ) : (
           Object.entries(sortedGroupedSales).map(([customerName, customerSales]) => {
             const customerId = customerSales[0]?.customer_id;
+            const customerLocation = getCustomerLocation(customers.find(customer => customer.id === customerId));
+            const isCollapsed = collapsedCustomers.has(customerId);
+            const totalCrates = customerSales.reduce((sum, sale) => sum + sale.quantity_crates, 0);
+            const totalKg = customerSales.reduce((sum, sale) => sum + sale.quantity_kg, 0);
+            const quantityText = [totalCrates > 0 ? `${totalCrates} cr` : '', totalKg > 0 ? `${totalKg} kg` : '']
+              .filter(Boolean)
+              .join(' · ');
+            const billingStatus = customerSales[0]?.billing_status;
             return (
               /* View Mode */
               <View key={customerName} style={styles.customerGroup}>
@@ -151,63 +160,55 @@ export default function SalesScreen() {
                   activeOpacity={0.7}
                 >
                   <View style={styles.customerHeader}>
-                    {/* First row: Name and Quantity */}
                     <View style={styles.customerHeaderTop}>
                       <View style={styles.customerHeaderLeft}>
                         <Text style={styles.collapseIcon}>
-                          {collapsedCustomers.has(customerId) ? '▶' : '▼'}
+                          {isCollapsed ? '▶' : '▼'}
                         </Text>
-                        <Text style={styles.customerName} numberOfLines={1} ellipsizeMode="tail">
-                          {customerName}
-                        </Text>
+                        <View style={styles.customerIdentity}>
+                          <Text style={styles.customerName} numberOfLines={1} ellipsizeMode="tail">
+                            {customerName}
+                          </Text>
+                          {customerLocation ? <Text style={styles.customerLocation} numberOfLines={1}>{customerLocation}</Text> : null}
+                        </View>
                       </View>
-                      <View style={styles.quantityBadge}>
-                        <Text style={styles.customerCount}>
-                          {[
-                            customerSales.reduce((sum, sale) => sum + sale.quantity_crates, 0) > 0
-                              ? `${customerSales.reduce((sum, sale) => sum + sale.quantity_crates, 0)} cr`
-                              : '',
-                            customerSales.reduce((sum, sale) => sum + sale.quantity_kg, 0) > 0
-                              ? `${customerSales.reduce((sum, sale) => sum + sale.quantity_kg, 0)} kg`
-                              : '',
-                          ].filter(Boolean).join(' · ')}
-                        </Text>
+                      <View style={styles.customerHeaderSummary}>
+                        <View style={styles.quantityBadge}>
+                          <Text style={styles.customerCount}>{quantityText}</Text>
+                        </View>
+                        {billingStatus ? (
+                          <View style={[
+                            styles.billingStatusBadge,
+                            billingStatus === 'billed' && styles.billingStatusBilled,
+                            billingStatus === 'unbilled' && styles.billingStatusUnbilled,
+                            billingStatus === 'partial' && styles.billingStatusPartial,
+                          ]}>
+                            <Text style={[
+                              styles.billingStatusIcon,
+                              billingStatus === 'billed' && { color: '#059669' },
+                              billingStatus === 'unbilled' && { color: '#DC2626' },
+                              billingStatus === 'partial' && { color: '#D97706' },
+                            ]}>
+                              {billingStatus === 'billed' && '✓'}
+                              {billingStatus === 'unbilled' && '⚠'}
+                              {billingStatus === 'partial' && '◐'}
+                            </Text>
+                            <Text style={[
+                              styles.billingStatusText,
+                              billingStatus === 'billed' && { color: '#059669' },
+                              billingStatus === 'unbilled' && { color: '#DC2626' },
+                              billingStatus === 'partial' && { color: '#D97706' },
+                            ]}>
+                              {billingStatus === 'billed' && 'Billed'}
+                              {billingStatus === 'unbilled' && 'Unbilled'}
+                              {billingStatus === 'partial' && 'Partial'}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
                     </View>
 
-                    {/* Second row: Status and Action Buttons */}
-                    <View style={styles.customerHeaderBottom}>
-                      {/* Billing Status Indicator */}
-                      {customerSales[0]?.billing_status && (
-                        <View style={[
-                          styles.billingStatusBadge,
-                          customerSales[0].billing_status === 'billed' && styles.billingStatusBilled,
-                          customerSales[0].billing_status === 'unbilled' && styles.billingStatusUnbilled,
-                          customerSales[0].billing_status === 'partial' && styles.billingStatusPartial,
-                        ]}>
-                          <Text style={[
-                            styles.billingStatusIcon,
-                            customerSales[0].billing_status === 'billed' && { color: '#059669' },
-                            customerSales[0].billing_status === 'unbilled' && { color: '#DC2626' },
-                            customerSales[0].billing_status === 'partial' && { color: '#D97706' },
-                          ]}>
-                            {customerSales[0].billing_status === 'billed' && '✓'}
-                            {customerSales[0].billing_status === 'unbilled' && '⚠'}
-                            {customerSales[0].billing_status === 'partial' && '◐'}
-                          </Text>
-                          <Text style={[
-                            styles.billingStatusText,
-                            customerSales[0].billing_status === 'billed' && { color: '#059669' },
-                            customerSales[0].billing_status === 'unbilled' && { color: '#DC2626' },
-                            customerSales[0].billing_status === 'partial' && { color: '#D97706' },
-                          ]}>
-                            {customerSales[0].billing_status === 'billed' && 'Billed'}
-                            {customerSales[0].billing_status === 'unbilled' && 'Unbilled'}
-                            {customerSales[0].billing_status === 'partial' && 'Partial'}
-                          </Text>
-                        </View>
-                      )}
-
+                    {!isCollapsed ? <View style={styles.customerHeaderActions}>
                       <View style={styles.actionButtons}>
                         {/* Show Generate Bill button only for unbilled sales */}
                         {customerSales.every((sale) => sale.billing_status === 'unbilled') && (
@@ -248,11 +249,11 @@ export default function SalesScreen() {
                           </TouchableOpacity>
                         )}
                       </View>
-                    </View>
+                    </View> : null}
                   </View>
                 </TouchableOpacity>
 
-                {!collapsedCustomers.has(customerId) && customerSales.map((sale) => (
+                {!isCollapsed && customerSales.map((sale) => (
                   <View key={sale.id} style={styles.saleItem}>
                     <View style={styles.saleInfo}>
                       <Text style={styles.varietyName}>{sale.fish_variety_name}</Text>

@@ -71,6 +71,9 @@ export function useSalesRecords() {
     setStockSnapshot(snapshotData);
     setSales(salesData);
     setFrequentVarietyIds(frequentIds);
+    if (!isRefreshing) {
+      setCollapsedCustomers(new Set(salesData.map((sale) => sale.customer_id)));
+    }
 
     if (isRefreshing) {
       setRefreshing(false);
