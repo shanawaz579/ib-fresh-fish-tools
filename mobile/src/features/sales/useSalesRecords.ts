@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import {
   deleteSale,
   getCustomers,
@@ -83,7 +83,7 @@ export function useSalesRecords() {
   };
 
   const onRefresh = () => {
-    loadData(true);
+    return loadData(true);
   };
 
   const toggleCustomerCollapse = (customerId: number) => {
@@ -286,22 +286,35 @@ export function useSalesRecords() {
   };
 
   const handleDelete = async (id: number) => {
+    const removeSale = async () => {
+      try {
+        await deleteSale(id);
+        await loadData();
+      } catch (error) {
+        const message = error && typeof error === 'object' && 'message' in error
+          ? String(error.message)
+          : 'Please try again.';
+        if (Platform.OS === 'web') window.alert(`Unable to delete sale\n\n${message}`);
+        else Alert.alert('Unable to delete sale', message);
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete this unbilled sale item?\n\nThis will restore its quantity to available stock.')) {
+        void removeSale();
+      }
+      return;
+    }
+
     Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this sale?',
+      'Delete sale item?',
+      'This will restore its quantity to available stock.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            const success = await deleteSale(id);
-            if (success) {
-              loadData();
-            } else {
-              Alert.alert('Error', 'Failed to delete sale');
-            }
-          },
+          onPress: () => { void removeSale(); },
         },
       ]
     );

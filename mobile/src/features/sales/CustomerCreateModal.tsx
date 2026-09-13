@@ -2,16 +2,18 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { addCustomer } from '../../api/stock';
+import { findDuplicateCustomer } from '../../domain/customers';
 import type { Customer } from '../../types';
 import styles from '../../styles/SalesScreen.styles';
 
 type Props = {
   visible: boolean;
+  customers: Customer[];
   onCreated: (customer: Customer) => void;
   onClose: () => void;
 };
 
-export default function CustomerCreateModal({ visible, onCreated, onClose }: Props) {
+export default function CustomerCreateModal({ visible, customers, onCreated, onClose }: Props) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [city, setCity] = useState('');
@@ -26,6 +28,11 @@ export default function CustomerCreateModal({ visible, onCreated, onClose }: Pro
   const save = async () => {
     if (!name.trim()) {
       Alert.alert('Customer name required', 'Enter the customer or business name.');
+      return;
+    }
+    const duplicate = findDuplicateCustomer(customers, { name, phone, city });
+    if (duplicate) {
+      Alert.alert('Customer already exists', `${duplicate.name} is already in the customer list. Select the existing customer instead.`);
       return;
     }
     setSaving(true);

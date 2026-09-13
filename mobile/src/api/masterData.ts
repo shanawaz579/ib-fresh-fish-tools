@@ -262,18 +262,22 @@ export async function updateCustomer(
 // Delete a customer
 
 export async function deleteCustomer(id: number): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('customers')
-      .delete()
-      .eq('id', id);
+  const { data, error } = await supabase
+    .from('customers')
+    .delete()
+    .eq('id', id)
+    .select('id');
 
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error('Error deleting customer:', err);
-    return false;
+  if (error) {
+    console.error('Error deleting customer:', error);
+    if (error.code === '23503') {
+      throw new Error('This customer has sales, bills, payments, or opening-balance history and cannot be deleted. Accounting history must remain linked to the customer.');
+    }
+    throw new Error(error.message || 'The customer could not be deleted.');
   }
+
+  if (!data?.length) throw new Error('Customer was not found or you do not have permission to delete it.');
+  return true;
 }
 
 // Clean up duplicate sales

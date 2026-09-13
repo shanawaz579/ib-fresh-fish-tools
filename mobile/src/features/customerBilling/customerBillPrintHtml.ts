@@ -1,5 +1,5 @@
 import type { Bill, BusinessConfiguration } from '../../types';
-import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg } from '../../domain/fish';
+import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg, sortFishItems } from '../../domain/fish';
 import { formatBusinessDate } from '../../utils/date';
 import { escapeHtml, formatConfiguredMoney } from '../../utils/businessFormatting';
 
@@ -20,15 +20,21 @@ export function buildCustomerBillPrintHtml(
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
       @page {
-        size: A4;
-        margin: 10mm;
+        size: A5 portrait;
+        margin: 7mm;
+      }
+      html {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
       body {
         font-family: 'Arial', sans-serif;
         padding: 0;
         margin: 0;
-        font-size: 12px;
-        min-height: 100vh;
+        color: #111827;
+        font-size: 13px;
+        line-height: 1.35;
+        min-height: 100%;
         display: flex;
         flex-direction: column;
       }
@@ -42,7 +48,7 @@ export function buildCustomerBillPrintHtml(
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        font-size: 300px;
+        font-size: 180px;
         opacity: 0.03;
         z-index: 0;
         pointer-events: none;
@@ -145,6 +151,7 @@ export function buildCustomerBillPrintHtml(
       }
       table {
         width: 100%;
+        table-layout: fixed;
         border-collapse: collapse;
         margin-bottom: 10px;
         border: 1px solid #e5e7eb;
@@ -157,21 +164,22 @@ export function buildCustomerBillPrintHtml(
         background: linear-gradient(to bottom, #1e293b, #334155);
       }
       th {
-        padding: 6px 4px;
+        padding: 7px 3px;
         text-align: left;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 700;
         color: #ffffff;
         text-transform: uppercase;
         letter-spacing: 0.3px;
       }
       td {
-        padding: 6px 4px;
+        padding: 7px 3px;
         font-size: 12px;
         color: #111827;
         border-bottom: 1px solid #e5e7eb;
         background: #ffffff;
         vertical-align: middle;
+        overflow-wrap: anywhere;
       }
       tbody tr:nth-child(even) td {
         background: #f9fafb;
@@ -198,7 +206,7 @@ export function buildCustomerBillPrintHtml(
         display: flex;
         justify-content: space-between;
         margin-bottom: 4px;
-        font-size: 12px;
+        font-size: 13px;
         padding: 1px 0;
       }
       .total-label {
@@ -215,11 +223,11 @@ export function buildCustomerBillPrintHtml(
       }
       .charge-label {
         font-weight: 500;
-        font-size: 12px;
+        font-size: 12.5px;
         color: #64748b;
       }
       .charge-value {
-        font-size: 12px;
+        font-size: 12.5px;
         color: #059669;
         font-weight: 700;
       }
@@ -323,7 +331,7 @@ export function buildCustomerBillPrintHtml(
           </tr>
         </thead>
         <tbody>
-          ${(previewBill.items || []).map(item => {
+          ${sortFishItems(previewBill.items || [], item => item.fish_variety_name).map(item => {
             const crateWeight = item.crate_weight ?? preferences.default_crate_weight_kg ?? DEFAULT_CRATE_WEIGHT_KG;
             const totalWeight = getTotalWeightKg(item.quantity_crates, item.quantity_kg, crateWeight);
             let qtyText = '';
@@ -357,11 +365,11 @@ export function buildCustomerBillPrintHtml(
           let html = '';
 
           // Previous Balance Section
-          if (previewBill.previous_balance && previewBill.previous_balance > 0) {
+          if (previewBill.previous_balance !== 0) {
             html += `
               <div class="total-row">
-                <span class="total-label">Previous Balance:</span>
-                <span class="total-value">${money(previewBill.previous_balance)}</span>
+                <span class="total-label">${previewBill.previous_balance < 0 ? 'Customer Credit Brought Forward:' : 'Previous Balance:'}</span>
+                <span class="total-value">${previewBill.previous_balance < 0 ? '−' : ''}${money(Math.abs(previewBill.previous_balance))}</span>
               </div>
             `;
           }
@@ -391,7 +399,7 @@ export function buildCustomerBillPrintHtml(
           }
 
           // Separator after previous balance/payments section
-          if ((previewBill.previous_balance && previewBill.previous_balance > 0) || (previewBill.payments && previewBill.payments.length > 0)) {
+          if (previewBill.previous_balance !== 0 || (previewBill.payments && previewBill.payments.length > 0)) {
             html += `<div class="separator"></div>`;
           }
 

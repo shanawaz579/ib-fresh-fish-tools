@@ -1,14 +1,20 @@
 export const PURCHASE_BILL_PRINT_CSS = `
 @page {
-            size: A4;
-            margin: 10mm;
+            size: A5 portrait;
+            margin: 7mm;
+          }
+          html {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
           }
           body {
             font-family: 'Arial', sans-serif;
             padding: 0;
             margin: 0;
-            font-size: 12px;
-            min-height: 100vh;
+            color: #111827;
+            font-size: 13px;
+            line-height: 1.35;
+            min-height: 100%;
             display: flex;
             flex-direction: column;
           }
@@ -22,16 +28,16 @@ export const PURCHASE_BILL_PRINT_CSS = `
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 300px;
+            font-size: 180px;
             opacity: 0.03;
             z-index: 0;
             pointer-events: none;
           }
           .header {
             background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
-            padding: 10px 16px;
+            padding: 8px 14px;
             border-bottom: 3px solid #0ea5e9;
-            margin-bottom: 10px;
+            margin-bottom: 7px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             position: relative;
             z-index: 1;
@@ -40,11 +46,11 @@ export const PURCHASE_BILL_PRINT_CSS = `
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             font-size: 12px;
           }
           .company-name {
-            font-size: 24px;
+            font-size: 22px;
             font-weight: 900;
             color: #0f172a;
             letter-spacing: 2px;
@@ -78,8 +84,8 @@ export const PURCHASE_BILL_PRINT_CSS = `
             font-weight: 500;
           }
           .farmer-section {
-            margin-bottom: 10px;
-            padding: 10px;
+            margin-bottom: 7px;
+            padding: 8px;
             background: #f9fafb;
             border-radius: 6px;
             border: 1px solid #e5e7eb;
@@ -125,8 +131,9 @@ export const PURCHASE_BILL_PRINT_CSS = `
           }
           table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
-            margin-bottom: 10px;
+            margin-bottom: 7px;
             border: 1px solid #e5e7eb;
             border-radius: 6px;
             overflow: hidden;
@@ -137,20 +144,21 @@ export const PURCHASE_BILL_PRINT_CSS = `
             background: linear-gradient(to bottom, #1e293b, #334155);
           }
           th {
-            padding: 6px 4px;
+            padding: 5px 3px;
             text-align: left;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
             color: #ffffff;
             text-transform: uppercase;
             letter-spacing: 0.3px;
           }
           td {
-            padding: 6px 4px;
+            padding: 5px 3px;
             font-size: 12px;
             color: #111827;
             border-bottom: 1px solid #e5e7eb;
             background: #ffffff;
+            overflow-wrap: anywhere;
           }
           tbody tr:nth-child(even) td {
             background: #f9fafb;
@@ -171,8 +179,8 @@ export const PURCHASE_BILL_PRINT_CSS = `
             text-align: right;
           }
           .totals {
-            margin-top: 10px;
-            padding: 10px;
+            margin-top: 7px;
+            padding: 8px;
             background: linear-gradient(to bottom, #f8fafc, #ffffff);
             border-radius: 6px;
             border: 1px solid #e5e7eb;
@@ -182,8 +190,8 @@ export const PURCHASE_BILL_PRINT_CSS = `
           .total-row {
             display: flex;
             justify-content: space-between;
-            margin-bottom: 4px;
-            font-size: 12px;
+            margin-bottom: 3px;
+            font-size: 13px;
             padding: 1px 0;
           }
           .total-label {
@@ -200,16 +208,16 @@ export const PURCHASE_BILL_PRINT_CSS = `
           }
           .charge-label {
             font-weight: 500;
-            font-size: 12px;
+            font-size: 12.5px;
             color: #64748b;
           }
           .charge-value {
-            font-size: 12px;
+            font-size: 12.5px;
             color: #059669;
             font-weight: 700;
           }
           .deduction-value {
-            font-size: 12px;
+            font-size: 12.5px;
             color: #DC2626;
             font-weight: 700;
           }
@@ -219,8 +227,8 @@ export const PURCHASE_BILL_PRINT_CSS = `
             margin: 6px 0;
           }
           .grand-total {
-            margin-top: 8px;
-            padding: 8px;
+            margin-top: 5px;
+            padding: 6px;
             border-top: 3px solid #3b82f6;
             background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
             border-radius: 6px;
@@ -246,8 +254,8 @@ export const PURCHASE_BILL_PRINT_CSS = `
             font-weight: 700;
           }
           .notes {
-            margin-top: 16px;
-            padding-top: 12px;
+            margin-top: 7px;
+            padding-top: 7px;
             border-top: 1px solid #e5e7eb;
           }
           .notes-title {
@@ -262,8 +270,8 @@ export const PURCHASE_BILL_PRINT_CSS = `
             font-style: italic;
           }
           .payment-details-section {
-            margin-top: 10px;
-            padding: 10px;
+            margin-top: 7px;
+            padding: 8px;
             background: #f8fafc;
             border-radius: 6px;
             border: 1px solid #e5e7eb;
@@ -299,8 +307,8 @@ export const PURCHASE_BILL_PRINT_CSS = `
             letter-spacing: 0.3px;
           }
           .payment-table td {
-            padding: 5px 4px;
-            font-size: 11px;
+            padding: 4px;
+            font-size: 11.5px;
             color: #111827;
             border-bottom: 1px solid #e5e7eb;
             background: #ffffff;

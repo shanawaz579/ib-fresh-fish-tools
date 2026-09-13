@@ -3,6 +3,7 @@ import type { BusinessConfiguration } from '../../types';
 import { formatBusinessDate } from '../../utils/date';
 import { escapeHtml, formatConfiguredMoney } from '../../utils/businessFormatting';
 import { PURCHASE_BILL_PRINT_CSS } from './purchaseBillPrintStyles';
+import { sortFishItems } from '../../domain/fish';
 
 export function generatePurchaseBillHtml(
   bill: PurchaseBillDetails,
@@ -11,7 +12,7 @@ export function generatePurchaseBillHtml(
   const { profile, preferences } = configuration;
   const money = (amount: number, digits = 0) => formatConfiguredMoney(amount, preferences, digits);
   const activePayments = bill.payments.filter((payment) => !payment.voided_at);
-  const itemsHTML = bill.items.map((item) => {
+  const itemsHTML = sortFishItems(bill.items, item => item.fish_variety_name).map((item) => {
     let qtyText = '';
     if (item.quantity_crates > 0 && item.quantity_kg > 0) {
       qtyText = `${item.quantity_crates} cr · ${item.quantity_kg} kg`;
@@ -181,10 +182,6 @@ export function generatePurchaseBillHtml(
           </div>
           ` : ''}
 
-          <div class="payment-space">
-            <div class="payment-space-title">Payment Records</div>
-            <div class="payment-space-subtitle">Use this space to record payment details manually</div>
-          </div>
         </div>
 
         <div class="footer">

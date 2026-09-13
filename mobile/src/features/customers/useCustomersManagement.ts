@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { addCustomer, deleteCustomer, getCustomers, setCustomerOpeningBalance, updateCustomer } from '../../api/stock';
 import type { Customer } from '../../types';
+import { findDuplicateCustomer } from '../../domain/customers';
 import { toLocalDateString } from '../../utils/date';
 
 export interface CustomerFormData {
@@ -67,6 +68,11 @@ export function useCustomersManagement() {
       Alert.alert('Error', 'Please enter customer name');
       return;
     }
+    const duplicate = findDuplicateCustomer(customers, formData);
+    if (duplicate) {
+      Alert.alert('Customer already exists', `${duplicate.name} is already in the customer list. Open that customer instead of creating another.`);
+      return;
+    }
 
     setSubmitting(true);
     const result = await addCustomer(
@@ -115,6 +121,12 @@ export function useCustomersManagement() {
 
     if (editingId === null) return;
 
+    const duplicate = findDuplicateCustomer(customers, editingData, editingId);
+    if (duplicate) {
+      Alert.alert('Customer already exists', `These details belong to ${duplicate.name}. Customer records cannot be duplicated.`);
+      return;
+    }
+
     setSubmitting(true);
     const result = await updateCustomer(
       editingId,
@@ -142,8 +154,8 @@ export function useCustomersManagement() {
 
   const handleDelete = async (id: number) => {
     Alert.alert(
-      'Confirm Delete',
-      'Are you sure you want to delete this customer?',
+      'Delete customer?',
+      'Only customers with no sales, bills, payments, or opening-balance history can be deleted.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -151,15 +163,19 @@ export function useCustomersManagement() {
           style: 'destructive',
           onPress: async () => {
             setSubmitting(true);
-            const result = await deleteCustomer(id);
-            if (result) {
+            try {
+              await deleteCustomer(id);
               await loadCustomers();
               setEditingId(null);
-              Alert.alert('Success', 'Customer deleted successfully!');
-            } else {
-              Alert.alert('Error', 'Failed to delete customer');
+              Alert.alert('Customer deleted', 'The unused customer record was removed.');
+            } catch (error) {
+              Alert.alert(
+                'Unable to delete customer',
+                error instanceof Error ? error.message : 'Please try again.',
+              );
+            } finally {
+              setSubmitting(false);
             }
-            setSubmitting(false);
           },
         },
       ]

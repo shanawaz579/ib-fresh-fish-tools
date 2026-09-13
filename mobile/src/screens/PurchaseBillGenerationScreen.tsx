@@ -14,7 +14,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { createPurchaseBill, revisePurchaseBill } from '../api/stock';
 import { getFishVarieties } from '../api/stock';
-import { DEFAULT_CRATE_WEIGHT_KG, getPurchaseTotalWeightKg } from '../domain/fish';
+import { DEFAULT_CRATE_WEIGHT_KG, getPurchaseTotalWeightKg, sortFishItems } from '../domain/fish';
 import { useBusinessConfig } from '../context/BusinessConfigContext';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { FishVariety } from '../types';
@@ -138,7 +138,7 @@ export default function PurchaseBillGenerationScreen() {
       };
     });
 
-    setItems(initialItems);
+    setItems(sortFishItems(initialItems, item => item.varietyName));
     if (correction) {
       const deductions = correction.bill.other_deductions || [];
       const deductionAmount = (type: string) => String(deductions.find(entry => entry.type === type)?.amount || '');
@@ -211,7 +211,7 @@ export default function PurchaseBillGenerationScreen() {
       item.grossAmount = item.billableWeight * (Number.parseFloat(item.ratePerKg) || 0);
     }
     next[selectingItemIndex] = item;
-    setItems(next);
+    setItems(sortFishItems(next, row => row.varietyName));
     setSelectingItemIndex(null);
   };
 

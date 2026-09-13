@@ -336,19 +336,16 @@ export async function deleteUnbilledPurchaseGroup(ids: number[]): Promise<void> 
 
 // Delete a sale
 
-export async function deleteSale(id: number): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('sales')
-      .delete()
-      .eq('id', id);
+export async function deleteSale(id: number): Promise<void> {
+  const { data, error } = await supabase
+    .from('sales')
+    .delete()
+    .eq('id', id)
+    .select('id')
+    .maybeSingle();
 
-    if (error) throw error;
-    return true;
-  } catch (err) {
-    console.error('Error deleting sale:', err);
-    return false;
-  }
+  if (error) throw error;
+  if (!data) throw new Error('Sale was not deleted. Check your permission or refresh the screen.');
 }
 
 // Add a new farmer

@@ -2,26 +2,36 @@ import supabase from '../lib/supabase';
 import type { Bill, BillItem, BillOtherCharge, Payment } from '../types';
 import { DEFAULT_CRATE_WEIGHT_KG } from '../domain/fish';
 
-// Get last rate for a fish variety from bill_items
+type LastItemRate = { rate_per_crate: number; rate_per_kg: number };
 
-export async function getLastRateForVariety(varietyId: number): Promise<{ rate_per_crate: number; rate_per_kg: number } | null> {
+async function queryLastRate(varietyId: number, customerId?: number): Promise<LastItemRate | null> {
+  let query = supabase
+    .from('bill_items')
+    .select('rate_per_crate, rate_per_kg, bills!inner(customer_id, is_active)')
+    .eq('fish_variety_id', varietyId)
+    .eq('bills.is_active', true)
+    .gt('rate_per_kg', 0);
+
+  if (customerId !== undefined) query = query.eq('bills.customer_id', customerId);
+
+  const { data, error } = await query
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    rate_per_crate: data.rate_per_crate || 0,
+    rate_per_kg: data.rate_per_kg || 0,
+  };
+}
+
+// Prefer this customer's last active billed rate, then fall back to the market-wide last rate.
+export async function getLastRateForVariety(varietyId: number, customerId?: number): Promise<LastItemRate | null> {
   try {
-    const { data, error } = await supabase
-      .from('bill_items')
-      .select('rate_per_crate, rate_per_kg')
-      .eq('fish_variety_id', varietyId)
-      .order('created_at', { ascending: false })
-      .limit(1);
-
-    if (error) throw error;
-
-    if (data && data.length > 0) {
-      return {
-        rate_per_crate: data[0].rate_per_crate || 0,
-        rate_per_kg: data[0].rate_per_kg || 0,
-      };
-    }
-    return null;
+    const customerRate = customerId === undefined ? null : await queryLastRate(varietyId, customerId);
+    return customerRate ?? await queryLastRate(varietyId);
   } catch (err) {
     console.error('Error getting last rate:', err);
     return null;
@@ -178,6 +188,7 @@ export async function getBillById(id: number): Promise<Bill | null> {
       .from('payments')
       .select('*')
       .eq('customer_id', billData.customer_id)
+      .is('voided_at', null)
       .gt('payment_date', previousBillDate)
       .lte('payment_date', billData.bill_date)
       .order('payment_date', { ascending: true });

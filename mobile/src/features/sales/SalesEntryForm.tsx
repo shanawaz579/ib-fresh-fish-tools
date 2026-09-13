@@ -125,7 +125,7 @@ export default function SalesEntryForm(props: Props) {
 
       <SearchableSelectModal visible={showCustomers} title="Select customer" searchPlaceholder="Search name, type, area or phone" options={customerOptions} emptyMessage="No customer found" createLabel="+ Create customer" onCreate={() => { setShowCustomers(false); setShowCreateCustomer(true); }} onSelect={props.onCustomerChange} onClose={() => setShowCustomers(false)} />
       <SearchableSelectModal visible={showItems} title="Select available item" searchPlaceholder="Search item, code or grade" options={itemOptions} emptyMessage="No available stock found" createLabel="+ Create catalog item" onCreate={() => { setShowItems(false); setShowCreateItem(true); }} onSelect={props.onVarietyChange} onClose={() => setShowItems(false)} />
-      <CustomerCreateModal visible={showCreateCustomer} onCreated={props.onCustomerCreated} onClose={() => setShowCreateCustomer(false)} />
+      <CustomerCreateModal customers={props.customers} visible={showCreateCustomer} onCreated={props.onCustomerCreated} onClose={() => setShowCreateCustomer(false)} />
       <ItemCatalogCreateModal visible={showCreateItem} onCreated={props.onCatalogCreated} onClose={() => setShowCreateItem(false)} />
     </View>
   );

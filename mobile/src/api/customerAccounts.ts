@@ -62,12 +62,13 @@ export async function getBillPreviewData(customerId: number, billDate: string): 
 }> {
   try {
     // Get previous active bill
-    const { data: previousBill } = await supabase
+    const { data: previousBill, error: previousBillError } = await supabase
       .from('bills')
       .select('id, total, bill_date')
       .eq('customer_id', customerId)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
+    if (previousBillError) throw previousBillError;
 
     const { data: customer } = previousBill ? { data: null } : await supabase
       .from('customers')
@@ -81,13 +82,15 @@ export async function getBillPreviewData(customerId: number, billDate: string): 
     const previousBillDate = previousBill?.bill_date || '1900-01-01';
 
     // Get payments since previous bill
-    const { data: paymentsData } = await supabase
+    const { data: paymentsData, error: paymentsError } = await supabase
       .from('payments')
       .select('*')
       .eq('customer_id', customerId)
+      .is('voided_at', null)
       .gt('payment_date', previousBillDate)
       .lte('payment_date', billDate)
       .order('payment_date', { ascending: true });
+    if (paymentsError) throw paymentsError;
 
     const payments = paymentsData || [];
     const totalPayments = payments.reduce((sum: number, p: any) => sum + p.amount, 0);
@@ -235,7 +238,8 @@ export async function getCustomerLedger(customerId: number, startDate?: string, 
     let paymentsQuery = supabase
       .from('payments')
       .select('id, payment_date, amount, payment_method, reference_number')
-      .eq('customer_id', customerId);
+      .eq('customer_id', customerId)
+      .is('voided_at', null);
 
     if (startDate) paymentsQuery = paymentsQuery.gte('payment_date', startDate);
     if (endDate) paymentsQuery = paymentsQuery.lte('payment_date', endDate);

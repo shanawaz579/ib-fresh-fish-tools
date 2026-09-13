@@ -34,26 +34,6 @@ export function getPurchaseTotalWeightKg(
   return Math.max(crates, 0) * Math.max(crateWeightKg, 0) + Math.max(looseKg, 0);
 }
 
-export function normalizeCratesAndKg(
-  crates: number,
-  looseKg: number,
-  crateWeightKg = DEFAULT_CRATE_WEIGHT_KG,
-): { crates: number; kg: number } {
-  const safeCrates = Math.max(crates, 0);
-  const safeLooseKg = Math.max(looseKg, 0);
-  const safeCrateWeight = Math.max(crateWeightKg, 0);
-
-  if (safeCrateWeight === 0) return { crates: safeCrates, kg: safeLooseKg };
-
-  const additionalCrates = Math.floor(safeLooseKg / safeCrateWeight);
-  const remainingKg = Number((safeLooseKg - additionalCrates * safeCrateWeight).toFixed(3));
-
-  return {
-    crates: safeCrates + additionalCrates,
-    kg: remainingKg,
-  };
-}
-
 export function extractFishSize(varietyName: string): { name: string; size: string } {
   const structuredGrade = varietyName.match(/^(.*?)\s+-\s+(OB|B|M|S)$/i);
   if (structuredGrade) {
@@ -106,6 +86,27 @@ export function getFishVarietySortKey(varietyName: string): number {
 
   const sizeIndex = FISH_SIZE_ORDER.indexOf(sizeName as typeof FISH_SIZE_ORDER[number]);
   return varietyIndex * 10 + Math.max(sizeIndex, 0);
+}
+
+export function compareFishVarietyNames(left: string, right: string): number {
+  const leftVariety = extractFishSize(left);
+  const rightVariety = extractFishSize(right);
+  const nameOrder = leftVariety.name.localeCompare(rightVariety.name, undefined, {
+    numeric: true,
+    sensitivity: 'base',
+  });
+  if (nameOrder !== 0) return nameOrder;
+
+  const gradeIndex = (grade: string) => {
+    const index = GRADE_ORDER.indexOf(grade as typeof GRADE_ORDER[number]);
+    return index === -1 ? GRADE_ORDER.length : index;
+  };
+  return gradeIndex(leftVariety.size) - gradeIndex(rightVariety.size)
+    || left.localeCompare(right, undefined, { numeric: true, sensitivity: 'base' });
+}
+
+export function sortFishItems<T>(items: readonly T[], getName: (item: T) => string): T[] {
+  return [...items].sort((left, right) => compareFishVarietyNames(getName(left), getName(right)));
 }
 
 export function sortFishVarieties(varieties: FishVariety[]): FishVariety[] {

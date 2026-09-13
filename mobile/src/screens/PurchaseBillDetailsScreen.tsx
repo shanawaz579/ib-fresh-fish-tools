@@ -21,6 +21,7 @@ import type { PurchaseBillDetails } from '../domain/purchaseBillDetails';
 import { generatePurchaseBillHtml } from '../features/purchaseBilling/purchaseBillDocument';
 import DateNavigator from '../components/DateNavigator';
 import { useBusinessConfig } from '../context/BusinessConfigContext';
+import { sortFishItems } from '../domain/fish';
 
 type PurchaseBillDetailsRouteProp = RouteProp<RootStackParamList, 'PurchaseBillDetails'>;
 
@@ -251,7 +252,7 @@ export default function PurchaseBillDetailsScreen() {
         {/* Items Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Items</Text>
-          {billDetails.items.map((item, index) => (
+          {sortFishItems(billDetails.items, item => item.fish_variety_name).map((item, index) => (
             <View key={item.id} style={styles.itemCard}>
               <View style={styles.itemHeader}>
                 <Text style={styles.itemName}>{item.fish_variety_name}</Text>

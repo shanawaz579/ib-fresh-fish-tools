@@ -1,5 +1,5 @@
 import type { BillOtherCharge, Sale } from '../types';
-import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg } from './fish';
+import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg, sortFishItems } from './fish';
 
 export type BillItemForm = {
   sale_ids: number[];
@@ -38,10 +38,11 @@ export async function buildBillItemsFromSales(
     grouped.set(sale.fish_variety_id, current);
   }
 
-  return Promise.all([...grouped.values()].map(async item => ({
+  const items = await Promise.all([...grouped.values()].map(async item => ({
     ...item,
     rate_per_kg: (await loadRate(item.fish_variety_id))?.rate_per_kg || 0,
   })));
+  return sortFishItems(items, item => item.fish_variety_name);
 }
 
 export function calculateBillItemAmount(item: BillItemForm): number {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import type { Bill } from '../../types';
-import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg } from '../../domain/fish';
+import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg, sortFishItems } from '../../domain/fish';
 import { formatBusinessDate } from '../../utils/date';
 import styles from '../../styles/BillGenerationScreen.styles';
 import { useBusinessConfig } from '../../context/BusinessConfigContext';
@@ -79,7 +79,7 @@ export default function CustomerBillPreview({
                     <Text style={[styles.tableHeaderText, styles.rateColumn]}>Rate{'\n'}({preferences.currency_symbol}/kg)</Text>
                     <Text style={[styles.tableHeaderText, styles.amountColumn]}>Amount{'\n'}({preferences.currency_symbol})</Text>
                   </View>
-                  {(previewBill.items || []).map((item, index) => {
+                  {sortFishItems(previewBill.items || [], item => item.fish_variety_name).map((item, index) => {
                     const crateWeight = item.crate_weight ?? preferences.default_crate_weight_kg ?? DEFAULT_CRATE_WEIGHT_KG;
                     const totalWeight = getTotalWeightKg(item.quantity_crates, item.quantity_kg, crateWeight);
                     const qtyText = [
@@ -107,10 +107,10 @@ export default function CustomerBillPreview({
 
                 <View style={styles.billTotals}>
                   {/* Previous Balance */}
-                  {previewBill.previous_balance > 0 && (
+                  {previewBill.previous_balance !== 0 && (
                     <View style={styles.billTotalRow}>
-                      <Text style={styles.billTotalLabel}>Previous Balance:</Text>
-                      <Text style={styles.billTotalValue}>{formatMoney(previewBill.previous_balance, 2)}</Text>
+                      <Text style={styles.billTotalLabel}>{previewBill.previous_balance < 0 ? 'Customer Credit Brought Forward:' : 'Previous Balance:'}</Text>
+                      <Text style={styles.billTotalValue}>{previewBill.previous_balance < 0 ? '−' : ''}{formatMoney(Math.abs(previewBill.previous_balance), 2)}</Text>
                     </View>
                   )}
 
@@ -138,7 +138,7 @@ export default function CustomerBillPreview({
                   )}
 
                   {/* Separator */}
-                  {(previewBill.previous_balance > 0 || (previewBill.payments && previewBill.payments.length > 0)) && (
+                  {(previewBill.previous_balance !== 0 || (previewBill.payments && previewBill.payments.length > 0)) && (
                     <View style={styles.separator} />
                   )}
 

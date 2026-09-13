@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
+  Alert,
   type LayoutChangeEvent,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -18,7 +19,9 @@ import AvailableStockStrip from '../features/sales/AvailableStockStrip';
 import SalesEntryForm from '../features/sales/SalesEntryForm';
 import ExistingSaleModal from '../features/sales/ExistingSaleModal';
 import QuickCustomerPaymentModal from '../features/sales/QuickCustomerPaymentModal';
+import BillCorrectionModal from '../components/BillCorrectionModal';
 import { getCustomerLocation } from '../domain/customers';
+import { releaseCustomerBillForCorrection } from '../api/stock';
 import type { Sale } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -29,6 +32,8 @@ export default function SalesScreen() {
   const [formOffset, setFormOffset] = useState(0);
   const [existingSalePrompt, setExistingSalePrompt] = useState<{ customerId: number; customerName: string; sales: Sale[] } | null>(null);
   const [paymentTarget, setPaymentTarget] = useState<{ customerId: number; customerName: string } | null>(null);
+  const [deleteBillId, setDeleteBillId] = useState<number | null>(null);
+  const [deletingBill, setDeletingBill] = useState(false);
   const {
     date, goToPreviousDay, goToNextDay, goToToday,
     varieties, customers, frequentVarietyIds, loading, refreshing, submitting,
@@ -61,6 +66,27 @@ export default function SalesScreen() {
       return;
     }
     navigation.navigate('BillGeneration', { customer_id: existingCustomerId, customer_name: customerName, date });
+  };
+
+  const handleDeleteBill = async (reason: string) => {
+    if (!deleteBillId) return;
+    setDeletingBill(true);
+    try {
+      await releaseCustomerBillForCorrection(deleteBillId, reason);
+      setDeleteBillId(null);
+      await onRefresh();
+      Alert.alert('Bill deleted', 'Its sales are now unbilled and can be corrected or billed again.');
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'message' in error
+        ? String(error.message)
+        : 'Please try again.';
+      Alert.alert(
+        message.includes('Void active receipts') ? 'Payment must be voided first' : 'Unable to delete bill',
+        message,
+      );
+    } finally {
+      setDeletingBill(false);
+    }
   };
 
   return (
@@ -152,6 +178,7 @@ export default function SalesScreen() {
               .filter(Boolean)
               .join(' · ');
             const billingStatus = customerSales[0]?.billing_status;
+            const billedBillId = customerSales.find((sale) => sale.billed_in_bill_id)?.billed_in_bill_id;
             return (
               /* View Mode */
               <View key={customerName} style={styles.customerGroup}>
@@ -238,15 +265,28 @@ export default function SalesScreen() {
                             <Text style={styles.editButtonText}>Edit</Text>
                           </TouchableOpacity>
                         ) : (
-                          <TouchableOpacity
-                            onPress={(e) => {
-                              e.stopPropagation();
-                              setPaymentTarget({ customerId, customerName });
-                            }}
-                            style={styles.paymentButton}
-                          >
-                            <Text style={styles.paymentButtonText}>Payment</Text>
-                          </TouchableOpacity>
+                          <>
+                            <TouchableOpacity
+                              onPress={(e) => {
+                                e.stopPropagation();
+                                setPaymentTarget({ customerId, customerName });
+                              }}
+                              style={styles.paymentButton}
+                            >
+                              <Text style={styles.paymentButtonText}>Payment</Text>
+                            </TouchableOpacity>
+                            {billedBillId ? (
+                              <TouchableOpacity
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteBillId(billedBillId);
+                                }}
+                                style={styles.deleteBillButton}
+                              >
+                                <Text style={styles.deleteBillButtonText}>Delete bill</Text>
+                              </TouchableOpacity>
+                            ) : null}
+                          </>
                         )}
                       </View>
                     </View> : null}
@@ -292,6 +332,14 @@ export default function SalesScreen() {
         customerName={paymentTarget?.customerName}
         date={date}
         onClose={() => setPaymentTarget(null)}
+      />
+      <BillCorrectionModal
+        visible={deleteBillId !== null}
+        documentLabel="sales bill"
+        action="delete"
+        saving={deletingBill}
+        onClose={() => { if (!deletingBill) setDeleteBillId(null); }}
+        onConfirm={handleDeleteBill}
       />
     </ScrollView>
   );

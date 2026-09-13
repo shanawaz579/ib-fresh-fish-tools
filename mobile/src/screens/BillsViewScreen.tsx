@@ -9,8 +9,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
-import { getCustomers, getBillsByCustomer, releaseCustomerBillForCorrection } from '../api/stock';
+import { getBillById, getCustomers, getBillsByCustomer, releaseCustomerBillForCorrection } from '../api/stock';
 import BillCorrectionModal from '../components/BillCorrectionModal';
+import CustomerBillPreview from '../features/customerBilling/CustomerBillPreview';
+import { useCustomerBillDocuments } from '../features/customerBilling/useCustomerBillDocuments';
 import type { Customer, Bill } from '../types';
 import { formatBusinessDate } from '../utils/date';
 import { useBusinessConfig } from '../context/BusinessConfigContext';
@@ -23,6 +25,10 @@ export default function BillsViewScreen() {
   const [loading, setLoading] = useState(false);
   const [correctionTarget, setCorrectionTarget] = useState<Bill | null>(null);
   const [correcting, setCorrecting] = useState(false);
+  const [previewBill, setPreviewBill] = useState<Bill | null>(null);
+  const [loadingBillId, setLoadingBillId] = useState<number | null>(null);
+  const previewCustomerName = customers.find(customer => customer.id === previewBill?.customer_id)?.name;
+  const { handlePrintBill, handleShareBill } = useCustomerBillDocuments(previewBill, previewCustomerName);
 
   useEffect(() => {
     loadCustomers();
@@ -85,6 +91,19 @@ export default function BillsViewScreen() {
       Alert.alert(message.includes('Void active receipts') ? 'Payment must be voided first' : 'Unable to correct bill', message);
     } finally {
       setCorrecting(false);
+    }
+  };
+
+  const handleViewBill = async (billId: number) => {
+    setLoadingBillId(billId);
+    try {
+      const bill = await getBillById(billId);
+      if (!bill) throw new Error('The bill details could not be loaded.');
+      setPreviewBill(bill);
+    } catch (error) {
+      Alert.alert('Unable to open bill', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setLoadingBillId(null);
     }
   };
 
@@ -179,20 +198,14 @@ export default function BillsViewScreen() {
                       <Text style={styles.billTotal}>
                         {formatMoney(bill.total, 0)}
                       </Text>
-                      <TouchableOpacity
-                        style={styles.deleteButton}
-                        onPress={() => setCorrectionTarget(bill)}
-                      >
-                        <Text style={styles.deleteIcon}>↺</Text>
-                      </TouchableOpacity>
                     </View>
                   </View>
 
                   <View style={styles.billDetails}>
                     <View style={styles.billDetailRow}>
-                      <Text style={styles.billDetailLabel}>Previous Balance:</Text>
+                      <Text style={styles.billDetailLabel}>{bill.previous_balance < 0 ? 'Customer Credit:' : 'Previous Balance:'}</Text>
                       <Text style={styles.billDetailValue}>
-                        {formatMoney(bill.previous_balance || 0, 0)}
+                        {bill.previous_balance < 0 ? '−' : ''}{formatMoney(Math.abs(bill.previous_balance || 0), 0)}
                       </Text>
                     </View>
                     <View style={styles.billDetailRow}>
@@ -229,6 +242,23 @@ export default function BillsViewScreen() {
                       <Text style={styles.notesText}>{bill.notes}</Text>
                     </View>
                   )}
+
+                  <View style={styles.billActions}>
+                    <TouchableOpacity
+                      style={styles.viewButton}
+                      disabled={loadingBillId === bill.id}
+                      onPress={() => void handleViewBill(bill.id)}
+                    >
+                      {loadingBillId === bill.id
+                        ? <ActivityIndicator color="#FFFFFF" />
+                        : <Text style={styles.viewButtonText}>View · Print · Share</Text>}
+                    </TouchableOpacity>
+                    {bill.is_active ? (
+                      <TouchableOpacity style={styles.correctButton} onPress={() => setCorrectionTarget(bill)}>
+                        <Text style={styles.correctButtonText}>Correct bill</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
                 </View>
               );
             })}
@@ -255,6 +285,14 @@ export default function BillsViewScreen() {
           </View>
         )}
       </ScrollView>
+      <CustomerBillPreview
+        visible={Boolean(previewBill)}
+        bill={previewBill}
+        customerName={previewCustomerName}
+        onClose={() => setPreviewBill(null)}
+        onPrint={handlePrintBill}
+        onShare={handleShareBill}
+      />
       <BillCorrectionModal
         visible={Boolean(correctionTarget)}
         billNumber={correctionTarget?.bill_number}
@@ -381,17 +419,6 @@ const styles = StyleSheet.create({
   billHeaderRight: {
     alignItems: 'flex-end',
   },
-  deleteButton: {
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  deleteIcon: {
-    fontSize: 18,
-  },
   badge: {
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -442,6 +469,43 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#374151',
     fontStyle: 'italic',
+  },
+  billActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+  },
+  viewButton: {
+    alignItems: 'center',
+    backgroundColor: '#0F766E',
+    borderRadius: 9,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 42,
+    paddingHorizontal: 14,
+  },
+  viewButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  correctButton: {
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FED7AA',
+    borderRadius: 9,
+    borderWidth: 1,
+    justifyContent: 'center',
+    minHeight: 42,
+    paddingHorizontal: 14,
+  },
+  correctButtonText: {
+    color: '#C2410C',
+    fontSize: 13,
+    fontWeight: '700',
   },
   emptyState: {
     padding: 40,

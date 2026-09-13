@@ -92,6 +92,7 @@ export default function BillCustomerPanel(props: Props) {
         onClose={() => setShowSelector(false)}
       />
       <CustomerCreateModal
+        customers={props.customers}
         visible={showCreate}
         onCreated={props.onCreated}
         onClose={() => setShowCreate(false)}

@@ -1,5 +1,5 @@
 import type { Bill, BusinessConfiguration } from '../../types';
-import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg } from '../../domain/fish';
+import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg, sortFishItems } from '../../domain/fish';
 import { formatBusinessDate } from '../../utils/date';
 import { formatConfiguredMoney } from '../../utils/businessFormatting';
 
@@ -25,7 +25,7 @@ export function buildCustomerBillShareText(
   Customer: ${customer?.name || 'Unknown'}
 
   *Items:*
-  ${(previewBill.items || []).map(item => {
+  ${sortFishItems(previewBill.items || [], item => item.fish_variety_name).map(item => {
     const crateWeight = item.crate_weight ?? preferences.default_crate_weight_kg ?? DEFAULT_CRATE_WEIGHT_KG;
     const totalWeight = getTotalWeightKg(item.quantity_crates, item.quantity_kg, crateWeight);
     const qtyParts = [];

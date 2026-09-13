@@ -15,7 +15,7 @@ import {
   getSalesByDate,
 } from '../../api/stock';
 import type { Bill, BillOtherCharge, Customer, FishVariety, Sale } from '../../types';
-import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg } from '../../domain/fish';
+import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg, sortFishItems } from '../../domain/fish';
 import {
   buildBillItemsFromSales,
   calculateBillItemAmount,
@@ -119,7 +119,11 @@ export function useCustomerBilling() {
           return;
         }
 
-        setBillItems(await buildBillItemsFromSales(customerSales, getLastRateForVariety, defaultCrateWeight));
+        setBillItems(await buildBillItemsFromSales(
+          customerSales,
+          varietyId => getLastRateForVariety(varietyId, selectedCustomerId),
+          defaultCrateWeight,
+        ));
       }
       setLoadingItems(false);
     };
@@ -153,7 +157,11 @@ export function useCustomerBilling() {
       return;
     }
 
-    setBillItems(await buildBillItemsFromSales(customerSales, getLastRateForVariety, defaultCrateWeight));
+    setBillItems(await buildBillItemsFromSales(
+      customerSales,
+      varietyId => getLastRateForVariety(varietyId, customerId),
+      defaultCrateWeight,
+    ));
     setLoadingItems(false);
   };
 
@@ -215,14 +223,14 @@ export function useCustomerBilling() {
       Alert.alert('Item already added', 'Each item and grade can appear only once in a sales bill.');
       return;
     }
-    const lastRate = await getLastRateForVariety(varietyId);
+    const lastRate = await getLastRateForVariety(varietyId, selectedCustomerId ?? undefined);
     if (index === null) {
-      setBillItems(current => [...current, {
+      setBillItems(current => sortFishItems([...current, {
         sale_ids: [], fish_variety_id: variety.id, fish_variety_name: variety.name,
         quantity_crates: 0, quantity_kg: 0,
         crate_weight: variety.default_kg_per_crate || defaultCrateWeight || DEFAULT_CRATE_WEIGHT_KG,
         total_weight: 0, rate_per_kg: lastRate?.rate_per_kg || 0,
-      }]);
+      }], item => item.fish_variety_name));
       return;
     }
     const crateWeight = variety.default_kg_per_crate || billItems[index].crate_weight;
@@ -411,7 +419,7 @@ export function useCustomerBilling() {
       };
     });
 
-    setBillItems(formItems);
+    setBillItems(sortFishItems(formItems, item => item.fish_variety_name));
     setOtherCharges(bill.other_charges || []);
     setNotes(bill.notes || '');
     setEditingBillId(billId);
