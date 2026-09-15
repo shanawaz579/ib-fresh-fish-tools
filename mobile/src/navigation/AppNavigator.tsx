@@ -26,6 +26,8 @@ import ExpensesScreen from '../screens/ExpensesScreen';
 import CashbookScreen from '../screens/CashbookScreen';
 import ProfitabilityScreen from '../screens/ProfitabilityScreen';
 import PaymentRegisterScreen from '../screens/PaymentRegisterScreen';
+import IcePlantScreen from '../screens/IcePlantScreen';
+import IceFinanceScreen from '../screens/IceFinanceScreen';
 import type { PurchaseBillDetails } from '../domain/purchaseBillDetails';
 
 export type RootStackParamList = {
@@ -66,6 +68,8 @@ export type RootStackParamList = {
   Cashbook: undefined;
   Profitability: undefined;
   PaymentRegister: undefined;
+  IcePlant: undefined;
+  IceFinance: { initialView?: 'activity' | 'dashboard' } | undefined;
   PurchaseBillDetails: {
     billId: number;
   };
@@ -126,6 +130,8 @@ function Navigation() {
           <Stack.Screen name="Cashbook" component={CashbookScreen} />
           <Stack.Screen name="Profitability" component={ProfitabilityScreen} />
           <Stack.Screen name="PaymentRegister" component={PaymentRegisterScreen} />
+          <Stack.Screen name="IcePlant" component={IcePlantScreen} />
+          <Stack.Screen name="IceFinance" component={IceFinanceScreen} />
         </>
       ) : isPacker ? (
         // Packer users only get Packing screen

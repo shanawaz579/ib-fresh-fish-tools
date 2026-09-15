@@ -95,6 +95,15 @@ export default function HomeScreen({ navigation }: Props) {
           </View>
         </View> : null}
 
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Ice Plant</Text><Text style={styles.sectionHint}>Independent business</Text></View>
+          <View style={styles.actionGrid}>
+            <HomeActionCard icon="▦" title="Daily Check" subtitle="Check the 19-row can grid" color="#0891B2" onPress={() => navigation.navigate('IcePlant')} />
+            <HomeActionCard icon="₹" title="Sales & Expenses" subtitle="Record ice plant money" color="#059669" onPress={() => navigation.navigate('IceFinance', { initialView: 'activity' })} />
+            <HomeActionCard icon="↗" title="Dashboard" subtitle="Sales, costs and net result" color="#7C3AED" onPress={() => navigation.navigate('IceFinance', { initialView: 'dashboard' })} />
+          </View>
+        </View>
+
         <TouchableOpacity style={styles.moreButton} onPress={() => setMoreOpen(value => !value)}>
           <View><Text style={styles.moreTitle}>More</Text><Text style={styles.moreSubtitle}>Reports, bill history and setup</Text></View>
           <Text style={styles.moreChevron}>{moreOpen ? '▲' : '▼'}</Text>
