@@ -29,7 +29,8 @@ export function findDuplicateCustomer(
     if (customer.id === excludeId) return false;
     if (phone && normalizePhone(customer.phone) === phone) return true;
     if (email && normalizeText(customer.email) === email) return true;
-    return normalizeText(customer.name) === name
-      && normalizeText(getCustomerLocation(customer)) === location;
+    if (normalizeText(customer.name) !== name) return false;
+    const existingLocation = normalizeText(getCustomerLocation(customer));
+    return !location || !existingLocation || existingLocation === location;
   });
 }

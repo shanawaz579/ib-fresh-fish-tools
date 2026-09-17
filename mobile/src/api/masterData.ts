@@ -93,6 +93,7 @@ export async function getCustomers(): Promise<Customer[]> {
     const { data, error } = await supabase
       .from('customers')
       .select('*')
+      .eq('is_active', true)
       .order('name');
 
     if (error) throw error;
