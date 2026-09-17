@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Modal, Platform, RefreshControl, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import DateNavigator from '../components/DateNavigator';
 import { getIceGridDetail, setIceCanOverride, setIceRowStatus, setIceSampleColumn, verifyIceRowGrid, type IceCanStatus, type IceGridCell } from '../api/icePlant';
@@ -32,6 +32,8 @@ export default function IcePlantScreen({ navigation }: Props) {
   const [changingColumn, setChangingColumn] = useState(false);
   const [showColumnOptions, setShowColumnOptions] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [statusTarget, setStatusTarget] = useState<IceGridCell | null>(null);
+  const suppressPressRef = useRef(false);
 
   const loadGrid = useCallback(async (refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -48,7 +50,6 @@ export default function IcePlantScreen({ navigation }: Props) {
     if (cell.column_code === cell.sample_column && cell.row_verified) result.verifiedRows += 1;
     return result;
   }, { water: 0, quarter: 0, half: 0, three_quarter: 0, full: 0, verifiedRows: 0 }), [cells]);
-  const freezingEquivalent = counts.quarter * 0.25 + counts.half * 0.5 + counts.three_quarter * 0.75;
   const exceptionCount = useMemo(() => cells.filter(cell => cell.is_active && cell.is_override).length, [cells]);
 
   const changeSampleColumn = async (column: string) => {
@@ -64,10 +65,8 @@ export default function IcePlantScreen({ navigation }: Props) {
     } finally { setChangingColumn(false); }
   };
 
-  const cycleRowStatus = async (rowNumber: number, currentStatus: IceCanStatus) => {
+  const applyRowStatus = async (rowNumber: number, nextStatus: IceCanStatus) => {
     if (savingRows.has(rowNumber)) return;
-    const index = STATUS_OPTIONS.findIndex(option => option.value === currentStatus);
-    const nextStatus = STATUS_OPTIONS[(index + 1) % STATUS_OPTIONS.length].value;
     const previousRow = new Map(cells.filter(cell => cell.row_number === rowNumber).map(cell => [cell.can_id, cell]));
     setCells(current => current.map(cell => cell.row_number === rowNumber ? { ...cell, row_status: nextStatus, effective_status: nextStatus, row_verified: true, is_override: false, checked_at: new Date().toISOString() } : cell));
     setSavingRows(current => new Set(current).add(rowNumber));
@@ -80,10 +79,13 @@ export default function IcePlantScreen({ navigation }: Props) {
     }
   };
 
-  const cycleCanStatus = async (cell: IceGridCell) => {
+  const cycleRowStatus = (rowNumber: number, currentStatus: IceCanStatus) => {
+    const index = STATUS_OPTIONS.findIndex(option => option.value === currentStatus);
+    void applyRowStatus(rowNumber, STATUS_OPTIONS[(index + 1) % STATUS_OPTIONS.length].value);
+  };
+
+  const applyCanStatus = async (cell: IceGridCell, nextStatus: IceCanStatus) => {
     if (savingRows.has(cell.row_number) || savingCans.has(cell.can_id)) return;
-    const index = STATUS_OPTIONS.findIndex(option => option.value === cell.effective_status);
-    const nextStatus = STATUS_OPTIONS[(index + 1) % STATUS_OPTIONS.length].value;
     const previous = cell;
     setCells(current => current.map(item => item.can_id === cell.can_id ? { ...item, effective_status: nextStatus, is_override: nextStatus !== item.row_status, checked_at: new Date().toISOString() } : item));
     setSavingCans(current => new Set(current).add(cell.can_id));
@@ -94,6 +96,30 @@ export default function IcePlantScreen({ navigation }: Props) {
     } finally {
       setSavingCans(current => { const next = new Set(current); next.delete(cell.can_id); return next; });
     }
+  };
+
+  const cycleCanStatus = (cell: IceGridCell) => {
+    const index = STATUS_OPTIONS.findIndex(option => option.value === cell.effective_status);
+    void applyCanStatus(cell, STATUS_OPTIONS[(index + 1) % STATUS_OPTIONS.length].value);
+  };
+
+  const openStatusPicker = (cell: IceGridCell) => {
+    suppressPressRef.current = true;
+    setStatusTarget(cell);
+    setTimeout(() => { suppressPressRef.current = false; }, 500);
+  };
+
+  const handleCellPress = (cell: IceGridCell, sample: boolean) => {
+    if (statusTarget || suppressPressRef.current) return;
+    sample ? cycleRowStatus(cell.row_number, cell.row_status) : cycleCanStatus(cell);
+  };
+
+  const chooseStatus = (status: IceCanStatus) => {
+    const target = statusTarget;
+    if (!target) return;
+    setStatusTarget(null);
+    if (target.column_code === target.sample_column) void applyRowStatus(target.row_number, status);
+    else void applyCanStatus(target, status);
   };
 
   const verifyRemaining = async () => {
@@ -119,21 +145,26 @@ export default function IcePlantScreen({ navigation }: Props) {
       <View style={styles.summaryCard}>
         <View style={styles.primarySummary}><Text style={styles.primaryValue}>{counts.full}</Text><Text style={styles.primaryLabel}>EST. READY</Text></View>
         <View style={styles.summaryDivider} />
-        <View style={styles.summaryMetric}><Text style={styles.metricValue}>{freezingEquivalent.toFixed(freezingEquivalent % 1 ? 2 : 0)}</Text><Text style={styles.metricLabel}>FREEZING EQ.</Text></View>
+        <View style={styles.stageSummary}>
+          <View style={styles.stageMetric}><Text style={styles.stageSymbol}>¼</Text><Text style={styles.stageValue}>{counts.quarter}</Text></View>
+          <View style={styles.stageMetric}><Text style={styles.stageSymbol}>½</Text><Text style={styles.stageValue}>{counts.half}</Text></View>
+          <View style={styles.stageMetric}><Text style={styles.stageSymbol}>¾</Text><Text style={styles.stageValue}>{counts.three_quarter}</Text></View>
+          <Text style={styles.stageLabel}>FREEZING STAGES</Text>
+        </View>
         <View style={styles.summaryMetric}><Text style={styles.metricValue}>{counts.water}</Text><Text style={styles.metricLabel}>WATER</Text></View>
         <View style={styles.summaryMetric}><Text style={styles.metricValue}>{counts.verifiedRows}/19</Text><Text style={styles.metricLabel}>ROWS CHECKED</Text></View>
       </View>
       {exceptionCount > 0 ? <View style={styles.exceptionSummary}><View style={styles.exceptionSummaryDot} /><Text style={styles.exceptionSummaryText}>{exceptionCount} individual {exceptionCount === 1 ? 'exception' : 'exceptions'}</Text></View> : null}
       <View style={styles.sampleCard}>
         <View style={styles.sampleHeader}>
-          <View><Text style={styles.sampleEyebrow}>TODAY'S CHECK</Text><Text style={styles.sampleTitle}>Column {sampleColumn}</Text></View>
+          <View style={styles.sampleTitleRow}><Text style={styles.sampleEyebrow}>TODAY'S CHECK</Text><Text style={styles.sampleTitle}>Column {sampleColumn}</Text></View>
           <TouchableOpacity accessibilityLabel="Change sample column" style={styles.changeColumnButton} onPress={() => setShowColumnOptions(current => !current)}>
             <Text style={styles.changeColumnText}>{showColumnOptions ? 'Done' : 'Change'}</Text>
           </TouchableOpacity>
         </View>
         {showColumnOptions ? <View style={styles.columnPicker}>{SAMPLE_COLUMNS.map(column => <TouchableOpacity accessibilityLabel={`Use column ${column}`} disabled={changingColumn} key={column} onPress={() => { void changeSampleColumn(column); }} style={[styles.columnButton, column === sampleColumn && styles.columnButtonSelected]}><Text style={[styles.columnButtonText, column === sampleColumn && styles.columnButtonTextSelected]}>{column}</Text></TouchableOpacity>)}</View> : null}
       </View>
-      <Text style={styles.instruction}>Highlighted cell changes its row. Tap another cell only when that can is different.</Text>
+      <Text style={styles.instruction}>Highlighted cell changes its row. Tap to cycle · hold any cell to choose a stage.</Text>
       <View style={styles.legend}>{STATUS_OPTIONS.map(option => <View key={option.value} style={styles.legendItem}><View style={[styles.legendBadge, { backgroundColor: option.background }]}><Text style={[styles.legendShort, { color: option.color }]}>{option.short}</Text></View><Text style={styles.legendLabel}>{option.label}</Text></View>)}</View>
       <View style={styles.gridCard}>
         <View style={styles.gridHeader}><View style={styles.rowLabel} />{COLUMNS.map(column => <Text key={column} style={[styles.columnLabel, column === sampleColumn ? styles.sampleColumnLabel : styles.regularColumn]}>{column}</Text>)}</View>
@@ -146,16 +177,35 @@ export default function IcePlantScreen({ navigation }: Props) {
             const sample = column === sampleColumn;
             const meta = STATUS_META[cell.effective_status];
             const saving = savingRows.has(rowNumber) || savingCans.has(cell.can_id);
-            const cellStyle = [styles.cell, sample ? styles.sampleCell : styles.regularCell, { backgroundColor: meta.background, borderColor: meta.color }, sample && !cell.row_verified && styles.carriedCell, sample && !cell.row_verified && styles.uncheckedSampleCell, cell.is_override && styles.overrideCell, saving && styles.savingCell];
-            return <TouchableOpacity accessibilityLabel={`${cell.label}, ${meta.label}${sample ? ', changes complete row' : cell.is_override ? ', individual exception' : ', tap for individual change'}`} disabled={saving} key={column} onPress={() => { sample ? void cycleRowStatus(rowNumber, cell.row_status) : void cycleCanStatus(cell); }} style={cellStyle}>
+            const cellStyle = [styles.cell, sample ? styles.sampleCell : styles.regularCell, { backgroundColor: meta.background, borderColor: meta.color }, !cell.row_verified && styles.carriedCell, sample && !cell.row_verified && styles.uncheckedSampleCell, cell.is_override && styles.overrideCell, saving && styles.savingCell];
+            return <TouchableOpacity accessibilityLabel={`${cell.label}, ${meta.label}${sample ? ', changes complete row' : cell.is_override ? ', individual exception' : ', tap for individual change'}`} delayLongPress={350} disabled={saving} key={column} onLongPress={() => openStatusPicker(cell)} onPress={() => handleCellPress(cell, sample)} style={cellStyle}>
               <Text style={[styles.cellText, { color: meta.color }]}>{meta.short}</Text>{cell.is_override ? <View style={styles.overrideDot} /> : null}
             </TouchableOpacity>;
           })}</View>;
         })}
       </View>
-      <View style={styles.gridNote}><View style={styles.highlightSample} /><Text style={styles.gridNoteText}>Highlighted cells update the full row. Other cells create individual exceptions; cycle back to the row stage to reset. M19 is removed.</Text></View>
+      <View style={styles.gridNote}><View style={styles.highlightSample} /><Text style={styles.gridNoteText}>Light cells are carried forward. Highlighted cells update the full row; other cells create individual exceptions. M19 is removed.</Text></View>
       <View style={styles.exceptionLegend}><View style={styles.exceptionLegendDot} /><Text style={styles.exceptionLegendText}>Purple dot and border = individual can differs from its row.</Text></View>
       {!loading && counts.verifiedRows < ROW_NUMBERS.length ? <TouchableOpacity disabled={verifying} style={styles.verifyButton} onPress={confirmRemaining}>{verifying ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.verifyButtonText}>Verify remaining rows as unchanged</Text>}</TouchableOpacity> : !loading ? <View style={styles.completeCard}><Text style={styles.completeText}>✓ Daily check complete · 19/19 rows</Text></View> : null}
     </ScrollView>
+    <Modal animationType="fade" onRequestClose={() => setStatusTarget(null)} transparent visible={statusTarget !== null}>
+      <TouchableOpacity activeOpacity={1} accessibilityLabel="Close status choices" onPress={() => setStatusTarget(null)} style={styles.modalOverlay}>
+        <TouchableOpacity activeOpacity={1} onPress={() => undefined} style={styles.statusPicker}>
+          <Text style={styles.statusPickerEyebrow}>{statusTarget?.column_code === statusTarget?.sample_column ? 'UPDATE COMPLETE ROW' : 'UPDATE THIS CAN ONLY'}</Text>
+          <Text style={styles.statusPickerTitle}>{statusTarget?.label}</Text>
+          <View style={styles.statusOptions}>
+            {STATUS_OPTIONS.map(option => {
+              const selected = statusTarget?.effective_status === option.value;
+              return <TouchableOpacity accessibilityLabel={`Choose ${option.label}`} key={option.value} onPress={() => chooseStatus(option.value)} style={[styles.statusOption, selected && styles.statusOptionSelected]}>
+                <View style={[styles.statusOptionBadge, { backgroundColor: option.background }]}><Text style={[styles.statusOptionShort, { color: option.color }]}>{option.short}</Text></View>
+                <Text style={styles.statusOptionLabel}>{option.label}</Text>
+                {selected ? <Text style={styles.statusOptionCheck}>✓</Text> : null}
+              </TouchableOpacity>;
+            })}
+          </View>
+          <TouchableOpacity onPress={() => setStatusTarget(null)} style={styles.statusCancel}><Text style={styles.statusCancelText}>Cancel</Text></TouchableOpacity>
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
   </View>;
 }
