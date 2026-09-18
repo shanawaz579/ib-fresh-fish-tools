@@ -20,9 +20,11 @@ import SalesEntryForm from '../features/sales/SalesEntryForm';
 import ExistingSaleModal from '../features/sales/ExistingSaleModal';
 import QuickCustomerPaymentModal from '../features/sales/QuickCustomerPaymentModal';
 import BillCorrectionModal from '../components/BillCorrectionModal';
+import CustomerBillPreview from '../features/customerBilling/CustomerBillPreview';
+import { useCustomerBillDocuments } from '../features/customerBilling/useCustomerBillDocuments';
 import { getCustomerLocation } from '../domain/customers';
-import { releaseCustomerBillForCorrection } from '../api/stock';
-import type { Sale } from '../types';
+import { getBillById, releaseCustomerBillForCorrection } from '../api/stock';
+import type { Bill, Sale } from '../types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -34,6 +36,10 @@ export default function SalesScreen() {
   const [paymentTarget, setPaymentTarget] = useState<{ customerId: number; customerName: string } | null>(null);
   const [deleteBillId, setDeleteBillId] = useState<number | null>(null);
   const [deletingBill, setDeletingBill] = useState(false);
+  const [previewBill, setPreviewBill] = useState<Bill | null>(null);
+  const [previewCustomerName, setPreviewCustomerName] = useState<string>();
+  const [loadingBillId, setLoadingBillId] = useState<number | null>(null);
+  const { handlePrintBill, handleShareBill } = useCustomerBillDocuments(previewBill, previewCustomerName);
   const {
     date, goToPreviousDay, goToNextDay, goToToday,
     varieties, customers, frequentVarietyIds, loading, refreshing, submitting,
@@ -86,6 +92,20 @@ export default function SalesScreen() {
       );
     } finally {
       setDeletingBill(false);
+    }
+  };
+
+  const handleViewBill = async (billId: number, customerName: string) => {
+    setLoadingBillId(billId);
+    try {
+      const bill = await getBillById(billId);
+      if (!bill) throw new Error('The bill details could not be loaded.');
+      setPreviewCustomerName(customerName);
+      setPreviewBill(bill);
+    } catch (error) {
+      Alert.alert('Unable to open bill', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setLoadingBillId(null);
     }
   };
 
@@ -266,6 +286,20 @@ export default function SalesScreen() {
                           </TouchableOpacity>
                         ) : (
                           <>
+                            {billedBillId ? (
+                              <TouchableOpacity
+                                disabled={loadingBillId === billedBillId}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  void handleViewBill(billedBillId, customerName);
+                                }}
+                                style={[styles.viewBillButton, loadingBillId === billedBillId && styles.actionButtonDisabled]}
+                              >
+                                {loadingBillId === billedBillId
+                                  ? <ActivityIndicator size="small" color="#1D4ED8" />
+                                  : <Text style={styles.viewBillButtonText}>View / Print</Text>}
+                              </TouchableOpacity>
+                            ) : null}
                             <TouchableOpacity
                               onPress={(e) => {
                                 e.stopPropagation();
@@ -332,6 +366,14 @@ export default function SalesScreen() {
         customerName={paymentTarget?.customerName}
         date={date}
         onClose={() => setPaymentTarget(null)}
+      />
+      <CustomerBillPreview
+        visible={Boolean(previewBill)}
+        bill={previewBill}
+        customerName={previewCustomerName}
+        onClose={() => setPreviewBill(null)}
+        onPrint={handlePrintBill}
+        onShare={handleShareBill}
       />
       <BillCorrectionModal
         visible={deleteBillId !== null}

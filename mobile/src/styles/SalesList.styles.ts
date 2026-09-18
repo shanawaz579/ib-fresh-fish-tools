@@ -116,6 +116,8 @@ export default StyleSheet.create({
   actionButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
     gap: 8,
   },
   billingStatusBadge: {
@@ -204,6 +206,18 @@ export default StyleSheet.create({
     borderRadius: 7,
   },
   paymentButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  viewBillButton: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#BFDBFE',
+    borderRadius: 7,
+    borderWidth: 1,
+    minWidth: 86,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    alignItems: 'center',
+  },
+  viewBillButtonText: { color: '#1D4ED8', fontSize: 12, fontWeight: '700' },
+  actionButtonDisabled: { opacity: 0.6 },
   deleteBillButton: {
     backgroundColor: '#FFF1F2',
     borderColor: '#FECDD3',
