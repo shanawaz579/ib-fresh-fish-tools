@@ -19,6 +19,7 @@ type Props = {
   quantityKg: string;
   draftItems: PurchaseDraftItem[];
   submitting: boolean;
+  errorMessage: string | null;
   editing: boolean;
   editingLine: boolean;
   onSupplierChange: (id: number | null) => void;
@@ -203,6 +204,13 @@ export default function PurchaseEntryForm(props: Props) {
       <TouchableOpacity style={styles.addItemButton} onPress={props.onAddItem}>
         <Text style={styles.addItemButtonText}>{props.editingLine ? 'Update item' : props.editing ? '+ Add item' : '+ Add to purchase'}</Text>
       </TouchableOpacity>
+
+      {props.errorMessage ? (
+        <View style={styles.saveErrorCard}>
+          <Text style={styles.saveErrorTitle}>Purchase not saved</Text>
+          <Text style={styles.saveErrorText}>{props.errorMessage}</Text>
+        </View>
+      ) : null}
 
       <TouchableOpacity
         style={[styles.saveButton, (props.submitting || props.draftItems.length === 0 || props.editingLine) && styles.disabledButton]}

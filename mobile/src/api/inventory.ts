@@ -33,6 +33,45 @@ export async function getPurchasesByDate(date: string): Promise<Purchase[]> {
   }
 }
 
+export async function getUnbilledPurchases(): Promise<Purchase[]> {
+  const { data, error } = await supabase
+    .from('purchases')
+    .select('*, suppliers(name, supplier_type), farmers(name), item_variants(name, items(default_kg_per_crate))')
+    .eq('billing_status', 'unbilled')
+    .order('purchase_date', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map((item: any) => ({
+    ...item,
+    supplier_name: item.suppliers?.name,
+    supplier_type: item.suppliers?.supplier_type,
+    farmer_name: item.farmers?.name,
+    fish_variety_name: item.item_variants?.name,
+    default_kg_per_crate: item.item_variants?.items?.default_kg_per_crate,
+  }));
+}
+
+export async function getPurchasesByDateRange(from: string, to: string): Promise<Purchase[]> {
+  const { data, error } = await supabase
+    .from('purchases')
+    .select('*, suppliers(name, supplier_type), farmers(name), item_variants(name, items(default_kg_per_crate))')
+    .gte('purchase_date', from)
+    .lte('purchase_date', to)
+    .order('purchase_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []).map((item: any) => ({
+    ...item,
+    supplier_name: item.suppliers?.name,
+    supplier_type: item.suppliers?.supplier_type,
+    farmer_name: item.farmers?.name,
+    fish_variety_name: item.item_variants?.name,
+    default_kg_per_crate: item.item_variants?.items?.default_kg_per_crate,
+  }));
+}
+
 export async function getFrequentPurchaseVarietyIds(limit = 6): Promise<number[]> {
   const { data, error } = await supabase
     .from('purchases')
@@ -102,6 +141,53 @@ export async function getSalesByDate(date: string): Promise<Sale[]> {
     console.error('Error fetching sales:', err);
     return [];
   }
+}
+
+export async function getUnbilledSales(): Promise<Sale[]> {
+  const { data, error } = await supabase
+    .from('sales')
+    .select('*, customers(name), item_variants(name)')
+    .eq('billing_status', 'unbilled')
+    .order('sale_date', { ascending: true })
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map((item: any) => ({
+    ...item,
+    customer_name: item.customers?.name,
+    fish_variety_name: item.item_variants?.name,
+  }));
+}
+
+export async function getSalesByDateRange(from: string, to: string): Promise<Sale[]> {
+  const { data, error } = await supabase
+    .from('sales')
+    .select('*, customers(name), item_variants(name)')
+    .gte('sale_date', from)
+    .lte('sale_date', to)
+    .order('sale_date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []).map((item: any) => ({
+    ...item,
+    customer_name: item.customers?.name,
+    fish_variety_name: item.item_variants?.name,
+  }));
+}
+
+export async function getPendingBillingCounts(): Promise<{ sales: number; purchases: number }> {
+  const [salesResult, purchasesResult] = await Promise.all([
+    supabase.from('sales').select('sale_date, customer_id').eq('billing_status', 'unbilled'),
+    supabase.from('purchases').select('purchase_date, supplier_id, farmer_id, location').eq('billing_status', 'unbilled'),
+  ]);
+  if (salesResult.error) throw salesResult.error;
+  if (purchasesResult.error) throw purchasesResult.error;
+  const sales = new Set((salesResult.data ?? []).map(row => `${row.sale_date}:${row.customer_id}`)).size;
+  const purchases = new Set((purchasesResult.data ?? []).map(row =>
+    `${row.purchase_date}:${row.supplier_id}:${row.farmer_id ?? ''}:${row.location ?? ''}`,
+  )).size;
+  return { sales, purchases };
 }
 
 export type PurchaseBatchItem = {

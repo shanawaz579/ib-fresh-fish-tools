@@ -22,6 +22,7 @@ import QuickCustomerPaymentModal from '../features/sales/QuickCustomerPaymentMod
 import BillCorrectionModal from '../components/BillCorrectionModal';
 import CustomerBillPreview from '../features/customerBilling/CustomerBillPreview';
 import { useCustomerBillDocuments } from '../features/customerBilling/useCustomerBillDocuments';
+import PendingBillsModal, { type PendingBillGroup } from '../features/billing/PendingBillsModal';
 import { getCustomerLocation } from '../domain/customers';
 import { getBillById, releaseCustomerBillForCorrection } from '../api/stock';
 import type { Bill, Sale } from '../types';
@@ -39,6 +40,8 @@ export default function SalesScreen() {
   const [previewBill, setPreviewBill] = useState<Bill | null>(null);
   const [previewCustomerName, setPreviewCustomerName] = useState<string>();
   const [loadingBillId, setLoadingBillId] = useState<number | null>(null);
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
   const { handlePrintBill, handleShareBill } = useCustomerBillDocuments(previewBill, previewCustomerName);
   const {
     date, goToPreviousDay, goToNextDay, goToToday,
@@ -134,6 +137,11 @@ export default function SalesScreen() {
       </View>
 
       <DateNavigator date={date} onPrevious={goToPreviousDay} onNext={goToNextDay} onToday={goToToday} />
+
+      <TouchableOpacity style={styles.pendingButton} onPress={() => setPendingOpen(true)}>
+        <View><Text style={styles.pendingButtonTitle}>Pending bills across all dates</Text><Text style={styles.pendingButtonHint}>Find unbilled sales without checking each day</Text></View>
+        <Text style={styles.pendingButtonCount}>{pendingCount === null ? 'View ›' : `${pendingCount} ›`}</Text>
+      </TouchableOpacity>
 
       <AvailableStockStrip varieties={varieties} getStock={getStockForVariety} onSelect={setFishVarietyId} />
 
@@ -374,6 +382,17 @@ export default function SalesScreen() {
         onClose={() => setPreviewBill(null)}
         onPrint={handlePrintBill}
         onShare={handleShareBill}
+      />
+      <PendingBillsModal
+        visible={pendingOpen}
+        mode="sales"
+        onClose={() => setPendingOpen(false)}
+        onCountChange={setPendingCount}
+        onOpen={(group: PendingBillGroup) => {
+          if (group.kind !== 'sales') return;
+          setPendingOpen(false);
+          navigation.navigate('BillGeneration', { customer_id: group.partyId, customer_name: group.partyName, date: group.date });
+        }}
       />
       <BillCorrectionModal
         visible={deleteBillId !== null}

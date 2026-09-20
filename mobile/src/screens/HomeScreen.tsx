@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { Alert, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DayCloseHomeCard from '../features/cashbook/DayCloseHomeCard';
 import { useTodayCloseStatus } from '../features/cashbook/useTodayCloseStatus';
@@ -10,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { useBusinessConfig } from '../context/BusinessConfigContext';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import styles from '../styles/HomeScreen.styles';
+import { getPendingBillingCounts } from '../api/stock';
 
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Home'> };
 
@@ -41,6 +43,13 @@ export default function HomeScreen({ navigation }: Props) {
   const { enabled_modules: modules, terminology } = preferences;
   const todayCloseStatus = useTodayCloseStatus();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [pendingCounts, setPendingCounts] = useState({ sales: 0, purchases: 0 });
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void getPendingBillingCounts().then(counts => { if (active) setPendingCounts(counts); }).catch(error => console.warn('Unable to load pending billing counts:', error));
+    return () => { active = false; };
+  }, []));
 
   const handleLogout = () => Alert.alert('Logout', 'Are you sure you want to logout?', [
     { text: 'Cancel', style: 'cancel' },
@@ -71,8 +80,8 @@ export default function HomeScreen({ navigation }: Props) {
         {hasDailyWork ? <View style={[styles.section, styles.firstSection]}>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Daily work</Text><Text style={styles.sectionHint}>Record today’s activity</Text></View>
           <View style={styles.actionGrid}>
-            {modules.sales ? <HomeActionCard icon="↑" title="Sales" subtitle="Sell stock to customers" color="#2563EB" onPress={() => navigation.navigate('Sales')} /> : null}
-            {modules.purchases ? <HomeActionCard icon="↓" title="Purchases" subtitle="Record incoming stock" color="#059669" onPress={() => navigation.navigate('Purchase')} /> : null}
+            {modules.sales ? <HomeActionCard icon="↑" title="Sales" subtitle="Sell stock to customers" color="#2563EB" badge={pendingCounts.sales ? `${pendingCounts.sales} pending` : undefined} onPress={() => navigation.navigate('Sales')} /> : null}
+            {modules.purchases ? <HomeActionCard icon="↓" title="Purchases" subtitle="Record incoming stock" color="#059669" badge={pendingCounts.purchases ? `${pendingCounts.purchases} pending` : undefined} onPress={() => navigation.navigate('Purchase')} /> : null}
             {modules.packing ? <HomeActionCard icon="✓" title="Packing" subtitle="Prepare and load orders" color="#D97706" onPress={() => navigation.navigate('Packing')} /> : null}
           </View>
         </View> : null}
@@ -113,7 +122,7 @@ export default function HomeScreen({ navigation }: Props) {
           {hasReports ? <View style={styles.secondarySection}>
             <Text style={styles.secondaryTitle}>REPORTS & HISTORY</Text>
             <View style={styles.secondaryGrid}>
-              {(modules.sales || modules.purchases) ? <SecondaryRow icon="⌕" label="Item activity" hint="Items by customer or supplier" onPress={() => navigation.navigate('ItemsByCustomer')} /> : null}
+              {(modules.sales || modules.purchases) ? <SecondaryRow icon="⌕" label="Trade activity" hint="Items and quantities by party" onPress={() => navigation.navigate('ItemsByCustomer')} /> : null}
               {modules.customer_billing ? <SecondaryRow icon="▤" label="Sales bill history" hint="Find and correct customer bills" last={!modules.supplier_billing && !modules.profitability} onPress={() => navigation.navigate('BillsView')} /> : null}
               {modules.supplier_billing ? <SecondaryRow icon="▤" label="Purchase bill history" hint="Review supplier bills" last={!modules.profitability} onPress={() => navigation.navigate('PurchaseBillsView')} /> : null}
               {modules.profitability ? <SecondaryRow icon="↗" label="Profitability" hint="Revenue, costs and profit" last onPress={() => navigation.navigate('Profitability')} /> : null}

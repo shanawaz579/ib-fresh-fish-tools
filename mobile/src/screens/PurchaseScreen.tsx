@@ -14,6 +14,7 @@ import DateNavigator from '../components/DateNavigator';
 import PurchaseEntryForm from '../features/purchases/PurchaseEntryForm';
 import PurchaseGroupCard from '../features/purchases/PurchaseGroupCard';
 import { usePurchaseRecords } from '../features/purchases/usePurchaseRecords';
+import PendingBillsModal, { type PendingBillGroup } from '../features/billing/PendingBillsModal';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import styles from '../styles/PurchaseScreen.styles';
 
@@ -24,6 +25,8 @@ export default function PurchaseScreen() {
   const purchase = usePurchaseRecords();
   const scrollRef = useRef<ScrollView>(null);
   const [formOffset, setFormOffset] = useState(0);
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState<number | null>(null);
 
   return (
     <View style={styles.container}>
@@ -57,6 +60,11 @@ export default function PurchaseScreen() {
           accentColor="#0F766E"
         />
 
+        <TouchableOpacity style={styles.pendingButton} onPress={() => setPendingOpen(true)}>
+          <View><Text style={styles.pendingButtonTitle}>Pending bills across all dates</Text><Text style={styles.pendingButtonHint}>Find unbilled purchases without checking each day</Text></View>
+          <Text style={styles.pendingButtonCount}>{pendingCount === null ? 'View ›' : `${pendingCount} ›`}</Text>
+        </TouchableOpacity>
+
         <View onLayout={(event: LayoutChangeEvent) => setFormOffset(event.nativeEvent.layout.y)}>
         <PurchaseEntryForm
           suppliers={purchase.suppliers}
@@ -70,6 +78,7 @@ export default function PurchaseScreen() {
           quantityKg={purchase.quantityKg}
           draftItems={purchase.draftItems}
           submitting={purchase.submitting}
+          errorMessage={purchase.saveError}
           editing={purchase.editingGroup !== null}
           editingLine={purchase.editingDraftPurchaseId !== null}
           onSupplierChange={purchase.setSupplierId}
@@ -117,6 +126,25 @@ export default function PurchaseScreen() {
           />
         ))}
       </ScrollView>
+
+      <PendingBillsModal
+        visible={pendingOpen}
+        mode="purchases"
+        onClose={() => setPendingOpen(false)}
+        onCountChange={setPendingCount}
+        onOpen={(group: PendingBillGroup) => {
+          if (group.kind !== 'purchases') return;
+          setPendingOpen(false);
+          navigation.navigate('PurchaseBillGeneration', {
+            supplier_id: group.partyId,
+            supplier_name: group.partyName,
+            farmer_name: group.farmerName,
+            location: group.location,
+            purchases: group.lines,
+            date: group.date,
+          });
+        }}
+      />
 
     </View>
   );

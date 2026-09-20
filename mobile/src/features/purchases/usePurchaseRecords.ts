@@ -6,12 +6,14 @@ import {
   deleteUnbilledPurchaseGroup,
   getFishVarieties,
   getFrequentPurchaseVarietyIds,
+  getStockSnapshot,
   getSuppliers,
   getPurchasesByDate,
   updateUnbilledPurchaseGroup,
 } from '../../api/stock';
 import { useBusinessDate } from '../../hooks/useBusinessDate';
 import type { FishVariety, Purchase, Supplier, SupplierCreateInput } from '../../types';
+import { toLocalDateString } from '../../utils/date';
 
 export type PurchaseDraftItem = {
   purchaseId?: number;
@@ -49,6 +51,7 @@ export function usePurchaseRecords() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [supplierId, setSupplierId] = useState<number | null>(null);
   const [farmerName, setFarmerName] = useState('');
@@ -169,14 +172,51 @@ export function usePurchaseRecords() {
     const selectedSupplier = suppliers.find((supplier) => supplier.id === supplierId);
     const needsSourceFarmer = selectedSupplier?.supplier_type === 'mediator';
     if (!selectedSupplier || (needsSourceFarmer && !farmerName.trim()) || draftItems.length === 0) {
-      Alert.alert('Incomplete purchase', 'Select the primary supplier, enter a source farmer when required, then add at least one item.');
+      const message = 'Select the primary supplier, enter a source farmer when required, then add at least one item.';
+      setSaveError(message);
+      Alert.alert('Incomplete purchase', message);
       return;
     }
 
+    setSaveError(null);
     setSubmitting(true);
     try {
       if (editingGroup) {
         const unbilled = editingGroup.purchases.filter(purchase => purchase.billing_status === 'unbilled');
+        const stockRows = await getStockSnapshot(toLocalDateString());
+        const stockByVariety = new Map(stockRows.map(row => [row.itemVariantId, row]));
+        const originalByVariety = new Map<number, { crates: number; kg: number }>();
+        unbilled.forEach(purchase => {
+          const current = originalByVariety.get(purchase.fish_variety_id) ?? { crates: 0, kg: 0 };
+          current.crates += purchase.quantity_crates;
+          current.kg += Number(purchase.quantity_kg);
+          originalByVariety.set(purchase.fish_variety_id, current);
+        });
+        const editedByVariety = new Map(draftItems.map(item => [item.varietyId, { crates: item.crates, kg: item.kg, name: item.varietyName }]));
+        const reductionIssue = [...originalByVariety.entries()].map(([varietyId, original]) => {
+          const edited = editedByVariety.get(varietyId) ?? { crates: 0, kg: 0, name: varieties.find(item => item.id === varietyId)?.name ?? 'This item' };
+          const stockRow = stockByVariety.get(varietyId);
+          const crateReduction = Math.max(0, original.crates - edited.crates);
+          const kgReduction = Math.max(0, original.kg - edited.kg);
+          return {
+            name: edited.name,
+            crateReduction,
+            kgReduction,
+            availableCrates: Number(stockRow?.closingCrates ?? 0),
+            availableKg: Number(stockRow?.closingKg ?? 0),
+          };
+        }).find(issue => issue.crateReduction > issue.availableCrates || issue.kgReduction > issue.availableKg);
+
+        if (reductionIssue) {
+          const available = [
+            `${reductionIssue.availableCrates} cr`,
+            `${reductionIssue.availableKg} kg`,
+          ].join(' and ');
+          const message = `${reductionIssue.name} has only ${available} available. Some of the original quantity has already been sold. Correct the related sale first, or keep this purchase quantity unchanged.`;
+          setSaveError(message);
+          Alert.alert('Cannot reduce purchased stock', message);
+          return;
+        }
         await updateUnbilledPurchaseGroup({
           purchaseIds: unbilled.map(purchase => purchase.id),
           items: draftItems.map(item => ({
@@ -208,7 +248,16 @@ export function usePurchaseRecords() {
       Alert.alert('Purchase saved', `${savedCount} item${savedCount === 1 ? '' : 's'} saved together.`);
     } catch (error) {
       console.error('Unable to save purchase batch:', error);
-      Alert.alert('Unable to save purchase', 'Nothing was saved. Check the details and try again.');
+      const detail = typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string'
+        ? error.message
+        : '';
+      const message = detail.toLowerCase().includes('business day')
+        ? 'This business day is closed. Reopen or correct the day before changing its purchases.'
+        : detail.toLowerCase().includes('insufficient')
+          ? 'This purchase cannot be reduced because part of its stock has already been sold.'
+          : detail || 'Nothing was saved. Check the details and try again.';
+      setSaveError(message);
+      Alert.alert('Unable to save purchase', message);
     } finally {
       setSubmitting(false);
     }
@@ -231,6 +280,7 @@ export function usePurchaseRecords() {
     setQuantityCrates('');
     setQuantityKg('');
     setEditingDraftPurchaseId(null);
+    setSaveError(null);
   };
 
   const cancelEditingGroup = () => {
@@ -243,6 +293,7 @@ export function usePurchaseRecords() {
     setQuantityCrates('');
     setQuantityKg('');
     setEditingDraftPurchaseId(null);
+    setSaveError(null);
   };
 
   const deleteGroup = (group: PurchaseGroup) => {
@@ -315,7 +366,7 @@ export function usePurchaseRecords() {
 
   return {
     date, goToPreviousDay, goToNextDay, goToToday,
-    varieties, frequentVarietyIds, suppliers, groups, loading, refreshing, submitting,
+    varieties, frequentVarietyIds, suppliers, groups, loading, refreshing, submitting, saveError,
     supplierId, setSupplierId, farmerName, setFarmerName, location, setLocation,
     fishVarietyId, setFishVarietyId, quantityCrates, setQuantityCrates,
     quantityKg, setQuantityKg, draftItems, collapsedGroups, editingGroup,

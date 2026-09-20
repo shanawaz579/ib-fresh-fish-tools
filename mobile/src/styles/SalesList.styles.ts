@@ -1,6 +1,10 @@
 import { StyleSheet } from 'react-native';
 
 export default StyleSheet.create({
+  pendingButton: { alignItems:'center', backgroundColor:'#FFFBEB', borderColor:'#FDE68A', borderRadius:12, borderWidth:1, flexDirection:'row', justifyContent:'space-between', marginBottom:10, marginHorizontal:16, marginTop:-2, paddingHorizontal:12, paddingVertical:10 },
+  pendingButtonTitle: { color:'#92400E', fontSize:12, fontWeight:'900' },
+  pendingButtonHint: { color:'#A16207', fontSize:9, marginTop:2 },
+  pendingButtonCount: { color:'#B45309', fontSize:12, fontWeight:'900', marginLeft:10 },
   listContainer: {
     marginHorizontal: 16,
     marginTop: 4,
