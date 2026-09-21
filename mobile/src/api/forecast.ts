@@ -22,6 +22,8 @@ export type HarvestForecastRow = {
   generated_at: string;
   model_name: 'weekday_average' | 'weekday_weighted';
   model_accuracy: number | null;
+  run_status: 'ready' | 'approved' | 'archived';
+  approved_at: string | null;
 };
 
 export type CustomerHarvestForecastRow = {
@@ -44,6 +46,22 @@ export type CustomerHarvestForecastRow = {
 export type HarvestForecastPlan = {
   items: HarvestForecastRow[];
   customers: CustomerHarvestForecastRow[];
+  accuracy: ForecastAccuracyRow[];
+};
+
+export type ForecastAccuracyRow = {
+  recommendation_id: number;
+  run_id: number;
+  forecast_date: string;
+  item_variant_id: number;
+  variant_name: string;
+  recommended_crates: number;
+  final_crates: number;
+  actual_crates: number;
+  model_absolute_error: number;
+  plan_absolute_error: number;
+  plan_accuracy: number;
+  is_overridden: boolean;
 };
 
 function normalizeRow(row: Record<string, unknown>): HarvestForecastRow {
@@ -96,10 +114,32 @@ async function getCustomerPlanRows(runId: number): Promise<CustomerHarvestForeca
   }));
 }
 
+async function getAccuracyRows(): Promise<ForecastAccuracyRow[]> {
+  const { data, error } = await supabase
+    .from('forecast_actual_comparison')
+    .select('*')
+    .order('forecast_date', { ascending: false })
+    .order('actual_crates', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    ...(row as unknown as ForecastAccuracyRow),
+    recommendation_id: Number(row.recommendation_id),
+    run_id: Number(row.run_id),
+    item_variant_id: Number(row.item_variant_id),
+    recommended_crates: Number(row.recommended_crates),
+    final_crates: Number(row.final_crates),
+    actual_crates: Number(row.actual_crates),
+    model_absolute_error: Number(row.model_absolute_error),
+    plan_absolute_error: Number(row.plan_absolute_error),
+    plan_accuracy: Number(row.plan_accuracy),
+  }));
+}
+
 export async function getHarvestForecast(startDate: string, refresh = false): Promise<HarvestForecastPlan> {
   let runId: number | null = null;
   if (!refresh) {
-    const { data, error } = await supabase.from('forecast_runs').select('id').eq('start_date', startDate).maybeSingle();
+    const { data, error } = await supabase.from('forecast_runs').select('id,status').eq('start_date', startDate).maybeSingle();
     if (error) throw error;
     runId = data ? Number(data.id) : null;
   }
@@ -120,7 +160,7 @@ export async function getHarvestForecast(startDate: string, refresh = false): Pr
     if (error) throw error;
     customers = await getCustomerPlanRows(runId);
   }
-  return { items: await getPlanRows(runId), customers };
+  return { items: await getPlanRows(runId), customers, accuracy: await getAccuracyRows() };
 }
 
 export async function saveHarvestForecastQuantity(id: number, crates: number): Promise<void> {
@@ -131,4 +171,13 @@ export async function saveHarvestForecastQuantity(id: number, crates: number): P
   });
   if (error) throw error;
   if (!data) throw new Error('Forecast adjustment was not saved');
+}
+
+export async function setHarvestForecastApproval(runId: number, approved: boolean): Promise<void> {
+  const { data, error } = await supabase.rpc(approved ? 'approve_harvest_forecast' : 'reopen_harvest_forecast', {
+    p_run_id: runId,
+    p_note: approved ? 'Approved from harvest planning screen' : 'Reopened from harvest planning screen',
+  });
+  if (error) throw error;
+  if (!data) throw new Error(approved ? 'Plan was not approved' : 'Plan was not reopened');
 }

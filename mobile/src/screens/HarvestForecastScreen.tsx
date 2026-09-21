@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useHarvestForecast } from '../features/forecast/useHarvestForecast';
 import type { RootStackParamList } from '../navigation/AppNavigator';
@@ -15,7 +15,7 @@ export default function HarvestForecastScreen({ navigation }: Props) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(forecast.startDate, index)), [forecast.startDate]);
   const isDefaultWeek = forecast.startDate === addDays(toLocalDateString(), 1);
   const [selectedDate, setSelectedDate] = useState(forecast.startDate);
-  const [view, setView] = useState<'items' | 'customers'>('items');
+  const [view, setView] = useState<'items' | 'customers' | 'accuracy'>('items');
   useEffect(() => { setSelectedDate(forecast.startDate); }, [forecast.startDate]);
   const selectedRows = forecast.rows
     .filter((row) => row.forecast_date === selectedDate)
@@ -33,6 +33,23 @@ export default function HarvestForecastScreen({ navigation }: Props) {
       .map((group) => ({ ...group, items: group.items.sort((a, b) => b.recommended_crates - a.recommended_crates) }))
       .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
   }, [forecast.customerRows, selectedDate]);
+  const runStatus = forecast.rows[0]?.run_status ?? 'ready';
+  const isApproved = runStatus === 'approved';
+  const accuracySummary = useMemo(() => {
+    const actual = forecast.accuracyRows.reduce((sum, row) => sum + row.actual_crates, 0);
+    const error = forecast.accuracyRows.reduce((sum, row) => sum + row.plan_absolute_error, 0);
+    return { actual, error, accuracy: actual > 0 ? Math.max(0, 1 - (error / actual)) : null };
+  }, [forecast.accuracyRows]);
+  const handleApproval = () => {
+    if (forecast.hasChanges) {
+      Alert.alert('Save changes first', 'Save your planning changes before approving the plan.');
+      return;
+    }
+    Alert.alert(isApproved ? 'Reopen plan?' : 'Approve this plan?', isApproved ? 'The quantities will become editable again.' : 'Approval locks quantities and refresh until you explicitly reopen it.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: isApproved ? 'Reopen' : 'Approve', onPress: () => void forecast.setApproval(!isApproved) },
+    ]);
+  };
 
   return (
     <View style={styles.container}>
@@ -51,7 +68,7 @@ export default function HarvestForecastScreen({ navigation }: Props) {
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
         <View style={styles.advisory}>
           <View style={styles.advisoryCopy}><Text style={styles.advisoryTitle}>Planning only</Text><Text style={styles.advisoryText}>Uses eight matching weekdays and customer demand history. It does not reduce stock or create purchases.</Text></View>
-          <TouchableOpacity disabled={forecast.loading} style={styles.refreshButton} onPress={() => void forecast.refresh()}><Text style={styles.refreshText}>Refresh</Text></TouchableOpacity>
+          <TouchableOpacity disabled={forecast.loading || isApproved} style={[styles.refreshButton, isApproved && styles.refreshButtonDisabled]} onPress={() => void forecast.refresh()}><Text style={styles.refreshText}>{isApproved ? 'Locked' : 'Refresh'}</Text></TouchableOpacity>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
           {days.map((date) => {
@@ -68,7 +85,12 @@ export default function HarvestForecastScreen({ navigation }: Props) {
         <View style={styles.viewSwitch}>
           <TouchableOpacity style={[styles.viewOption, view === 'items' && styles.viewOptionOn]} onPress={() => setView('items')}><Text style={[styles.viewOptionText, view === 'items' && styles.viewOptionTextOn]}>By item</Text></TouchableOpacity>
           <TouchableOpacity style={[styles.viewOption, view === 'customers' && styles.viewOptionOn]} onPress={() => setView('customers')}><Text style={[styles.viewOptionText, view === 'customers' && styles.viewOptionTextOn]}>By customer</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.viewOption, view === 'accuracy' && styles.viewOptionOn]} onPress={() => setView('accuracy')}><Text style={[styles.viewOptionText, view === 'accuracy' && styles.viewOptionTextOn]}>Accuracy</Text></TouchableOpacity>
         </View>
+        {view !== 'accuracy' && forecast.rows.length ? <View style={[styles.approvalCard, isApproved && styles.approvalCardOn]}>
+          <View style={styles.approvalCopy}><Text style={styles.approvalTitle}>{isApproved ? '✓ Plan approved' : 'Plan is still editable'}</Text><Text style={styles.approvalHint}>{isApproved ? 'Reopen only when quantities must change' : 'Review quantities before locking the plan'}</Text></View>
+          <TouchableOpacity disabled={forecast.saving} style={[styles.approvalButton, isApproved && styles.reopenButton]} onPress={handleApproval}><Text style={[styles.approvalButtonText, isApproved && styles.reopenButtonText]}>{isApproved ? 'Reopen' : 'Approve plan'}</Text></TouchableOpacity>
+        </View> : null}
         {forecast.loading ? <View style={styles.loading}><ActivityIndicator color="#0F766E" size="large" /><Text style={styles.loadingText}>Preparing recommendations…</Text></View> : null}
         {!forecast.loading && forecast.rows.length === 0 ? <View style={styles.empty}><Text style={styles.emptyTitle}>No crate demand found</Text><Text style={styles.emptyText}>There is not enough matched history for this week yet.</Text></View> : null}
 
@@ -94,6 +116,7 @@ export default function HarvestForecastScreen({ navigation }: Props) {
                       value={forecast.drafts[row.id] ?? ''}
                       onChangeText={(value) => forecast.updateDraft(row.id, value)}
                       keyboardType="number-pad"
+                      editable={!isApproved}
                       selectTextOnFocus
                       maxLength={4}
                     />
@@ -117,6 +140,19 @@ export default function HarvestForecastScreen({ navigation }: Props) {
             </View>)}
           </View>)}
           {!selectedCustomers.length ? <View style={styles.empty}><Text style={styles.emptyTitle}>No known customer demand</Text><Text style={styles.emptyText}>Item demand may still include unmatched historical customers.</Text></View> : null}
+        </> : null}
+        {!forecast.loading && view === 'accuracy' ? <>
+          {accuracySummary.accuracy !== null ? <View style={styles.accuracySummary}>
+            <Text style={styles.accuracyEyebrow}>FORECAST VS ACTUAL</Text>
+            <Text style={styles.accuracyValue}>{Math.round(accuracySummary.accuracy * 100)}%</Text>
+            <Text style={styles.accuracyCaption}>plan accuracy across {forecast.accuracyRows.length} completed item forecasts</Text>
+          </View> : <View style={styles.empty}><Text style={styles.emptyTitle}>Accuracy starts after the forecast date</Text><Text style={styles.emptyText}>Once actual sales are recorded, this tab will compare them with both the system recommendation and your approved plan.</Text></View>}
+          {forecast.accuracyRows.map((row) => <View key={row.recommendation_id} style={styles.actualRow}>
+            <View style={styles.actualCopy}><Text style={styles.actualName}>{row.variant_name}</Text><Text style={styles.actualDate}>{formatBusinessDate(row.forecast_date)}</Text></View>
+            <View style={styles.actualMetric}><Text style={styles.actualMetricLabel}>PLAN</Text><Text style={styles.actualMetricValue}>{row.final_crates}</Text></View>
+            <View style={styles.actualMetric}><Text style={styles.actualMetricLabel}>ACTUAL</Text><Text style={styles.actualMetricValue}>{row.actual_crates}</Text></View>
+            <View style={styles.actualPercent}><Text style={styles.actualPercentText}>{Math.round(row.plan_accuracy * 100)}%</Text></View>
+          </View>)}
         </> : null}
       </ScrollView>
 

@@ -3,8 +3,10 @@ import { Alert } from 'react-native';
 import {
   getHarvestForecast,
   type CustomerHarvestForecastRow,
+  type ForecastAccuracyRow,
   type HarvestForecastRow,
   saveHarvestForecastQuantity,
+  setHarvestForecastApproval,
 } from '../../api/forecast';
 import { addDays, toLocalDateString } from '../../utils/date';
 
@@ -17,6 +19,7 @@ export function useHarvestForecast() {
   const [startDate, setStartDate] = useState(addDays(toLocalDateString(), 1));
   const [rows, setRows] = useState<HarvestForecastRow[]>([]);
   const [customerRows, setCustomerRows] = useState<CustomerHarvestForecastRow[]>([]);
+  const [accuracyRows, setAccuracyRows] = useState<ForecastAccuracyRow[]>([]);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,6 +30,7 @@ export function useHarvestForecast() {
       const result = await getHarvestForecast(startDate, refresh);
       setRows(result.items);
       setCustomerRows(result.customers);
+      setAccuracyRows(result.accuracy);
       setDrafts(Object.fromEntries(result.items.map((row) => [row.id, String(row.final_crates)])));
     } catch (error) {
       console.error('Unable to generate harvest forecast:', error);
@@ -66,10 +70,27 @@ export function useHarvestForecast() {
     }
   };
 
+  const setApproval = async (approved: boolean) => {
+    const runId = rows[0]?.run_id;
+    if (!runId) return;
+    setSaving(true);
+    try {
+      await setHarvestForecastApproval(runId, approved);
+      await load(false);
+      Alert.alert(approved ? 'Plan approved' : 'Plan reopened', approved ? 'The plan is now locked against accidental changes.' : 'The plan can now be edited and refreshed.');
+    } catch (error) {
+      console.error('Unable to change forecast approval:', error);
+      Alert.alert('Unable to update plan', errorMessage(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return {
     startDate,
     rows,
     customerRows,
+    accuracyRows,
     drafts,
     loading,
     saving,
@@ -81,5 +102,6 @@ export function useHarvestForecast() {
     load,
     refresh: () => load(true),
     save,
+    setApproval,
   };
 }

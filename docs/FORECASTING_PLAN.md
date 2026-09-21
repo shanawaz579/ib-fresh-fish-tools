@@ -71,6 +71,14 @@ backtests before changing production recommendations.
 - Show measured backtest accuracy for predictable items and mark unstable items as
   `Low predictability` rather than presenting false precision.
 
+## Operational controls
+
+- The proprietor can approve a reviewed seven-day plan from the forecast screen.
+- Approval locks item quantities and recalculation until the plan is explicitly reopened.
+- Approval and reopening are audited independently from quantity adjustments.
+- The Accuracy tab compares completed forecasts with actual sales and reports both the
+  system recommendation and the proprietor's final plan.
+
 The proprietor can edit the base quantity. The system stores both the recommendation and
 the final quantity so accuracy and human overrides can be measured later.
 
