@@ -24,7 +24,7 @@ Historical demand is isolated from operational sales, stock, bills, balances, an
      --output-dir .local-forecast-import/sql
    ```
 
-4. Apply migrations `063` through `068` only after taking a production backup.
+4. Apply migrations `063` through `070` only after taking a production backup.
 5. Stage legacy customers and items as `proposed` mappings.
 6. Confirm ambiguous mappings before validating an import batch.
 7. Import rows idempotently using `(source_system, legacy_sale_id)`.

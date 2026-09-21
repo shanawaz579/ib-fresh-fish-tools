@@ -84,6 +84,7 @@ export default function HarvestForecastScreen({ navigation }: Props) {
                     <Text style={styles.itemName}>{row.variant_name}</Text>
                     <View style={styles.metaRow}>
                       <Text style={[styles.confidence, styles[`confidence${confidenceCopy[row.confidence_label]}`]]}>{confidenceCopy[row.confidence_label]} confidence</Text>
+                      {row.model_accuracy !== null ? <Text style={styles.accuracy}>{row.model_accuracy >= 0.2 ? `${Math.round(row.model_accuracy * 100)}% backtest accuracy` : 'Low predictability'}</Text> : null}
                       <Text style={styles.range}>usual {row.low_crates}–{row.high_crates} cr</Text>
                     </View>
                   </View>

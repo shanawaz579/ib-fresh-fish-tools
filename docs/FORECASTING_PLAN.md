@@ -61,6 +61,16 @@ Recent trend, learned month-position effects, customer-level explanations, and a
 holiday suggestions remain candidate improvements. They must beat this baseline in rolling
 backtests before changing production recommendations.
 
+### Version 2: backtested selection
+
+- Evaluate the most recent 56 completed dates without looking ahead.
+- Compare an eight-week same-weekday average with a recency-weighted same-weekday model.
+- Select the lower-error model independently for each item and grade.
+- Store WAPE and mean absolute error so the choice remains auditable.
+- Suppress sub-1.5-crate, low-confidence rounding noise.
+- Show measured backtest accuracy for predictable items and mark unstable items as
+  `Low predictability` rather than presenting false precision.
+
 The proprietor can edit the base quantity. The system stores both the recommendation and
 the final quantity so accuracy and human overrides can be measured later.
 

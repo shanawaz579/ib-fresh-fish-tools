@@ -20,6 +20,8 @@ export type HarvestForecastRow = {
   is_overridden: boolean;
   override_note: string | null;
   generated_at: string;
+  model_name: 'weekday_average' | 'weekday_weighted';
+  model_accuracy: number | null;
 };
 
 export type CustomerHarvestForecastRow = {
@@ -56,6 +58,7 @@ function normalizeRow(row: Record<string, unknown>): HarvestForecastRow {
     high_crates: Number(row.high_crates),
     final_crates: Number(row.final_crates),
     confidence_score: Number(row.confidence_score),
+    model_accuracy: row.model_accuracy === null || row.model_accuracy === undefined ? null : Number(row.model_accuracy),
     reasons: Array.isArray(row.reasons) ? row.reasons.map(String) : [],
   };
 }
@@ -102,14 +105,18 @@ export async function getHarvestForecast(startDate: string, refresh = false): Pr
   }
 
   if (runId === null) {
-    const { data, error } = await supabase.rpc('generate_harvest_forecast', { p_start_date: startDate });
+    if (refresh) {
+      const { error: evaluationError } = await supabase.rpc('refresh_forecast_model_performance');
+      if (evaluationError) throw evaluationError;
+    }
+    const { data, error } = await supabase.rpc('generate_harvest_forecast_v2', { p_start_date: startDate });
     if (error) throw error;
     runId = Number(data);
   }
 
   let customers = refresh ? [] : await getCustomerPlanRows(runId);
   if (refresh || customers.length === 0) {
-    const { error } = await supabase.rpc('generate_customer_harvest_forecast', { p_run_id: runId });
+    const { error } = await supabase.rpc('generate_customer_harvest_forecast_v2', { p_run_id: runId });
     if (error) throw error;
     customers = await getCustomerPlanRows(runId);
   }

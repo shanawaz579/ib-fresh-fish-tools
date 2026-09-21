@@ -60,6 +60,7 @@ export default StyleSheet.create({
   confidenceHigh: { backgroundColor: '#D1FAE5', color: '#047857' },
   confidenceMedium: { backgroundColor: '#FEF3C7', color: '#A16207' },
   confidenceLow: { backgroundColor: '#FEE2E2', color: '#B91C1C' },
+  accuracy: { color: '#0F766E', fontSize: 7, fontWeight: '800' },
   range: { color: '#94A3B8', fontSize: 8, fontWeight: '700' },
   quantityBox: { alignItems: 'center', flexDirection: 'row' },
   quantityInput: { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1', borderRadius: 9, borderWidth: 1, color: '#0F766E', fontSize: 16, fontWeight: '900', height: 40, paddingHorizontal: 5, textAlign: 'center', width: 52 },
