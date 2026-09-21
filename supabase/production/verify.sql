@@ -10,6 +10,8 @@ BEGIN
     'bills','bill_items','bill_corrections','business_preferences','business_profile',
     'cash_adjustments','cash_day_closings','customers','expense_categories','expenses',
     'farmers','inventory_cost_events','inventory_costing_control','inventory_costing_runs',
+    'forecast_customer_mappings','forecast_import_batches','forecast_item_mappings',
+    'forecast_sales_history',
     'item_grades','items','item_variants','packing_share_activity','packing_share_links',
     'packing_status','payments','purchase_bill_items',
     'purchase_bill_payments','purchase_bills','purchases','sales','stock_locations',
@@ -29,6 +31,10 @@ BEGIN
 
   IF missing_rls IS NOT NULL THEN
     RAISE EXCEPTION 'RLS is disabled on: %', missing_rls;
+  END IF;
+
+  IF to_regclass('working.forecast_training_sales') IS NULL THEN
+    RAISE EXCEPTION 'Forecast training view is missing';
   END IF;
 
   IF to_regprocedure('working.save_sales_batch(bigint,date,jsonb)') IS NULL

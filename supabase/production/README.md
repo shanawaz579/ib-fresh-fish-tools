@@ -27,4 +27,4 @@ Do not replay the migration chain against an existing populated schema. First ru
 
 ## Migration policy after launch
 
-Files `001` through `047` form the initial migration chain. Every later database change receives one new numbered migration and one non-destructive verification file.
+Files `001` through `047` form the initial migration chain. Every later database change receives one new numbered migration and one non-destructive verification file. Run the matching verification file immediately after applying any incremental migration.
