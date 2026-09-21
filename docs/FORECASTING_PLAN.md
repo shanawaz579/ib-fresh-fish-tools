@@ -15,7 +15,10 @@
 - Current operational source: 11 September 2026 onward.
 - Legacy history is imported into dedicated forecast tables. It must never update stock,
   bills, balances, payments, or cashbook entries.
-- Legacy items must be mapped to a current item variant before entering training data.
+- Legacy items must be mapped to a current item variant or item family before entering training data.
+- When the legacy source has no grade, it may map to a current item family. The forecast
+  allocates that family demand across grades using the recent current-grade mix rather than
+  inventing a historical grade.
 - Legacy customers may remain unmatched for total/item demand, but only confirmed customer
   mappings may contribute to customer-specific recommendations.
 

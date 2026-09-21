@@ -32,4 +32,8 @@ Historical demand is isolated from operational sales, stock, bills, balances, an
 
 Loose kilograms remain in the audit history but are excluded from the crate-only training view. Unmatched customers may remain null in the training view, while unmatched items are excluded until reviewed.
 
+If a legacy item identifies a fish family but not its grade, set `item_id` and leave
+`item_variant_id` null. The forecast can then allocate family demand using recent current
+grade proportions without rewriting history.
+
 The prepared JSON contains customer names. Keep it outside Git and delete it after the verified import.
