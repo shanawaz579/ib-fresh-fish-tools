@@ -43,11 +43,18 @@ customer levels instead of fitting an independent model to every pair.
 
 ### Version 1: transparent statistical forecast
 
-1. Build an item-by-weekday baseline using recency-weighted historical crates.
-2. Add stable customer demand signals where enough mapped history exists.
-3. Apply bounded adjustments for recent trend and beginning/middle/end of month.
-4. Apply a reviewed event multiplier for relevant Tamil Nadu holidays and local closure days.
-5. Produce low/base/high quantities and round only the final harvest plan to whole crates.
+The first recommendation-only release is intentionally a measurable baseline:
+
+1. Average the last eight matching weekdays, including zero-demand weeks.
+2. Preserve customer demand through the underlying matched sales history.
+3. Allocate grade-unknown family history only across explicitly approved grades, using the
+   recent current-grade mix (Jilebi is limited to Pailet M/S).
+4. Apply only confirmed calendar-event multipliers.
+5. Produce low/base/high quantities, confidence, and a whole-crate editable plan.
+
+Recent trend, learned month-position effects, customer-level explanations, and automatic
+holiday suggestions remain candidate improvements. They must beat this baseline in rolling
+backtests before changing production recommendations.
 
 The proprietor can edit the base quantity. The system stores both the recommendation and
 the final quantity so accuracy and human overrides can be measured later.
@@ -69,5 +76,6 @@ can be backtested.
 - Display a low-confidence warning for new items, sparse history, and unusual event days.
 
 Initial baseline tests showed roughly 29% daily-total error for a same-weekday model and
-roughly 56% item-level error. Version 1 should beat these baselines consistently before it
-is presented as a production forecast.
+roughly 56% item-level error. The current screen is therefore labelled and operated as a
+planning assistant: it shows confidence and a range, stays editable, and never creates a
+purchase automatically.

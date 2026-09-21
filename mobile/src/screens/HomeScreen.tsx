@@ -79,6 +79,11 @@ export default function HomeScreen({ navigation }: Props) {
 
         {hasDailyWork ? <View style={[styles.section, styles.firstSection]}>
           <View style={styles.sectionHeader}><Text style={styles.sectionTitle}>Daily work</Text><Text style={styles.sectionHint}>Record today’s activity</Text></View>
+          {modules.sales ? <TouchableOpacity style={styles.forecastCard} onPress={() => navigation.navigate('HarvestForecast')}>
+            <View style={styles.forecastIcon}><Text style={styles.forecastIconText}>7</Text></View>
+            <View style={styles.forecastCopy}><Text style={styles.forecastTitle}>Harvest forecast</Text><Text style={styles.forecastHint}>Plan the next 7 days from sales history</Text></View>
+            <Text style={styles.forecastArrow}>›</Text>
+          </TouchableOpacity> : null}
           <View style={styles.actionGrid}>
             {modules.sales ? <HomeActionCard icon="↑" title="Sales" subtitle="Sell stock to customers" color="#2563EB" badge={pendingCounts.sales ? `${pendingCounts.sales} pending` : undefined} onPress={() => navigation.navigate('Sales')} /> : null}
             {modules.purchases ? <HomeActionCard icon="↓" title="Purchases" subtitle="Record incoming stock" color="#059669" badge={pendingCounts.purchases ? `${pendingCounts.purchases} pending` : undefined} onPress={() => navigation.navigate('Purchase')} /> : null}

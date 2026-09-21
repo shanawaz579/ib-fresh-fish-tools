@@ -28,6 +28,7 @@ import ProfitabilityScreen from '../screens/ProfitabilityScreen';
 import PaymentRegisterScreen from '../screens/PaymentRegisterScreen';
 import IcePlantScreen from '../screens/IcePlantScreen';
 import IceFinanceScreen from '../screens/IceFinanceScreen';
+import HarvestForecastScreen from '../screens/HarvestForecastScreen';
 import type { PurchaseBillDetails } from '../domain/purchaseBillDetails';
 
 export type RootStackParamList = {
@@ -70,6 +71,7 @@ export type RootStackParamList = {
   PaymentRegister: undefined;
   IcePlant: undefined;
   IceFinance: { initialView?: 'activity' | 'dashboard' } | undefined;
+  HarvestForecast: undefined;
   PurchaseBillDetails: {
     billId: number;
   };
@@ -132,6 +134,7 @@ function Navigation() {
           <Stack.Screen name="PaymentRegister" component={PaymentRegisterScreen} />
           <Stack.Screen name="IcePlant" component={IcePlantScreen} />
           <Stack.Screen name="IceFinance" component={IceFinanceScreen} />
+          <Stack.Screen name="HarvestForecast" component={HarvestForecastScreen} />
         </>
       ) : isPacker ? (
         // Packer users only get Packing screen

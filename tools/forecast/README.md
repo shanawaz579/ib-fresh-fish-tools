@@ -24,11 +24,12 @@ Historical demand is isolated from operational sales, stock, bills, balances, an
      --output-dir .local-forecast-import/sql
    ```
 
-4. Apply migrations `063` and `064` only after taking a production backup.
+4. Apply migrations `063` through `067` only after taking a production backup.
 5. Stage legacy customers and items as `proposed` mappings.
 6. Confirm ambiguous mappings before validating an import batch.
 7. Import rows idempotently using `(source_system, legacy_sale_id)`.
 8. Train only from `working.forecast_training_sales`.
+9. Generate a seven-day advisory plan through `working.generate_harvest_forecast(date)`.
 
 Loose kilograms remain in the audit history but are excluded from the crate-only training view. Unmatched customers may remain null in the training view, while unmatched items are excluded until reviewed.
 
@@ -37,3 +38,6 @@ If a legacy item identifies a fish family but not its grade, set `item_id` and l
 grade proportions without rewriting history.
 
 The prepared JSON contains customer names. Keep it outside Git and delete it after the verified import.
+
+Forecast recommendations and proprietor adjustments are stored separately and audited.
+They never write to inventory, purchases, sales, billing, payments, or cashbook tables.
