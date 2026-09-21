@@ -15,9 +15,24 @@ export default function HarvestForecastScreen({ navigation }: Props) {
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(forecast.startDate, index)), [forecast.startDate]);
   const isDefaultWeek = forecast.startDate === addDays(toLocalDateString(), 1);
   const [selectedDate, setSelectedDate] = useState(forecast.startDate);
+  const [view, setView] = useState<'items' | 'customers'>('items');
   useEffect(() => { setSelectedDate(forecast.startDate); }, [forecast.startDate]);
-  const selectedRows = forecast.rows.filter((row) => row.forecast_date === selectedDate);
+  const selectedRows = forecast.rows
+    .filter((row) => row.forecast_date === selectedDate)
+    .sort((a, b) => Number(forecast.drafts[b.id] || 0) - Number(forecast.drafts[a.id] || 0));
   const selectedTotal = selectedRows.reduce((sum, row) => sum + Number(forecast.drafts[row.id] || 0), 0);
+  const selectedCustomers = useMemo(() => {
+    const groups = new Map<number, { id: number; name: string; location: string | null; total: number; items: typeof forecast.customerRows }>();
+    forecast.customerRows.filter((row) => row.forecast_date === selectedDate).forEach((row) => {
+      const group = groups.get(row.customer_id) ?? { id: row.customer_id, name: row.customer_name, location: row.customer_location, total: 0, items: [] };
+      group.total += row.recommended_crates;
+      group.items.push(row);
+      groups.set(row.customer_id, group);
+    });
+    return Array.from(groups.values())
+      .map((group) => ({ ...group, items: group.items.sort((a, b) => b.recommended_crates - a.recommended_crates) }))
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
+  }, [forecast.customerRows, selectedDate]);
 
   return (
     <View style={styles.container}>
@@ -50,10 +65,14 @@ export default function HarvestForecastScreen({ navigation }: Props) {
             </TouchableOpacity>;
           })}
         </ScrollView>
+        <View style={styles.viewSwitch}>
+          <TouchableOpacity style={[styles.viewOption, view === 'items' && styles.viewOptionOn]} onPress={() => setView('items')}><Text style={[styles.viewOptionText, view === 'items' && styles.viewOptionTextOn]}>By item</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.viewOption, view === 'customers' && styles.viewOptionOn]} onPress={() => setView('customers')}><Text style={[styles.viewOptionText, view === 'customers' && styles.viewOptionTextOn]}>By customer</Text></TouchableOpacity>
+        </View>
         {forecast.loading ? <View style={styles.loading}><ActivityIndicator color="#0F766E" size="large" /><Text style={styles.loadingText}>Preparing recommendations…</Text></View> : null}
         {!forecast.loading && forecast.rows.length === 0 ? <View style={styles.empty}><Text style={styles.emptyTitle}>No crate demand found</Text><Text style={styles.emptyText}>There is not enough matched history for this week yet.</Text></View> : null}
 
-        {!forecast.loading && selectedRows.length ? (
+        {!forecast.loading && view === 'items' && selectedRows.length ? (
             <View style={styles.dayCard}>
               <View style={styles.dayHeader}>
                 <View><Text style={styles.dayName}>{new Date(`${selectedDate}T12:00:00`).toLocaleDateString('en-IN', { weekday: 'long' })}</Text><Text style={styles.dayDate}>{formatBusinessDate(selectedDate)}</Text></View>
@@ -83,6 +102,21 @@ export default function HarvestForecastScreen({ navigation }: Props) {
               ))}
             </View>
         ) : null}
+        {!forecast.loading && view === 'customers' ? <>
+          <Text style={styles.customerNote}>Known customers from matched history · highest quantity first</Text>
+          {selectedCustomers.map((customer) => <View key={customer.id} style={styles.customerCard}>
+            <View style={styles.customerHeader}>
+              <View style={styles.customerCopy}><Text style={styles.customerName}>{customer.name}</Text>{customer.location ? <Text style={styles.customerLocation}>{customer.location}</Text> : null}</View>
+              <View style={styles.customerTotal}><Text style={styles.customerTotalValue}>{customer.total}</Text><Text style={styles.customerTotalUnit}>CRATES</Text></View>
+            </View>
+            {customer.items.map((item, index) => <View key={item.id} style={[styles.customerItem, index === customer.items.length - 1 && styles.customerItemLast]}>
+              <Text style={styles.customerItemName}>{item.variant_name}</Text>
+              <Text style={styles.customerItemRange}>{item.low_crates}–{item.high_crates} usual</Text>
+              <Text style={styles.customerItemQty}>{item.recommended_crates} cr</Text>
+            </View>)}
+          </View>)}
+          {!selectedCustomers.length ? <View style={styles.empty}><Text style={styles.emptyTitle}>No known customer demand</Text><Text style={styles.emptyText}>Item demand may still include unmatched historical customers.</Text></View> : null}
+        </> : null}
       </ScrollView>
 
       {forecast.hasChanges ? <View style={styles.saveBar}><Text style={styles.saveHint}>Unsaved planning changes</Text><TouchableOpacity disabled={forecast.saving} style={styles.saveButton} onPress={() => void forecast.save()}><Text style={styles.saveButtonText}>{forecast.saving ? 'Saving…' : 'Save plan'}</Text></TouchableOpacity></View> : null}

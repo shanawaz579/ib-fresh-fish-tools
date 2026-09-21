@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import {
   getHarvestForecast,
+  type CustomerHarvestForecastRow,
   type HarvestForecastRow,
   saveHarvestForecastQuantity,
 } from '../../api/forecast';
@@ -15,6 +16,7 @@ function errorMessage(error: unknown): string {
 export function useHarvestForecast() {
   const [startDate, setStartDate] = useState(addDays(toLocalDateString(), 1));
   const [rows, setRows] = useState<HarvestForecastRow[]>([]);
+  const [customerRows, setCustomerRows] = useState<CustomerHarvestForecastRow[]>([]);
   const [drafts, setDrafts] = useState<Record<number, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -23,8 +25,9 @@ export function useHarvestForecast() {
     setLoading(true);
     try {
       const result = await getHarvestForecast(startDate, refresh);
-      setRows(result);
-      setDrafts(Object.fromEntries(result.map((row) => [row.id, String(row.final_crates)])));
+      setRows(result.items);
+      setCustomerRows(result.customers);
+      setDrafts(Object.fromEntries(result.items.map((row) => [row.id, String(row.final_crates)])));
     } catch (error) {
       console.error('Unable to generate harvest forecast:', error);
       Alert.alert('Unable to prepare forecast', errorMessage(error));
@@ -66,6 +69,7 @@ export function useHarvestForecast() {
   return {
     startDate,
     rows,
+    customerRows,
     drafts,
     loading,
     saving,

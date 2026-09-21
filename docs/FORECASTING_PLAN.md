@@ -52,6 +52,11 @@ The first recommendation-only release is intentionally a measurable baseline:
 4. Apply only confirmed calendar-event multipliers.
 5. Produce low/base/high quantities, confidence, and a whole-crate editable plan.
 
+The same screen also provides a known-customer breakdown. It uses confirmed customer
+mappings, shows the expected item mix for each customer, and sorts customers and items
+from highest forecast quantity to lowest. Unmapped historical customers remain included
+in the item-level plan but are not displayed under a guessed customer name.
+
 Recent trend, learned month-position effects, customer-level explanations, and automatic
 holiday suggestions remain candidate improvements. They must beat this baseline in rolling
 backtests before changing production recommendations.
