@@ -28,3 +28,5 @@ Do not replay the migration chain against an existing populated schema. First ru
 ## Migration policy after launch
 
 Files `001` through `047` form the initial migration chain. Every later database change receives one new numbered migration and one non-destructive verification file. Run the matching verification file immediately after applying any incremental migration.
+
+Migration `072_optimize_forecast_generation.sql` keeps the seven-day item and customer forecast calculations within the mobile API timeout without changing their forecasting formulas.
