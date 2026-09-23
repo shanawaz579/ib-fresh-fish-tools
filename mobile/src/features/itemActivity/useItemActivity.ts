@@ -6,13 +6,14 @@ import type { Customer, FishVariety, Purchase, Sale, Supplier } from '../../type
 import { addDays, toLocalDateString } from '../../utils/date';
 
 export type ActivityMode = 'sales' | 'purchases';
-export type ActivityRangeDays = 1 | 7 | 30;
+export type ActivityPeriod = 1 | 7 | 30 | 'date';
 export type ActivityRow = { id:number; date:string; partyId:number; partyName:string; varietyId:number; varietyName:string; crates:number; kg:number; status:string };
 
 export function useItemActivity() {
   const today = toLocalDateString();
   const [mode, setMode] = useState<ActivityMode>('sales');
-  const [rangeDays, setRangeDays] = useState<ActivityRangeDays>(7);
+  const [period, setPeriod] = useState<ActivityPeriod>(7);
+  const [selectedDate, setSelectedDate] = useState(today);
   const [selectedVarietyId, setSelectedVarietyId] = useState<number | null>(null);
   const [selectedPartyId, setSelectedPartyId] = useState<number | null>(null);
   const [sales, setSales] = useState<Sale[]>([]);
@@ -23,20 +24,21 @@ export function useItemActivity() {
   const [stock, setStock] = useState<StockSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const fromDate = addDays(today, -(rangeDays - 1));
+  const fromDate = period === 'date' ? selectedDate : addDays(today, -(period - 1));
+  const toDate = period === 'date' ? selectedDate : today;
 
   const load = useCallback(async (refresh = false) => {
     refresh ? setRefreshing(true) : setLoading(true);
     try {
       const [saleRows, purchaseRows, itemRows, customerRows, supplierRows, stockRows] = await Promise.all([
-        getSalesByDateRange(fromDate, today), getPurchasesByDateRange(fromDate, today), getFishVarieties(), getCustomers(), getSuppliers(), getStockSnapshot(today),
+        getSalesByDateRange(fromDate, toDate), getPurchasesByDateRange(fromDate, toDate), getFishVarieties(), getCustomers(), getSuppliers(), getStockSnapshot(today),
       ]);
       setSales(saleRows); setPurchases(purchaseRows); setVarieties(itemRows); setCustomers(customerRows); setSuppliers(supplierRows); setStock(stockRows);
     } catch (error) {
       console.error('Unable to load trade activity:', error);
       Alert.alert('Unable to load activity', 'Check the connection and try again.');
     } finally { setLoading(false); setRefreshing(false); }
-  }, [fromDate, today]);
+  }, [fromDate, toDate, today]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -53,11 +55,21 @@ export function useItemActivity() {
   const itemSummaries = useMemo(() => summarize(rows, 'item'), [rows]);
   const totals = useMemo(() => ({ crates:rows.reduce((sum,row)=>sum+row.crates,0), kg:rows.reduce((sum,row)=>sum+row.kg,0), transactions:rows.length, unbilled:rows.filter(row=>row.status==='unbilled').length }), [rows]);
   const selectMode = (next: ActivityMode) => { setMode(next); setSelectedPartyId(null); setSelectedVarietyId(null); };
-  const selectRange = (next: ActivityRangeDays) => { setRangeDays(next); setSelectedPartyId(null); setSelectedVarietyId(null); };
+  const clearFilters = () => { setSelectedPartyId(null); setSelectedVarietyId(null); };
+  const selectPeriod = (next: ActivityPeriod) => { setPeriod(next); clearFilters(); };
+  const changeSelectedDate = (date: string) => { setSelectedDate(date); clearFilters(); };
   const selectedStock = selectedVarietyId ? stock.find(row => row.itemVariantId === selectedVarietyId) : undefined;
   const stockSummary = { availableCrates:selectedStock?.closingCrates ?? 0, totalCrates:(selectedStock?.openingCrates ?? 0)+(selectedStock?.inwardCrates ?? 0), availableKg:selectedStock?.closingKg ?? 0, totalKg:(selectedStock?.openingKg ?? 0)+(selectedStock?.inwardKg ?? 0) };
 
-  return { today, fromDate, mode, selectMode, rangeDays, selectRange, selectedVarietyId, setSelectedVarietyId, selectedPartyId, setSelectedPartyId, varieties:activeVarieties, parties, rows, partySummaries, itemSummaries, totals, stockSummary, loading, refreshing, refresh:()=>load(true) };
+  return {
+    today, fromDate, toDate, mode, selectMode, period, selectPeriod, selectedDate,
+    previousDate: () => changeSelectedDate(addDays(selectedDate, -1)),
+    nextDate: () => { if (selectedDate < today) changeSelectedDate(addDays(selectedDate, 1)); },
+    goToToday: () => changeSelectedDate(today),
+    selectedVarietyId, setSelectedVarietyId, selectedPartyId, setSelectedPartyId,
+    varieties:activeVarieties, parties, rows, partySummaries, itemSummaries,
+    totals, stockSummary, loading, refreshing, refresh:()=>load(true),
+  };
 }
 
 function summarize(rows: ActivityRow[], by: 'party' | 'item') {
