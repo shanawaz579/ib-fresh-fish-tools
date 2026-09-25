@@ -13,7 +13,8 @@ const confidenceCopy = { low: 'Low', medium: 'Medium', high: 'High' } as const;
 export default function HarvestForecastScreen({ navigation }: Props) {
   const forecast = useHarvestForecast();
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(forecast.startDate, index)), [forecast.startDate]);
-  const isDefaultWeek = forecast.startDate === addDays(toLocalDateString(), 1);
+  const nextPlanningDate = addDays(toLocalDateString(), 1);
+  const isDefaultWeek = forecast.startDate <= nextPlanningDate && addDays(forecast.startDate, 6) >= nextPlanningDate;
   const [selectedDate, setSelectedDate] = useState(forecast.startDate);
   const [view, setView] = useState<'items' | 'customers' | 'accuracy'>('items');
   useEffect(() => { setSelectedDate(forecast.startDate); }, [forecast.startDate]);

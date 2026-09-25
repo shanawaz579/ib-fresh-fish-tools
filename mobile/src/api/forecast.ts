@@ -44,6 +44,7 @@ export type CustomerHarvestForecastRow = {
 };
 
 export type HarvestForecastPlan = {
+  startDate: string;
   items: HarvestForecastRow[];
   customers: CustomerHarvestForecastRow[];
   accuracy: ForecastAccuracyRow[];
@@ -138,10 +139,20 @@ async function getAccuracyRows(): Promise<ForecastAccuracyRow[]> {
 
 export async function getHarvestForecast(startDate: string, refresh = false): Promise<HarvestForecastPlan> {
   let runId: number | null = null;
+  let planStartDate = startDate;
   if (!refresh) {
-    const { data, error } = await supabase.from('forecast_runs').select('id,status').eq('start_date', startDate).maybeSingle();
+    const { data, error } = await supabase
+      .from('forecast_runs')
+      .select('id,start_date,status')
+      .lte('start_date', startDate)
+      .gte('end_date', startDate)
+      .in('status', ['ready', 'approved'])
+      .order('start_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (error) throw error;
     runId = data ? Number(data.id) : null;
+    if (data?.start_date) planStartDate = String(data.start_date);
   }
 
   if (runId === null) {
@@ -152,6 +163,7 @@ export async function getHarvestForecast(startDate: string, refresh = false): Pr
     const { data, error } = await supabase.rpc('generate_harvest_forecast_v2', { p_start_date: startDate });
     if (error) throw error;
     runId = Number(data);
+    planStartDate = startDate;
   }
 
   let customers = refresh ? [] : await getCustomerPlanRows(runId);
@@ -160,7 +172,7 @@ export async function getHarvestForecast(startDate: string, refresh = false): Pr
     if (error) throw error;
     customers = await getCustomerPlanRows(runId);
   }
-  return { items: await getPlanRows(runId), customers, accuracy: await getAccuracyRows() };
+  return { startDate: planStartDate, items: await getPlanRows(runId), customers, accuracy: await getAccuracyRows() };
 }
 
 export async function saveHarvestForecastQuantity(id: number, crates: number): Promise<void> {

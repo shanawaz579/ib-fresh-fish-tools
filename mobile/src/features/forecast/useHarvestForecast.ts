@@ -28,6 +28,7 @@ export function useHarvestForecast() {
     setLoading(true);
     try {
       const result = await getHarvestForecast(startDate, refresh);
+      if (result.startDate !== startDate) setStartDate(result.startDate);
       setRows(result.items);
       setCustomerRows(result.customers);
       setAccuracyRows(result.accuracy);
