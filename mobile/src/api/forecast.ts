@@ -115,7 +115,7 @@ async function getCustomerPlanRows(runId: number): Promise<CustomerHarvestForeca
   }));
 }
 
-async function getAccuracyRows(): Promise<ForecastAccuracyRow[]> {
+export async function getForecastAccuracy(): Promise<ForecastAccuracyRow[]> {
   const { data, error } = await supabase
     .from('forecast_actual_comparison')
     .select('*')
@@ -172,7 +172,7 @@ export async function getHarvestForecast(startDate: string, refresh = false): Pr
     if (error) throw error;
     customers = await getCustomerPlanRows(runId);
   }
-  return { startDate: planStartDate, items: await getPlanRows(runId), customers, accuracy: await getAccuracyRows() };
+  return { startDate: planStartDate, items: await getPlanRows(runId), customers, accuracy: [] };
 }
 
 export async function saveHarvestForecastQuantity(id: number, crates: number): Promise<void> {

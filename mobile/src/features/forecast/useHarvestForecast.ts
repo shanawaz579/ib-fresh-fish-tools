@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from 'react-native';
 import {
   getHarvestForecast,
+  getForecastAccuracy,
   type CustomerHarvestForecastRow,
   type ForecastAccuracyRow,
   type HarvestForecastRow,
@@ -42,6 +43,14 @@ export function useHarvestForecast() {
   }, [startDate]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    void getForecastAccuracy()
+      .then((result) => { if (active) setAccuracyRows(result); })
+      .catch((error) => console.warn('Unable to load forecast accuracy:', error));
+    return () => { active = false; };
+  }, []);
 
   const changedRows = useMemo(() => rows.filter((row) => {
     const value = Number(drafts[row.id]);
