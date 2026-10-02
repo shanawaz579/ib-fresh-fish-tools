@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { RootStackParamList } from '../../navigation/AppNavigator';
@@ -359,7 +359,9 @@ export function useCustomerBilling() {
       const message = err && typeof err === 'object' && 'message' in err
         ? String(err.message)
         : 'Please try again.';
-      Alert.alert(editingBillId ? 'Unable to update bill' : 'Unable to create bill', message);
+      const title = editingBillId ? 'Unable to update bill' : 'Unable to create bill';
+      if (Platform.OS === 'web' && typeof window !== 'undefined') window.alert(`${title}\n\n${message}`);
+      else Alert.alert(title, message);
     } finally {
       setSubmitting(false);
     }
