@@ -51,7 +51,7 @@ export default StyleSheet.create({
   },
   companyNameMain: {
     flex: 1,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900',
     color: '#0F172A',
     letterSpacing: 0.2,
@@ -63,10 +63,25 @@ export default StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
+  proprietorText: {
+    color: '#334155',
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  businessTagline: {
+    color: '#0F766E',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
   businessDetails: {
-    fontSize: 9,
+    fontSize: 10,
     color: '#64748B',
-    marginTop: 5,
+    lineHeight: 14,
+    marginTop: 4,
   },
   companyName: {
     fontSize: 24,
@@ -114,6 +129,10 @@ export default StyleSheet.create({
   },
   itemsTable: {
     marginBottom: 16,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
   tableHeader: {
     flexDirection: 'row',
@@ -134,6 +153,39 @@ export default StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+  },
+  itemCard: {
+    borderBottomColor: '#E2E8F0',
+    borderBottomWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+  },
+  itemCardMain: {
+    alignItems: 'baseline',
+    flexDirection: 'row',
+    gap: 10,
+    justifyContent: 'space-between',
+  },
+  itemCardName: {
+    color: '#0F172A',
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  itemCardAmount: {
+    color: '#0F766E',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  itemCardMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 5,
+  },
+  itemCardMetaText: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: '600',
   },
   tableCellText: {
     fontSize: 13,

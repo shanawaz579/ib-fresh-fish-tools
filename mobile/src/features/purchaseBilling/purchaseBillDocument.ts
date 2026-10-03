@@ -4,6 +4,7 @@ import { formatBusinessDate } from '../../utils/date';
 import { escapeHtml, formatConfiguredMoney } from '../../utils/businessFormatting';
 import { PURCHASE_BILL_PRINT_CSS } from './purchaseBillPrintStyles';
 import { sortFishItems } from '../../domain/fish';
+import { getBusinessBillBranding } from '../billing/businessBillBranding';
 
 export function generatePurchaseBillHtml(
   bill: PurchaseBillDetails,
@@ -11,15 +12,7 @@ export function generatePurchaseBillHtml(
 ): string {
   const { profile, preferences } = configuration;
   const money = (amount: number, digits = 0) => formatConfiguredMoney(amount, preferences, digits);
-  const legalName = profile.legal_name?.trim();
-  const showLegalName = Boolean(
-    legalName && legalName.toLocaleLowerCase() !== profile.display_name.trim().toLocaleLowerCase(),
-  );
-  const businessDetails = [
-    showLegalName ? legalName : '',
-    profile.address?.trim(),
-    profile.phone?.trim(),
-  ].filter(Boolean);
+  const branding = getBusinessBillBranding(profile);
   const activePayments = bill.payments.filter((payment) => !payment.voided_at);
   const itemsHTML = sortFishItems(bill.items, item => item.fish_variety_name).map((item) => {
     let qtyText = '';
@@ -34,13 +27,16 @@ export function generatePurchaseBillHtml(
     }
 
     return `
-    <tr>
-      <td>${escapeHtml(item.fish_variety_name)}</td>
-      <td class="text-center">${qtyText}</td>
-      <td class="text-center">${item.billable_weight}</td>
-      <td class="text-center">${item.rate_per_kg}</td>
-      <td class="text-right">${money(item.amount)}</td>
-    </tr>
+    <div class="item-row">
+      <div class="item-main">
+        <span class="item-name">${escapeHtml(item.fish_variety_name)}</span>
+        <span class="item-amount">${money(item.amount)}</span>
+      </div>
+      <div class="item-meta">
+        <span>${escapeHtml(qtyText)} | ${item.billable_weight} kg</span>
+        <span class="item-rate">${money(item.rate_per_kg)}/kg</span>
+      </div>
+    </div>
     `;
   }).join('');
 
@@ -88,10 +84,12 @@ export function generatePurchaseBillHtml(
         <div class="content-wrapper">
           <div class="header">
             <div class="header-main">
-              <div class="company-name">${escapeHtml(profile.display_name)}</div>
+              <div class="company-name">${escapeHtml(branding.name)}</div>
               <div class="document-title">Purchase Bill</div>
             </div>
-            ${businessDetails.length > 0 ? `<div class="business-details">${businessDetails.map((detail) => escapeHtml(detail || '')).join(' | ')}</div>` : ''}
+            ${branding.proprietor ? `<div class="proprietor">${escapeHtml(branding.proprietor)}</div>` : ''}
+            <div class="tagline">${escapeHtml(branding.tagline)}</div>
+            ${branding.contactLine ? `<div class="business-details">${escapeHtml(branding.contactLine)}</div>` : ''}
           </div>
 
           <div class="farmer-section">
@@ -107,26 +105,13 @@ export function generatePurchaseBillHtml(
               ` : ''}
             </div>
             <div class="farmer-right">
-              <div class="bill-number">${bill.bill_number}</div>
+              <div class="bill-number">${escapeHtml(bill.bill_number)}</div>
               <div class="bill-date">${formatBusinessDate(bill.bill_date)}</div>
             </div>
           </div>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th class="text-center">Qty</th>
-              <th class="text-center">Weight (kg)</th>
-              <th class="text-center">Rate (${escapeHtml(preferences.currency_symbol)}/kg)</th>
-              <th class="text-right">Amount (${escapeHtml(preferences.currency_symbol)})</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHTML}
-          </tbody>
-        </table>
+        <div class="item-list">${itemsHTML}</div>
 
         <div class="totals">
           <div class="total-row">

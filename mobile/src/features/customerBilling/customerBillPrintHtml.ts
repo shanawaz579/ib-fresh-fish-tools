@@ -2,6 +2,7 @@ import type { Bill, BusinessConfiguration } from '../../types';
 import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg, sortFishItems } from '../../domain/fish';
 import { formatBusinessDate } from '../../utils/date';
 import { escapeHtml, formatConfiguredMoney } from '../../utils/businessFormatting';
+import { getBusinessBillBranding } from '../billing/businessBillBranding';
 
 export function buildCustomerBillPrintHtml(
   previewBill: Bill,
@@ -11,15 +12,7 @@ export function buildCustomerBillPrintHtml(
   const customer = customerName ? { name: customerName } : undefined;
   const { profile, preferences } = configuration;
   const money = (amount: number) => formatConfiguredMoney(amount, preferences, 0);
-  const legalName = profile.legal_name?.trim();
-  const showLegalName = Boolean(
-    legalName && legalName.toLocaleLowerCase() !== profile.display_name.trim().toLocaleLowerCase(),
-  );
-  const businessDetails = [
-    showLegalName ? legalName : '',
-    profile.address?.trim(),
-    profile.phone?.trim(),
-  ].filter(Boolean);
+  const branding = getBusinessBillBranding(profile);
 
   // Generate HTML for PDF (matching purchase bill format)
   const htmlContent = `
@@ -30,7 +23,7 @@ export function buildCustomerBillPrintHtml(
     <style>
       @page {
         size: A5 portrait;
-        margin: 7mm;
+        margin: 5mm;
       }
       html {
         -webkit-print-color-adjust: exact;
@@ -42,8 +35,8 @@ export function buildCustomerBillPrintHtml(
         padding: 0;
         margin: 0;
         color: #111827;
-        font-size: 13px;
-        line-height: 1.35;
+        font-size: 14px;
+        line-height: 1.4;
         min-height: 100%;
         display: flex;
         flex-direction: column;
@@ -64,7 +57,7 @@ export function buildCustomerBillPrintHtml(
         pointer-events: none;
       }
       .header {
-        padding: 8px 2px 9px;
+        padding: 6px 2px 9px;
         border-bottom: 2px solid #0f766e;
         margin-bottom: 10px;
         position: relative;
@@ -77,7 +70,7 @@ export function buildCustomerBillPrintHtml(
         gap: 12px;
       }
       .company-name {
-        font-size: 22px;
+        font-size: 24px;
         font-weight: 900;
         color: #0f172a;
         letter-spacing: 0.2px;
@@ -85,13 +78,27 @@ export function buildCustomerBillPrintHtml(
       .document-title {
         color: #0f766e;
         font-weight: 800;
-        font-size: 10px;
+        font-size: 11px;
         letter-spacing: 1px;
         text-transform: uppercase;
       }
+      .proprietor {
+        margin-top: 2px;
+        font-size: 10px;
+        color: #334155;
+        font-weight: 700;
+      }
+      .tagline {
+        margin-top: 3px;
+        font-size: 10px;
+        color: #0f766e;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+      }
       .business-details {
-        margin-top: 4px;
-        font-size: 9px;
+        margin-top: 3px;
+        font-size: 9.5px;
         color: #64748b;
         font-weight: 500;
       }
@@ -179,6 +186,31 @@ export function buildCustomerBillPrintHtml(
       tbody tr:hover td {
         background: #f0f9ff;
       }
+      .item-list {
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        overflow: hidden;
+        margin-bottom: 10px;
+        position: relative;
+        z-index: 1;
+      }
+      .item-row {
+        padding: 8px 10px;
+        border-bottom: 1px solid #e2e8f0;
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+      .item-row:last-child { border-bottom: 0; }
+      .item-main, .item-meta {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .item-name { font-size: 13px; font-weight: 800; color: #0f172a; }
+      .item-amount { font-size: 13px; font-weight: 900; color: #0f766e; white-space: nowrap; }
+      .item-meta { margin-top: 3px; font-size: 10.5px; color: #64748b; }
+      .item-rate { white-space: nowrap; }
       .text-center {
         text-align: center;
       }
@@ -193,6 +225,8 @@ export function buildCustomerBillPrintHtml(
         border: 1px solid #e5e7eb;
         position: relative;
         z-index: 1;
+        break-inside: avoid;
+        page-break-inside: avoid;
       }
       .total-row {
         display: flex;
@@ -291,36 +325,28 @@ export function buildCustomerBillPrintHtml(
     <div class="content-wrapper">
       <div class="header">
         <div class="header-main">
-          <div class="company-name">${escapeHtml(profile.display_name)}</div>
+          <div class="company-name">${escapeHtml(branding.name)}</div>
           <div class="document-title">Sales Bill</div>
         </div>
-        ${businessDetails.length > 0 ? `<div class="business-details">${businessDetails.map((detail) => escapeHtml(detail || '')).join(' | ')}</div>` : ''}
+        ${branding.proprietor ? `<div class="proprietor">${escapeHtml(branding.proprietor)}</div>` : ''}
+        <div class="tagline">${escapeHtml(branding.tagline)}</div>
+        ${branding.contactLine ? `<div class="business-details">${escapeHtml(branding.contactLine)}</div>` : ''}
       </div>
 
       <div class="customer-section">
         <div class="customer-row">
           <div class="customer-left">
-            <div class="customer-name">${customer?.name || 'Unknown'}</div>
+            <div class="customer-name">${escapeHtml(customer?.name || 'Unknown')}</div>
             <div class="total-boxes">Total: ${(previewBill.items || []).reduce((sum, item) => sum + item.quantity_crates, 0)} boxes</div>
           </div>
           <div class="customer-right">
-            <div class="bill-number">${previewBill.bill_number}</div>
+            <div class="bill-number">${escapeHtml(previewBill.bill_number)}</div>
             <div class="bill-date">${formatBusinessDate(previewBill.bill_date)}</div>
           </div>
         </div>
       </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Item</th>
-            <th class="text-center">Qty</th>
-            <th class="text-center">Weight (kg)</th>
-            <th class="text-center">Rate (${escapeHtml(preferences.currency_symbol)}/kg)</th>
-            <th class="text-right">Amount (${escapeHtml(preferences.currency_symbol)})</th>
-          </tr>
-        </thead>
-        <tbody>
+      <div class="item-list">
           ${sortFishItems(previewBill.items || [], item => item.fish_variety_name).map(item => {
             const crateWeight = item.crate_weight ?? preferences.default_crate_weight_kg ?? DEFAULT_CRATE_WEIGHT_KG;
             const totalWeight = getTotalWeightKg(item.quantity_crates, item.quantity_kg, crateWeight);
@@ -335,17 +361,19 @@ export function buildCustomerBillPrintHtml(
               qtyText = '0';
             }
             return `
-            <tr>
-              <td>${item.fish_variety_name}</td>
-              <td class="text-center">${qtyText}</td>
-              <td class="text-center">${totalWeight}</td>
-              <td class="text-center">${item.rate_per_kg}</td>
-              <td class="text-right">${money(item.amount)}</td>
-            </tr>
+            <div class="item-row">
+              <div class="item-main">
+                <span class="item-name">${escapeHtml(item.fish_variety_name)}</span>
+                <span class="item-amount">${money(item.amount)}</span>
+              </div>
+              <div class="item-meta">
+                <span>${escapeHtml(qtyText)} | ${totalWeight} kg</span>
+                <span class="item-rate">${money(item.rate_per_kg)}/kg</span>
+              </div>
+            </div>
             `;
           }).join('')}
-        </tbody>
-      </table>
+      </div>
 
       <div class="totals">
         ${(() => {

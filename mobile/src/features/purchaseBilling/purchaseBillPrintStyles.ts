@@ -1,7 +1,7 @@
 export const PURCHASE_BILL_PRINT_CSS = `
 @page {
             size: A5 portrait;
-            margin: 7mm;
+            margin: 5mm;
           }
           html {
             -webkit-print-color-adjust: exact;
@@ -13,8 +13,8 @@ export const PURCHASE_BILL_PRINT_CSS = `
             padding: 0;
             margin: 0;
             color: #111827;
-            font-size: 13px;
-            line-height: 1.35;
+            font-size: 14px;
+            line-height: 1.4;
             min-height: 100%;
             display: flex;
             flex-direction: column;
@@ -35,7 +35,7 @@ export const PURCHASE_BILL_PRINT_CSS = `
             pointer-events: none;
           }
           .header {
-            padding: 8px 2px 9px;
+            padding: 6px 2px 9px;
             border-bottom: 2px solid #0f766e;
             margin-bottom: 7px;
             position: relative;
@@ -48,7 +48,7 @@ export const PURCHASE_BILL_PRINT_CSS = `
             gap: 12px;
           }
           .company-name {
-            font-size: 22px;
+            font-size: 24px;
             font-weight: 900;
             color: #0f172a;
             letter-spacing: 0.2px;
@@ -56,16 +56,55 @@ export const PURCHASE_BILL_PRINT_CSS = `
           .document-title {
             color: #0f766e;
             font-weight: 800;
-            font-size: 10px;
+            font-size: 11px;
             letter-spacing: 1px;
             text-transform: uppercase;
           }
+          .proprietor {
+            margin-top: 2px;
+            font-size: 10px;
+            color: #334155;
+            font-weight: 700;
+          }
+          .tagline {
+            margin-top: 3px;
+            font-size: 10px;
+            color: #0f766e;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+          }
           .business-details {
-            margin-top: 4px;
-            font-size: 9px;
+            margin-top: 3px;
+            font-size: 9.5px;
             color: #64748b;
             font-weight: 500;
           }
+          .item-list {
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 7px;
+            position: relative;
+            z-index: 1;
+          }
+          .item-row {
+            padding: 7px 9px;
+            border-bottom: 1px solid #e2e8f0;
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .item-row:last-child { border-bottom: 0; }
+          .item-main, .item-meta {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 10px;
+          }
+          .item-name { font-size: 13px; font-weight: 800; color: #0f172a; }
+          .item-amount { font-size: 13px; font-weight: 900; color: #0f766e; white-space: nowrap; }
+          .item-meta { margin-top: 3px; font-size: 10.5px; color: #64748b; }
+          .item-rate { white-space: nowrap; }
           .farmer-section {
             margin-bottom: 7px;
             padding: 8px;
@@ -169,6 +208,8 @@ export const PURCHASE_BILL_PRINT_CSS = `
             border: 1px solid #e5e7eb;
             position: relative;
             z-index: 1;
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
           .total-row {
             display: flex;

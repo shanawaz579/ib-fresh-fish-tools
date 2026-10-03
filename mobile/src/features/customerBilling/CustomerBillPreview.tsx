@@ -5,6 +5,7 @@ import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg, sortFishItems } from '../../
 import { formatBusinessDate } from '../../utils/date';
 import styles from '../../styles/BillGenerationScreen.styles';
 import { useBusinessConfig } from '../../context/BusinessConfigContext';
+import { getBusinessBillBranding } from '../billing/businessBillBranding';
 
 type CustomerBillPreviewProps = {
   visible: boolean;
@@ -27,13 +28,7 @@ export default function CustomerBillPreview({
   const { profile, preferences } = configuration;
   const paymentsTotal = (previewBill?.payments || []).reduce((sum, payment) => sum + payment.amount, 0);
   const balanceAfterPayments = (previewBill?.previous_balance || 0) - paymentsTotal;
-  const legalName = profile.legal_name?.trim();
-  const showLegalName = Boolean(
-    legalName && legalName.toLocaleLowerCase() !== profile.display_name.trim().toLocaleLowerCase(),
-  );
-  const businessDetails = [showLegalName ? legalName : '', profile.address?.trim(), profile.phone?.trim()]
-    .filter(Boolean)
-    .join(' | ');
+  const branding = getBusinessBillBranding(profile);
   return (
     <Modal
         visible={visible}
@@ -54,10 +49,12 @@ export default function CustomerBillPreview({
                 {/* Business Header */}
                 <View style={styles.businessHeader}>
                   <View style={styles.businessHeaderMain}>
-                    <Text style={styles.companyNameMain}>{profile.display_name}</Text>
+                    <Text style={styles.companyNameMain}>{branding.name}</Text>
                     <Text style={styles.documentTitle}>Sales Bill</Text>
                   </View>
-                  {businessDetails ? <Text style={styles.businessDetails}>{businessDetails}</Text> : null}
+                  {branding.proprietor ? <Text style={styles.proprietorText}>{branding.proprietor}</Text> : null}
+                  <Text style={styles.businessTagline}>{branding.tagline}</Text>
+                  {branding.contactLine ? <Text style={styles.businessDetails}>{branding.contactLine}</Text> : null}
                 </View>
 
                 <View style={styles.customerInfo}>
@@ -80,12 +77,6 @@ export default function CustomerBillPreview({
                 </View>
 
                 <View style={styles.itemsTable}>
-                  <View style={styles.tableHeader}>
-                    <Text style={[styles.tableHeaderText, styles.itemColumnWide]}>Item</Text>
-                    <Text style={[styles.tableHeaderText, styles.weightColumn]}>Weight{'\n'}(kg)</Text>
-                    <Text style={[styles.tableHeaderText, styles.rateColumn]}>Rate{'\n'}({preferences.currency_symbol}/kg)</Text>
-                    <Text style={[styles.tableHeaderText, styles.amountColumn]}>Amount{'\n'}({preferences.currency_symbol})</Text>
-                  </View>
                   {sortFishItems(previewBill.items || [], item => item.fish_variety_name).map((item, index) => {
                     const crateWeight = item.crate_weight ?? preferences.default_crate_weight_kg ?? DEFAULT_CRATE_WEIGHT_KG;
                     const totalWeight = getTotalWeightKg(item.quantity_crates, item.quantity_kg, crateWeight);
@@ -95,18 +86,15 @@ export default function CustomerBillPreview({
                     ].filter(Boolean).join(' · ') || '0 kg';
 
                     return (
-                      <View key={index} style={styles.tableRow}>
-                        <View style={styles.itemColumnWide}>
-                          <Text style={styles.tableCellText}>{item.fish_variety_name}</Text>
-                          <Text style={styles.qtySubtext}>{qtyText}</Text>
+                      <View key={index} style={styles.itemCard}>
+                        <View style={styles.itemCardMain}>
+                          <Text style={styles.itemCardName}>{item.fish_variety_name}</Text>
+                          <Text style={styles.itemCardAmount}>{formatMoney(item.amount, 0)}</Text>
                         </View>
-                        <Text style={[styles.tableCellText, styles.weightColumn]}>
-                          {totalWeight.toFixed(2)}
-                        </Text>
-                        <Text style={[styles.tableCellText, styles.rateColumn]}>
-                          {item.rate_per_kg}
-                        </Text>
-                        <Text style={[styles.tableCellText, styles.amountColumn]}>{item.amount.toFixed(2)}</Text>
+                        <View style={styles.itemCardMeta}>
+                          <Text style={styles.itemCardMetaText}>{qtyText} | {totalWeight.toFixed(2)} kg</Text>
+                          <Text style={styles.itemCardMetaText}>{formatMoney(item.rate_per_kg, 0)}/kg</Text>
+                        </View>
                       </View>
                     );
                   })}

@@ -2,6 +2,7 @@ import type { Bill, BusinessConfiguration } from '../../types';
 import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg, sortFishItems } from '../../domain/fish';
 import { formatBusinessDate } from '../../utils/date';
 import { formatConfiguredMoney } from '../../utils/businessFormatting';
+import { getBusinessBillBranding } from '../billing/businessBillBranding';
 
 export function buildCustomerBillShareText(
   previewBill: Bill,
@@ -11,13 +12,14 @@ export function buildCustomerBillShareText(
   const customer = customerName ? { name: customerName } : undefined;
   const { profile, preferences } = configuration;
   const money = (amount: number) => formatConfiguredMoney(amount, preferences, 2);
+  const branding = getBusinessBillBranding(profile);
 
   // Recorded kilograms are authoritative; crate weight is only a legacy fallback estimate.
   const billText = `
-  *${profile.display_name}*
-  ${profile.tagline}
-  ${profile.phone ? `📞 ${profile.phone}` : ''}
-  ${profile.address || ''}
+  *${branding.name}*
+  ${branding.proprietor}
+  ${branding.tagline}
+  ${branding.contactLine}
 
   ━━━━━━━━━━━━━━━━━━━━━━
   Bill No: ${previewBill.bill_number}
