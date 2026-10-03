@@ -3,6 +3,7 @@ import { DEFAULT_CRATE_WEIGHT_KG, getTotalWeightKg, sortFishItems } from '../../
 import { formatBusinessDate } from '../../utils/date';
 import { escapeHtml, formatConfiguredMoney } from '../../utils/businessFormatting';
 import { getBusinessBillBranding } from '../billing/businessBillBranding';
+import { BRAND_COLORS, BRAND_FONT_FAMILY } from '../../config/brandTheme';
 
 export function buildCustomerBillPrintHtml(
   previewBill: Bill,
@@ -30,13 +31,13 @@ export function buildCustomerBillPrintHtml(
         print-color-adjust: exact;
       }
       body {
-        font-family: 'Arial', sans-serif;
+        font-family: ${BRAND_FONT_FAMILY};
         background: #ffffff;
         padding: 0;
         margin: 0;
-        color: #111827;
-        font-size: 14px;
-        line-height: 1.4;
+        color: ${BRAND_COLORS.ink};
+        font-size: 11px;
+        line-height: 1.3;
         min-height: 100%;
         display: flex;
         flex-direction: column;
@@ -57,160 +58,131 @@ export function buildCustomerBillPrintHtml(
         pointer-events: none;
       }
       .header {
-        padding: 6px 2px 9px;
-        border-bottom: 2px solid #0f766e;
-        margin-bottom: 10px;
+        padding: 3px 1px 6px;
+        border-bottom: 2px solid ${BRAND_COLORS.primary};
+        margin-bottom: 7px;
         position: relative;
         z-index: 1;
       }
       .header-main {
         display: flex;
         justify-content: space-between;
-        align-items: flex-end;
+        align-items: center;
         gap: 12px;
       }
       .company-name {
-        font-size: 24px;
+        font-size: 21px;
         font-weight: 900;
-        color: #0f172a;
+        color: ${BRAND_COLORS.ink};
         letter-spacing: 0.2px;
       }
       .document-title {
-        color: #0f766e;
+        color: ${BRAND_COLORS.primary};
         font-weight: 800;
-        font-size: 11px;
+        font-size: 10px;
         letter-spacing: 1px;
         text-transform: uppercase;
       }
-      .proprietor {
-        margin-top: 2px;
-        font-size: 10px;
-        color: #334155;
-        font-weight: 700;
-      }
+      .identity-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 1px; font-size: 9px; color: ${BRAND_COLORS.ink}; font-weight: 700; }
+      .proprietor { min-width: 0; }
+      .phone { color: ${BRAND_COLORS.primary}; white-space: nowrap; }
+      .phone-label { color: ${BRAND_COLORS.muted}; font-weight: 600; }
+      .phone-number { font-size: 10px; font-weight: 800; }
       .tagline {
-        margin-top: 3px;
-        font-size: 10px;
-        color: #0f766e;
+        margin-top: 2px;
+        font-size: 9px;
+        color: ${BRAND_COLORS.primary};
         font-weight: 800;
         text-transform: uppercase;
         letter-spacing: 0.3px;
       }
       .business-details {
-        margin-top: 3px;
-        font-size: 9.5px;
-        color: #64748b;
+        margin-top: 1px;
+        font-size: 8px;
+        color: ${BRAND_COLORS.muted};
         font-weight: 500;
       }
       .customer-section {
-        margin-bottom: 10px;
-        padding: 10px;
-        background: #f9fafb;
-        border-radius: 6px;
-        border: 1px solid #e5e7eb;
+        margin-bottom: 7px;
+        padding: 6px 8px;
+        background: ${BRAND_COLORS.primarySoft};
+        border-radius: 5px;
+        border: 1px solid ${BRAND_COLORS.border};
         position: relative;
         z-index: 1;
       }
       .customer-row {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
       }
       .customer-left {
         flex: 1;
       }
-      .customer-right {
-        text-align: right;
-        background: #fff;
-        padding: 8px 12px;
-        border-radius: 6px;
-        border: 1px solid #e5e7eb;
-      }
+      .customer-right { text-align: right; }
       .customer-name {
-        font-size: 16px;
+        font-size: 13px;
         font-weight: 800;
-        color: #111827;
-        margin-bottom: 2px;
+        color: ${BRAND_COLORS.ink};
+        margin-bottom: 1px;
       }
       .total-boxes {
-        font-size: 11px;
-        color: #6b7280;
+        font-size: 9px;
+        color: ${BRAND_COLORS.muted};
         font-weight: 500;
       }
       .bill-number {
-        font-size: 14px;
+        font-size: 11px;
         font-weight: 800;
-        color: #0ea5e9;
-        margin-bottom: 2px;
+        color: ${BRAND_COLORS.primary};
+        margin-bottom: 1px;
       }
       .bill-date {
-        font-size: 11px;
-        color: #6b7280;
+        font-size: 9px;
+        color: ${BRAND_COLORS.muted};
         font-weight: 600;
       }
       table {
         width: 100%;
         table-layout: fixed;
         border-collapse: collapse;
-        margin-bottom: 10px;
-        border: 1px solid #e5e7eb;
+        margin-bottom: 7px;
+        border: 1px solid ${BRAND_COLORS.border};
         border-radius: 6px;
         overflow: hidden;
         position: relative;
         z-index: 1;
       }
       thead {
-        background: linear-gradient(to bottom, #1e293b, #334155);
+        background: ${BRAND_COLORS.ink};
       }
       th {
-        padding: 7px 3px;
+        padding: 5px 4px;
         text-align: left;
-        font-size: 10px;
+        font-size: 8px;
         font-weight: 700;
         color: #ffffff;
         text-transform: uppercase;
         letter-spacing: 0.3px;
       }
       td {
-        padding: 7px 3px;
-        font-size: 12px;
-        color: #111827;
-        border-bottom: 1px solid #e5e7eb;
+        padding: 5px 4px;
+        font-size: 9.5px;
+        color: ${BRAND_COLORS.ink};
+        border-bottom: 1px solid ${BRAND_COLORS.border};
         background: #ffffff;
         vertical-align: middle;
         overflow-wrap: anywhere;
       }
       tbody tr:nth-child(even) td {
-        background: #f9fafb;
+        background: ${BRAND_COLORS.primarySoft};
       }
       tbody tr:hover td {
-        background: #f0f9ff;
+        background: ${BRAND_COLORS.primarySoft};
       }
-      .item-list {
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        overflow: hidden;
-        margin-bottom: 10px;
-        position: relative;
-        z-index: 1;
-      }
-      .item-row {
-        padding: 8px 10px;
-        border-bottom: 1px solid #e2e8f0;
-        break-inside: avoid;
-        page-break-inside: avoid;
-      }
-      .item-row:last-child { border-bottom: 0; }
-      .item-main, .item-meta {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 10px;
-      }
-      .item-name { font-size: 13px; font-weight: 800; color: #0f172a; }
-      .item-amount { font-size: 13px; font-weight: 900; color: #0f766e; white-space: nowrap; }
-      .item-meta { margin-top: 3px; font-size: 10.5px; color: #64748b; }
-      .item-rate { white-space: nowrap; }
+      .item-name { font-weight: 800; }
+      .item-amount { color: ${BRAND_COLORS.primary}; font-weight: 800; white-space: nowrap; }
+      .nowrap { white-space: nowrap; }
       .text-center {
         text-align: center;
       }
@@ -218,11 +190,11 @@ export function buildCustomerBillPrintHtml(
         text-align: right;
       }
       .totals {
-        margin-top: 10px;
-        padding: 10px;
-        background: linear-gradient(to bottom, #f8fafc, #ffffff);
-        border-radius: 6px;
-        border: 1px solid #e5e7eb;
+        margin-top: 7px;
+        padding: 7px 8px;
+        background: ${BRAND_COLORS.surface};
+        border-radius: 5px;
+        border: 1px solid ${BRAND_COLORS.border};
         position: relative;
         z-index: 1;
         break-inside: avoid;
@@ -231,58 +203,58 @@ export function buildCustomerBillPrintHtml(
       .total-row {
         display: flex;
         justify-content: space-between;
-        margin-bottom: 4px;
-        font-size: 13px;
+        margin-bottom: 2px;
+        font-size: 10px;
         padding: 1px 0;
       }
       .total-label {
-        color: #475569;
+        color: ${BRAND_COLORS.muted};
         font-weight: 600;
       }
       .total-value {
         font-weight: 700;
-        color: #111827;
+        color: ${BRAND_COLORS.ink};
       }
       .charge-row {
         padding-left: 20px;
-        border-left: 3px solid #e0f2fe;
+        border-left: 3px solid ${BRAND_COLORS.primarySoftStrong};
       }
       .charge-label {
         font-weight: 500;
-        font-size: 12.5px;
-        color: #64748b;
+        font-size: 9.5px;
+        color: ${BRAND_COLORS.muted};
       }
       .charge-value {
-        font-size: 12.5px;
-        color: #059669;
+        font-size: 9.5px;
+        color: ${BRAND_COLORS.primary};
         font-weight: 700;
       }
       .separator {
         height: 1px;
-        background: linear-gradient(to right, #e5e7eb, #cbd5e1, #e5e7eb);
-        margin: 6px 0;
+        background: ${BRAND_COLORS.border};
+        margin: 4px 0;
       }
       .grand-total {
-        margin-top: 8px;
-        padding: 8px;
-        border-top: 3px solid #3b82f6;
-        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-        border-radius: 6px;
+        margin-top: 5px;
+        padding: 6px;
+        border-top: 3px solid ${BRAND_COLORS.primary};
+        background: ${BRAND_COLORS.primarySoftStrong};
+        border-radius: 5px;
       }
       .grand-total .total-label {
-        font-size: 15px;
+        font-size: 11px;
         font-weight: 900;
-        color: #1e3a8a;
+        color: ${BRAND_COLORS.ink};
         text-transform: uppercase;
         letter-spacing: 0.8px;
       }
       .grand-total .total-value {
-        font-size: 18px;
+        font-size: 14px;
         font-weight: 900;
-        color: #1e40af;
+        color: ${BRAND_COLORS.primary};
       }
       .payment-paid {
-        color: #059669;
+        color: ${BRAND_COLORS.primary};
         font-weight: 700;
       }
       .payment-due {
@@ -290,33 +262,33 @@ export function buildCustomerBillPrintHtml(
         font-weight: 700;
       }
       .notes {
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid #e5e7eb;
+        margin-top: 6px;
+        padding-top: 6px;
+        border-top: 1px solid ${BRAND_COLORS.border};
       }
       .notes-title {
         font-size: 9px;
         font-weight: 600;
-        color: #6b7280;
+        color: ${BRAND_COLORS.muted};
         margin-bottom: 3px;
       }
       .notes-text {
         font-size: 10px;
-        color: #374151;
+        color: ${BRAND_COLORS.ink};
         font-style: italic;
       }
       .footer {
         margin-top: auto;
-        padding-top: 10px;
-        padding-bottom: 8px;
-        border-top: 3px double #cbd5e1;
+        padding-top: 6px;
+        padding-bottom: 3px;
+        border-top: 3px double ${BRAND_COLORS.border};
         text-align: center;
-        background: linear-gradient(to top, #f8fafc, transparent);
+        background: ${BRAND_COLORS.surface};
       }
       .footer-text {
-        font-size: 13px;
+        font-size: 10px;
         font-weight: 700;
-        color: #059669;
+        color: ${BRAND_COLORS.primary};
         letter-spacing: 0.4px;
       }
     </style>
@@ -328,16 +300,19 @@ export function buildCustomerBillPrintHtml(
           <div class="company-name">${escapeHtml(branding.name)}</div>
           <div class="document-title">Sales Bill</div>
         </div>
-        ${branding.proprietor ? `<div class="proprietor">${escapeHtml(branding.proprietor)}</div>` : ''}
+        <div class="identity-row">
+          ${branding.proprietor ? `<div class="proprietor">${escapeHtml(branding.proprietor)}</div>` : '<span></span>'}
+          ${branding.phone ? `<div class="phone"><span class="phone-label">Mobile:</span> <span class="phone-number">${escapeHtml(branding.phone)}</span></div>` : ''}
+        </div>
         <div class="tagline">${escapeHtml(branding.tagline)}</div>
-        ${branding.contactLine ? `<div class="business-details">${escapeHtml(branding.contactLine)}</div>` : ''}
+        ${branding.address ? `<div class="business-details">${escapeHtml(branding.address)}</div>` : ''}
       </div>
 
       <div class="customer-section">
         <div class="customer-row">
           <div class="customer-left">
             <div class="customer-name">${escapeHtml(customer?.name || 'Unknown')}</div>
-            <div class="total-boxes">Total: ${(previewBill.items || []).reduce((sum, item) => sum + item.quantity_crates, 0)} boxes</div>
+            <div class="total-boxes">Total: ${(previewBill.items || []).reduce((sum, item) => sum + item.quantity_crates, 0)} cr</div>
           </div>
           <div class="customer-right">
             <div class="bill-number">${escapeHtml(previewBill.bill_number)}</div>
@@ -346,34 +321,33 @@ export function buildCustomerBillPrintHtml(
         </div>
       </div>
 
-      <div class="item-list">
+      <table class="items-table">
+        <colgroup><col style="width:35%"><col style="width:16%"><col style="width:17%"><col style="width:13%"><col style="width:19%"></colgroup>
+        <thead><tr><th>Item</th><th class="text-center">Qty (cr)</th><th class="text-right">Wt (kg)</th><th class="text-right">${escapeHtml(preferences.currency_symbol)}/kg</th><th class="text-right">Amount (${escapeHtml(preferences.currency_symbol)})</th></tr></thead>
+        <tbody>
           ${sortFishItems(previewBill.items || [], item => item.fish_variety_name).map(item => {
             const crateWeight = item.crate_weight ?? preferences.default_crate_weight_kg ?? DEFAULT_CRATE_WEIGHT_KG;
             const totalWeight = getTotalWeightKg(item.quantity_crates, item.quantity_kg, crateWeight);
             let qtyText = '';
             if (item.quantity_crates > 0 && item.quantity_kg > 0) {
-              qtyText = `${item.quantity_crates} cr · ${item.quantity_kg} kg`;
+              qtyText = `${item.quantity_crates} + ${item.quantity_kg} kg`;
             } else if (item.quantity_crates > 0) {
-              qtyText = `${item.quantity_crates} cr`;
+              qtyText = `${item.quantity_crates}`;
             } else if (item.quantity_kg > 0) {
               qtyText = `${item.quantity_kg} kg`;
             } else {
               qtyText = '0';
             }
-            return `
-            <div class="item-row">
-              <div class="item-main">
-                <span class="item-name">${escapeHtml(item.fish_variety_name)}</span>
-                <span class="item-amount">${money(item.amount)}</span>
-              </div>
-              <div class="item-meta">
-                <span>${escapeHtml(qtyText)} | ${totalWeight} kg</span>
-                <span class="item-rate">${money(item.rate_per_kg)}/kg</span>
-              </div>
-            </div>
-            `;
+            return `<tr>
+              <td class="item-name">${escapeHtml(item.fish_variety_name)}</td>
+              <td class="text-center nowrap">${escapeHtml(qtyText)}</td>
+              <td class="text-right nowrap">${totalWeight}</td>
+              <td class="text-right nowrap">${money(item.rate_per_kg).replace(preferences.currency_symbol, '')}</td>
+              <td class="text-right item-amount">${money(item.amount).replace(preferences.currency_symbol, '')}</td>
+            </tr>`;
           }).join('')}
-      </div>
+        </tbody>
+      </table>
 
       <div class="totals">
         ${(() => {

@@ -1,4 +1,5 @@
 import type { BusinessConfiguration } from '../types';
+import { BRAND_COLORS } from './brandTheme';
 
 const fallbackTimestamp = '1970-01-01T00:00:00.000Z';
 
@@ -13,7 +14,7 @@ export const DEFAULT_BUSINESS_CONFIGURATION: BusinessConfiguration = {
     email: null,
     address: null,
     logo_url: null,
-    primary_color: '#0EA5E9',
+    primary_color: BRAND_COLORS.primary,
     created_at: fallbackTimestamp,
     updated_at: fallbackTimestamp,
   },

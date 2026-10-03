@@ -17,27 +17,22 @@ export function generatePurchaseBillHtml(
   const itemsHTML = sortFishItems(bill.items, item => item.fish_variety_name).map((item) => {
     let qtyText = '';
     if (item.quantity_crates > 0 && item.quantity_kg > 0) {
-      qtyText = `${item.quantity_crates} cr · ${item.quantity_kg} kg`;
+      qtyText = `${item.quantity_crates} + ${item.quantity_kg} kg`;
     } else if (item.quantity_crates > 0) {
-      qtyText = `${item.quantity_crates} cr`;
+      qtyText = `${item.quantity_crates}`;
     } else if (item.quantity_kg > 0) {
       qtyText = `${item.quantity_kg} kg`;
     } else {
       qtyText = '0 kg';
     }
 
-    return `
-    <div class="item-row">
-      <div class="item-main">
-        <span class="item-name">${escapeHtml(item.fish_variety_name)}</span>
-        <span class="item-amount">${money(item.amount)}</span>
-      </div>
-      <div class="item-meta">
-        <span>${escapeHtml(qtyText)} | ${item.billable_weight} kg</span>
-        <span class="item-rate">${money(item.rate_per_kg)}/kg</span>
-      </div>
-    </div>
-    `;
+    return `<tr>
+      <td class="item-name">${escapeHtml(item.fish_variety_name)}</td>
+      <td class="text-center nowrap">${escapeHtml(qtyText)}</td>
+      <td class="text-right nowrap">${item.billable_weight}</td>
+      <td class="text-right nowrap">${money(item.rate_per_kg).replace(preferences.currency_symbol, '')}</td>
+      <td class="text-right item-amount">${money(item.amount).replace(preferences.currency_symbol, '')}</td>
+    </tr>`;
   }).join('');
 
   const otherDeductionsHTML = bill.other_deductions.map((deduction) => {
@@ -87,9 +82,12 @@ export function generatePurchaseBillHtml(
               <div class="company-name">${escapeHtml(branding.name)}</div>
               <div class="document-title">Purchase Bill</div>
             </div>
-            ${branding.proprietor ? `<div class="proprietor">${escapeHtml(branding.proprietor)}</div>` : ''}
+            <div class="identity-row">
+              ${branding.proprietor ? `<div class="proprietor">${escapeHtml(branding.proprietor)}</div>` : '<span></span>'}
+              ${branding.phone ? `<div class="phone"><span class="phone-label">Mobile:</span> <span class="phone-number">${escapeHtml(branding.phone)}</span></div>` : ''}
+            </div>
             <div class="tagline">${escapeHtml(branding.tagline)}</div>
-            ${branding.contactLine ? `<div class="business-details">${escapeHtml(branding.contactLine)}</div>` : ''}
+            ${branding.address ? `<div class="business-details">${escapeHtml(branding.address)}</div>` : ''}
           </div>
 
           <div class="farmer-section">
@@ -111,7 +109,11 @@ export function generatePurchaseBillHtml(
           </div>
         </div>
 
-        <div class="item-list">${itemsHTML}</div>
+        <table class="items-table">
+          <colgroup><col style="width:35%"><col style="width:16%"><col style="width:17%"><col style="width:13%"><col style="width:19%"></colgroup>
+          <thead><tr><th>Item</th><th class="text-center">Qty (cr)</th><th class="text-right">Wt (kg)</th><th class="text-right">${escapeHtml(preferences.currency_symbol)}/kg</th><th class="text-right">Amount (${escapeHtml(preferences.currency_symbol)})</th></tr></thead>
+          <tbody>${itemsHTML}</tbody>
+        </table>
 
         <div class="totals">
           <div class="total-row">

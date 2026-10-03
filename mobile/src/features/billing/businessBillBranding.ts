@@ -22,10 +22,9 @@ export function getBusinessBillBranding(profile: BusinessProfile) {
   const tagline = profile.tagline.trim() !== 'Fish Trading Tools'
     ? profile.tagline.trim()
     : DEFAULT_BILL_BRANDING.tagline;
-  const contactLine = [
-    profile.address?.trim() || DEFAULT_BILL_BRANDING.address,
-    `Mobile: ${profile.phone?.trim() || DEFAULT_BILL_BRANDING.phone}`,
-  ].filter(Boolean).join(' | ');
+  const address = profile.address?.trim() || DEFAULT_BILL_BRANDING.address;
+  const phone = profile.phone?.trim() || DEFAULT_BILL_BRANDING.phone;
+  const contactLine = [address, `Mobile: ${phone}`].filter(Boolean).join(' | ');
 
-  return { name, proprietor, tagline, contactLine };
+  return { name, proprietor, tagline, address, phone, contactLine };
 }
