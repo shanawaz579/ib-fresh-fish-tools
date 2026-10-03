@@ -383,7 +383,7 @@ export type Bill = {
   discount: number;
   total: number; // Previous Balance - Payments + Subtotal
   amount_paid: number; // Total payments since previous bill
-  balance_due: number; // Previous Balance - Payments
+  balance_due: number; // Current outstanding/closing balance for account views
   status: 'unpaid' | 'paid';
   is_active?: boolean; // Whether this is the current active bill
   notes?: string;

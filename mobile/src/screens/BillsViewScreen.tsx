@@ -215,12 +215,6 @@ export default function BillsViewScreen() {
                       </Text>
                     </View>
                     <View style={styles.billDetailRow}>
-                      <Text style={styles.billDetailLabel}>Balance Due:</Text>
-                      <Text style={styles.billDetailValue}>
-                        {formatMoney(bill.balance_due || 0, 0)}
-                      </Text>
-                    </View>
-                    <View style={styles.billDetailRow}>
                       <Text style={styles.billDetailLabel}>Subtotal:</Text>
                       <Text style={styles.billDetailValue}>
                         {formatMoney(bill.subtotal || 0, 0)}
@@ -234,6 +228,12 @@ export default function BillsViewScreen() {
                         </Text>
                       </View>
                     )}
+                    <View style={styles.billDetailRow}>
+                      <Text style={styles.billDetailLabel}>Closing Balance:</Text>
+                      <Text style={styles.billDetailValue}>
+                        {formatMoney(bill.balance_due || 0, 0)}
+                      </Text>
+                    </View>
                   </View>
 
                   {bill.notes && (

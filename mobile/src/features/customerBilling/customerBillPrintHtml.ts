@@ -362,6 +362,8 @@ export function buildCustomerBillPrintHtml(
           const itemsTotal = (previewBill.items || []).reduce((sum, item) => sum + item.amount, 0);
           const otherChargesTotal = (previewBill.other_charges || []).reduce((sum, charge) => sum + charge.amount, 0);
           const subtotal = itemsTotal + otherChargesTotal;
+          const paymentsTotal = (previewBill.payments || []).reduce((sum, payment) => sum + payment.amount, 0);
+          const balanceAfterPayments = previewBill.previous_balance - paymentsTotal;
           let html = '';
 
           // Previous Balance Section
@@ -388,12 +390,13 @@ export function buildCustomerBillPrintHtml(
               `;
             });
 
-            // Show Credit Balance / Balance Outstanding after payments
-            const balanceLabel = previewBill.balance_due < 0 ? 'Credit Balance:' : 'Balance Outstanding:';
+            // Show the brought-forward balance after receipts. Current bill
+            // charges are added below before displaying the final total due.
+            const balanceLabel = balanceAfterPayments < 0 ? 'Credit after payments:' : 'Balance after payments:';
             html += `
               <div class="total-row">
                 <span class="total-label">${balanceLabel}</span>
-                <span class="total-value ${previewBill.balance_due < 0 ? 'payment-paid' : 'payment-due'}">${money(Math.abs(previewBill.balance_due))}</span>
+                <span class="total-value ${balanceAfterPayments < 0 ? 'payment-paid' : 'payment-due'}">${balanceAfterPayments < 0 ? '−' : ''}${money(Math.abs(balanceAfterPayments))}</span>
               </div>
             `;
           }

@@ -25,6 +25,8 @@ export default function CustomerBillPreview({
 }: CustomerBillPreviewProps) {
   const { configuration, formatMoney } = useBusinessConfig();
   const { profile, preferences } = configuration;
+  const paymentsTotal = (previewBill?.payments || []).reduce((sum, payment) => sum + payment.amount, 0);
+  const balanceAfterPayments = (previewBill?.previous_balance || 0) - paymentsTotal;
   return (
     <Modal
         visible={visible}
@@ -128,10 +130,10 @@ export default function CustomerBillPreview({
                       ))}
                       <View style={[styles.billTotalRow, styles.subtotalRow]}>
                         <Text style={styles.billTotalLabel}>
-                          {previewBill.balance_due < 0 ? 'Credit Balance:' : 'Balance Outstanding:'}
+                          {balanceAfterPayments < 0 ? 'Credit after payments:' : 'Balance after payments:'}
                         </Text>
-                        <Text style={[styles.billTotalValue, previewBill.balance_due < 0 ? styles.creditBalance : null]}>
-                          {formatMoney(Math.abs(previewBill.balance_due), 2)}
+                        <Text style={[styles.billTotalValue, balanceAfterPayments < 0 ? styles.creditBalance : null]}>
+                          {balanceAfterPayments < 0 ? '−' : ''}{formatMoney(Math.abs(balanceAfterPayments), 2)}
                         </Text>
                       </View>
                     </>
