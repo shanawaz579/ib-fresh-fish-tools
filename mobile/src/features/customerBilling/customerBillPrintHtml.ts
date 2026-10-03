@@ -11,6 +11,15 @@ export function buildCustomerBillPrintHtml(
   const customer = customerName ? { name: customerName } : undefined;
   const { profile, preferences } = configuration;
   const money = (amount: number) => formatConfiguredMoney(amount, preferences, 0);
+  const legalName = profile.legal_name?.trim();
+  const showLegalName = Boolean(
+    legalName && legalName.toLocaleLowerCase() !== profile.display_name.trim().toLocaleLowerCase(),
+  );
+  const businessDetails = [
+    showLegalName ? legalName : '',
+    profile.address?.trim(),
+    profile.phone?.trim(),
+  ].filter(Boolean);
 
   // Generate HTML for PDF (matching purchase bill format)
   const htmlContent = `
@@ -29,6 +38,7 @@ export function buildCustomerBillPrintHtml(
       }
       body {
         font-family: 'Arial', sans-serif;
+        background: #ffffff;
         padding: 0;
         margin: 0;
         color: #111827;
@@ -54,53 +64,35 @@ export function buildCustomerBillPrintHtml(
         pointer-events: none;
       }
       .header {
-        background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
-        padding: 10px 16px;
-        border-bottom: 3px solid #0ea5e9;
+        padding: 8px 2px 9px;
+        border-bottom: 2px solid #0f766e;
         margin-bottom: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         position: relative;
         z-index: 1;
       }
-      .header-top {
+      .header-main {
         display: flex;
         justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-        font-size: 12px;
+        align-items: flex-end;
+        gap: 12px;
       }
       .company-name {
-        font-size: 24px;
+        font-size: 22px;
         font-weight: 900;
         color: #0f172a;
-        letter-spacing: 2px;
-        text-align: center;
-        margin-bottom: 4px;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        letter-spacing: 0.2px;
       }
-      .proprietor {
-        color: #1e293b;
-        font-weight: 700;
-        font-size: 12px;
-      }
-      .contact {
-        color: #0284c7;
+      .document-title {
+        color: #0f766e;
         font-weight: 800;
-        font-size: 13px;
-      }
-      .tagline {
-        font-size: 12px;
-        font-weight: 700;
-        color: #475569;
+        font-size: 10px;
+        letter-spacing: 1px;
         text-transform: uppercase;
-        letter-spacing: 0.8px;
-        text-align: center;
-        margin-bottom: 4px;
       }
-      .address {
-        font-size: 11px;
+      .business-details {
+        margin-top: 4px;
+        font-size: 9px;
         color: #64748b;
-        text-align: center;
         font-weight: 500;
       }
       .customer-section {
@@ -298,13 +290,11 @@ export function buildCustomerBillPrintHtml(
   <body>
     <div class="content-wrapper">
       <div class="header">
-        <div class="header-top">
-          <span class="proprietor">${escapeHtml(profile.legal_name || profile.display_name)}</span>
-          <span class="contact">${profile.phone ? `📞 ${escapeHtml(profile.phone)}` : ''}</span>
+        <div class="header-main">
+          <div class="company-name">${escapeHtml(profile.display_name)}</div>
+          <div class="document-title">Sales Bill</div>
         </div>
-        <div class="company-name">${escapeHtml(profile.display_name)}</div>
-        <div class="tagline">${escapeHtml(profile.tagline)}</div>
-        <div class="address">${escapeHtml(profile.address)}</div>
+        ${businessDetails.length > 0 ? `<div class="business-details">${businessDetails.map((detail) => escapeHtml(detail || '')).join(' | ')}</div>` : ''}
       </div>
 
       <div class="customer-section">

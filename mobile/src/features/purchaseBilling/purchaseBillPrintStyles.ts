@@ -9,6 +9,7 @@ export const PURCHASE_BILL_PRINT_CSS = `
           }
           body {
             font-family: 'Arial', sans-serif;
+            background: #ffffff;
             padding: 0;
             margin: 0;
             color: #111827;
@@ -34,53 +35,35 @@ export const PURCHASE_BILL_PRINT_CSS = `
             pointer-events: none;
           }
           .header {
-            background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
-            padding: 8px 14px;
-            border-bottom: 3px solid #0ea5e9;
+            padding: 8px 2px 9px;
+            border-bottom: 2px solid #0f766e;
             margin-bottom: 7px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             position: relative;
             z-index: 1;
           }
-          .header-top {
+          .header-main {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-            font-size: 12px;
+            align-items: flex-end;
+            gap: 12px;
           }
           .company-name {
             font-size: 22px;
             font-weight: 900;
             color: #0f172a;
-            letter-spacing: 2px;
-            text-align: center;
-            margin-bottom: 4px;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+            letter-spacing: 0.2px;
           }
-          .proprietor {
-            color: #1e293b;
-            font-weight: 700;
-            font-size: 13px;
-          }
-          .contact {
-            color: #0284c7;
+          .document-title {
+            color: #0f766e;
             font-weight: 800;
-            font-size: 14px;
-          }
-          .tagline {
-            font-size: 12px;
-            font-weight: 700;
-            color: #475569;
+            font-size: 10px;
+            letter-spacing: 1px;
             text-transform: uppercase;
-            letter-spacing: 0.8px;
-            text-align: center;
-            margin-bottom: 4px;
           }
-          .address {
-            font-size: 11px;
+          .business-details {
+            margin-top: 4px;
+            font-size: 9px;
             color: #64748b;
-            text-align: center;
             font-weight: 500;
           }
           .farmer-section {

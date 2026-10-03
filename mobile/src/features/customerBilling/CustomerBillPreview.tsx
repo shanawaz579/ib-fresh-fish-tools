@@ -27,6 +27,13 @@ export default function CustomerBillPreview({
   const { profile, preferences } = configuration;
   const paymentsTotal = (previewBill?.payments || []).reduce((sum, payment) => sum + payment.amount, 0);
   const balanceAfterPayments = (previewBill?.previous_balance || 0) - paymentsTotal;
+  const legalName = profile.legal_name?.trim();
+  const showLegalName = Boolean(
+    legalName && legalName.toLocaleLowerCase() !== profile.display_name.trim().toLocaleLowerCase(),
+  );
+  const businessDetails = [showLegalName ? legalName : '', profile.address?.trim(), profile.phone?.trim()]
+    .filter(Boolean)
+    .join(' | ');
   return (
     <Modal
         visible={visible}
@@ -46,13 +53,11 @@ export default function CustomerBillPreview({
               <View style={styles.billPreview}>
                 {/* Business Header */}
                 <View style={styles.businessHeader}>
-                  <View style={styles.headerTopRow}>
-                    <Text style={styles.proprietorText}>{profile.legal_name || profile.display_name}</Text>
-                    <Text style={styles.contactText}>{profile.phone ? `📞 ${profile.phone}` : ''}</Text>
+                  <View style={styles.businessHeaderMain}>
+                    <Text style={styles.companyNameMain}>{profile.display_name}</Text>
+                    <Text style={styles.documentTitle}>Sales Bill</Text>
                   </View>
-                  <Text style={styles.companyNameMain}>{profile.display_name}</Text>
-                  <Text style={styles.businessTagline}>{profile.tagline}</Text>
-                  {profile.address ? <Text style={styles.addressText}>{profile.address}</Text> : null}
+                  {businessDetails ? <Text style={styles.businessDetails}>{businessDetails}</Text> : null}
                 </View>
 
                 <View style={styles.customerInfo}>

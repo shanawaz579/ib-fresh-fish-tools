@@ -11,6 +11,15 @@ export function generatePurchaseBillHtml(
 ): string {
   const { profile, preferences } = configuration;
   const money = (amount: number, digits = 0) => formatConfiguredMoney(amount, preferences, digits);
+  const legalName = profile.legal_name?.trim();
+  const showLegalName = Boolean(
+    legalName && legalName.toLocaleLowerCase() !== profile.display_name.trim().toLocaleLowerCase(),
+  );
+  const businessDetails = [
+    showLegalName ? legalName : '',
+    profile.address?.trim(),
+    profile.phone?.trim(),
+  ].filter(Boolean);
   const activePayments = bill.payments.filter((payment) => !payment.voided_at);
   const itemsHTML = sortFishItems(bill.items, item => item.fish_variety_name).map((item) => {
     let qtyText = '';
@@ -78,13 +87,11 @@ export function generatePurchaseBillHtml(
       <body>
         <div class="content-wrapper">
           <div class="header">
-            <div class="header-top">
-              <span class="proprietor">${escapeHtml(profile.legal_name || profile.display_name)}</span>
-              <span class="contact">${profile.phone ? `📞 ${escapeHtml(profile.phone)}` : ''}</span>
+            <div class="header-main">
+              <div class="company-name">${escapeHtml(profile.display_name)}</div>
+              <div class="document-title">Purchase Bill</div>
             </div>
-            <div class="company-name">${escapeHtml(profile.display_name)}</div>
-            <div class="tagline">${escapeHtml(profile.tagline)}</div>
-            <div class="address">${escapeHtml(profile.address)}</div>
+            ${businessDetails.length > 0 ? `<div class="business-details">${businessDetails.map((detail) => escapeHtml(detail || '')).join(' | ')}</div>` : ''}
           </div>
 
           <div class="farmer-section">
