@@ -36,12 +36,12 @@ export default function PaymentsScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home')}><Text style={styles.backIcon}>‹</Text></TouchableOpacity>
-        <View><Text style={styles.eyebrow}>CUSTOMER ACCOUNTS</Text><Text style={styles.title}>Record payment</Text></View>
+        <View><Text style={styles.eyebrow}>BILLS & RECEIPTS</Text><Text style={styles.title}>Customer accounts</Text></View>
       </View>
       <DateNavigator date={payment.date} onPrevious={payment.goToPreviousDay} onNext={payment.goToNextDay} onToday={payment.goToToday} accentColor="#0F766E" />
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
-        <PaymentCustomerSelector customers={payment.customers} selected={payment.selectedCustomer} onSelect={payment.selectCustomer} />
+        {payment.selectedCustomerId ? <PaymentCustomerSelector customers={payment.customers} selected={payment.selectedCustomer} onSelect={payment.selectCustomer} /> : null}
 
         {!payment.selectedCustomerId ? (
           <>
@@ -70,7 +70,7 @@ export default function PaymentsScreen() {
             </View>
 
             <View style={styles.formCard}>
-              <View style={styles.formHeading}><View style={styles.stepBadge}><Text style={styles.stepText}>{configuration.preferences.currency_symbol}</Text></View><View><Text style={styles.formTitle}>New receipt</Text><Text style={styles.formSubtitle}>Payment date: {formatBusinessDate(payment.date)}</Text></View></View>
+              <View style={styles.formHeading}><View style={styles.stepBadge}><Text style={styles.stepText}>{configuration.preferences.currency_symbol}</Text></View><View><Text style={styles.formTitle}>Record payment</Text><Text style={styles.formSubtitle}>Receipt date: {formatBusinessDate(payment.date)}</Text></View></View>
 
               <Text style={styles.fieldLabel}>AMOUNT RECEIVED *</Text>
               <View style={styles.amountWrap}><Text style={styles.currency}>{configuration.preferences.currency_symbol}</Text><TextInput style={styles.amountInput} value={payment.amount} onChangeText={payment.setAmount} placeholder="0" keyboardType="decimal-pad" autoFocus /></View>
