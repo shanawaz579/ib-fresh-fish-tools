@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert } from 'react-native';
-import { createPayment, getBillsByDate, getCustomerAccountSummary, getCustomers, getPaymentsByCustomer, releaseCustomerBillForCorrection, voidCustomerPayment } from '../../api/stock';
+import { createPayment, getBillsByDate, getCustomerAccountLedger, getCustomerAccountOverview, getCustomerAccountSummary, getCustomers, getPaymentsByCustomer, releaseCustomerBillForCorrection, voidCustomerPayment } from '../../api/stock';
 import { useBusinessDate } from '../../hooks/useBusinessDate';
 import type { Bill, Customer, CustomerAccountSummary, Payment } from '../../types';
 import { useBusinessConfig } from '../../context/BusinessConfigContext';
+import type { AccountLedgerEntry, AccountOverview } from '../../domain/accountLedger';
 
 export type PaymentMethod = Payment['payment_method'];
 
@@ -24,6 +25,8 @@ export function useCustomerPayments() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
   const [summary, setSummary] = useState<CustomerAccountSummary>(emptySummary);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [accounts, setAccounts] = useState<AccountOverview[]>([]);
+  const [ledger, setLedger] = useState<AccountLedgerEntry[]>([]);
   const [dailyBills, setDailyBills] = useState<Bill[]>([]);
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<PaymentMethod>('cash');
@@ -31,6 +34,7 @@ export function useCustomerPayments() {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
   const [loadingBills, setLoadingBills] = useState(true);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const selectedCustomer = customers.find(customer => customer.id === selectedCustomerId);
 
@@ -55,15 +59,31 @@ export function useCustomerPayments() {
 
   useEffect(() => { void loadDailyBills(); }, [loadDailyBills]);
 
+  const loadOverview = useCallback(async () => {
+    setLoadingAccounts(true);
+    try {
+      setAccounts(await getCustomerAccountOverview(businessDate.date));
+    } catch (error) {
+      console.error('Unable to load customer account overview:', error);
+      Alert.alert('Unable to load accounts', 'Check the connection and try again.');
+    } finally {
+      setLoadingAccounts(false);
+    }
+  }, [businessDate.date]);
+
+  useEffect(() => { void loadOverview(); }, [loadOverview]);
+
   const loadCustomer = useCallback(async (customerId: number, date = businessDate.date) => {
     setLoading(true);
     try {
-      const [accountSummary, paymentRows] = await Promise.all([
+      const [accountSummary, paymentRows, ledgerRows] = await Promise.all([
         getCustomerAccountSummary(customerId, date),
         getPaymentsByCustomer(customerId),
+        getCustomerAccountLedger(customerId, date),
       ]);
       setSummary(accountSummary);
       setPayments(paymentRows);
+      setLedger(ledgerRows);
     } catch (error) {
       console.error('Unable to load customer payments:', error);
       Alert.alert('Unable to load account', 'Check the connection and try again.');
@@ -78,6 +98,12 @@ export function useCustomerPayments() {
 
   const selectCustomer = (customerId: number) => {
     setSelectedCustomerId(customerId);
+    setAmount(''); setReference(''); setNotes('');
+  };
+
+  const clearCustomer = () => {
+    setSelectedCustomerId(null);
+    setSummary(emptySummary); setPayments([]); setLedger([]);
     setAmount(''); setReference(''); setNotes('');
   };
 
@@ -99,6 +125,7 @@ export function useCustomerPayments() {
       setAmount(''); setReference(''); setNotes(''); setMethod('cash');
       await loadCustomer(selectedCustomerId);
       await loadDailyBills();
+      await loadOverview();
       return true;
     } catch (error) {
       console.error('Unable to record customer payment:', error);
@@ -116,6 +143,7 @@ export function useCustomerPayments() {
       await voidCustomerPayment(paymentId, reason);
       await loadCustomer(selectedCustomerId);
       await loadDailyBills();
+      await loadOverview();
       Alert.alert('Payment voided', 'The receipt remains in history and the account balance was recalculated.');
       return true;
     } catch (error) {
@@ -132,6 +160,7 @@ export function useCustomerPayments() {
       await releaseCustomerBillForCorrection(billId, reason);
       if (selectedCustomerId) await loadCustomer(selectedCustomerId);
       await loadDailyBills();
+      await loadOverview();
       Alert.alert('Ready to correct', 'The original remains in correction history. Its sales are available for rebilling.');
       return true;
     } catch (error) {
@@ -147,8 +176,9 @@ export function useCustomerPayments() {
   };
 
   return {
-    ...businessDate, customers, dailyBills, loadingBills, selectedCustomerId, selectedCustomer, selectCustomer,
-    summary, payments, loading, submitting, amount, setAmount, method, setMethod,
+    ...businessDate, customers, dailyBills, loadingBills, accounts, loadingAccounts,
+    selectedCustomerId, selectedCustomer, selectCustomer, clearCustomer,
+    summary, payments, ledger, loading, submitting, amount, setAmount, method, setMethod,
     reference, setReference, notes, setNotes, record, voidPayment, correctBill,
   };
 }

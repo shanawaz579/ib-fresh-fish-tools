@@ -13,6 +13,8 @@ import type { Bill, Payment } from '../types';
 import { formatBusinessDate } from '../utils/date';
 import styles from '../styles/PaymentsScreen.styles';
 import { useBusinessConfig } from '../context/BusinessConfigContext';
+import AccountOverviewList from '../components/AccountOverviewList';
+import AccountActivityList from '../components/AccountActivityList';
 
 const methods: Array<{ value: PaymentMethod; label: string }> = [
   { value: 'cash', label: 'Cash' }, { value: 'upi', label: 'UPI' },
@@ -26,6 +28,7 @@ export default function PaymentsScreen() {
   const payment = useCustomerPayments();
   const [voidTarget, setVoidTarget] = useState<Payment | null>(null);
   const [correctionTarget, setCorrectionTarget] = useState<Bill | null>(null);
+  const [browseMode, setBrowseMode] = useState<'accounts' | 'bills'>('accounts');
   const numericAmount = Number.parseFloat(payment.amount) || 0;
   const balanceAfter = payment.summary.account_balance - numericAmount;
 
@@ -41,11 +44,20 @@ export default function PaymentsScreen() {
         <PaymentCustomerSelector customers={payment.customers} selected={payment.selectedCustomer} onSelect={payment.selectCustomer} />
 
         {!payment.selectedCustomerId ? (
-          <DailyBillsPanel bills={payment.dailyBills} customers={payment.customers} loading={payment.loadingBills} onSelectCustomer={payment.selectCustomer} onCorrect={setCorrectionTarget} />
+          <>
+            <View style={styles.accountTabs}>
+              <TouchableOpacity style={[styles.accountTab, browseMode === 'accounts' && styles.accountTabOn]} onPress={() => setBrowseMode('accounts')}><Text style={[styles.accountTabText, browseMode === 'accounts' && styles.accountTabTextOn]}>All accounts</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.accountTab, browseMode === 'bills' && styles.accountTabOn]} onPress={() => setBrowseMode('bills')}><Text style={[styles.accountTabText, browseMode === 'bills' && styles.accountTabTextOn]}>Bills this date</Text></TouchableOpacity>
+            </View>
+            {browseMode === 'accounts'
+              ? <AccountOverviewList accounts={payment.accounts} loading={payment.loadingAccounts} accountLabel="Customers" onSelect={payment.selectCustomer} />
+              : <DailyBillsPanel bills={payment.dailyBills} customers={payment.customers} loading={payment.loadingBills} onSelectCustomer={payment.selectCustomer} onCorrect={setCorrectionTarget} />}
+          </>
         ) : payment.loading ? (
           <View style={styles.loading}><ActivityIndicator color="#0F766E" /><Text style={styles.loadingText}>Loading customer account…</Text></View>
         ) : (
           <>
+            <TouchableOpacity style={styles.allAccountsButton} onPress={payment.clearCustomer}><Text style={styles.allAccountsText}>‹ All customer accounts</Text></TouchableOpacity>
             <View style={[styles.balanceCard, payment.summary.advance_credit > 0 ? styles.creditCard : payment.summary.outstanding_amount === 0 ? styles.clearCard : null]}>
               <Text style={styles.balanceLabel}>{payment.summary.advance_credit > 0 ? 'ADVANCE CREDIT' : payment.summary.outstanding_amount > 0 ? 'AMOUNT TO COLLECT' : 'ACCOUNT STATUS'}</Text>
               <Text style={[styles.balanceValue, payment.summary.advance_credit > 0 ? styles.creditValue : payment.summary.outstanding_amount === 0 ? styles.clearValue : null]}>
@@ -87,18 +99,10 @@ export default function PaymentsScreen() {
               <TouchableOpacity style={[styles.submitButton, payment.submitting && styles.disabled]} disabled={payment.submitting} onPress={payment.record}>{payment.submitting ? <ActivityIndicator color="#FFF" /> : <Text style={styles.submitText}>Record receipt</Text>}</TouchableOpacity>
             </View>
 
-            <View style={styles.historySection}>
-              <View style={styles.historyHeading}><Text style={styles.historyTitle}>Receipt history</Text><Text style={styles.historyCount}>{payment.payments.length}</Text></View>
-              {payment.payments.length === 0 ? <Text style={styles.emptyHistory}>No payments recorded for this customer</Text> : payment.payments.slice(0, 20).map(row => (
-                <View key={row.id} style={[styles.receiptRow, row.voided_at ? styles.voidedRow : null]}>
-                  <View style={styles.receiptMain}>
-                    <View style={[styles.methodBadge, row.voided_at ? styles.voidedBadge : null]}><Text style={[styles.methodBadgeText, row.voided_at ? styles.voidedBadgeText : null]}>{row.payment_method === 'bank_transfer' ? 'BANK' : row.payment_method.toUpperCase()}</Text></View>
-                    <View style={styles.receiptCopy}><Text style={[styles.receiptAmount, row.voided_at ? styles.voidedText : null]}>{formatMoney(row.amount, 0)}</Text><Text style={styles.receiptMeta}>{formatBusinessDate(row.payment_date)}{row.reference_number ? ` · ${row.reference_number}` : ''}</Text>{row.voided_at ? <Text style={styles.voidReason}>Voided · {row.void_reason}</Text> : row.advance_amount && row.advance_amount > 0 ? <Text style={styles.advanceMeta}>{formatMoney(row.advance_amount, 0)} advance</Text> : null}</View>
-                    {!row.voided_at ? <TouchableOpacity style={styles.moreButton} onPress={() => setVoidTarget(row)}><Text style={styles.moreText}>Void</Text></TouchableOpacity> : null}
-                  </View>
-                </View>
-              ))}
-            </View>
+            <AccountActivityList entries={payment.ledger} paymentLabel="Receipt" onVoidPayment={paymentId => {
+              const target = payment.payments.find(row => row.id === paymentId);
+              if (target) setVoidTarget(target);
+            }} />
 
             <DailyBillsPanel bills={payment.dailyBills} customers={payment.customers} loading={payment.loadingBills} onSelectCustomer={payment.selectCustomer} onCorrect={setCorrectionTarget} />
           </>

@@ -30,3 +30,5 @@ Do not replay the migration chain against an existing populated schema. First ru
 Files `001` through `047` form the initial migration chain. Every later database change receives one new numbered migration and one non-destructive verification file. Run the matching verification file immediately after applying any incremental migration.
 
 Migration `072_optimize_forecast_generation.sql` keeps the seven-day item and customer forecast calculations within the mobile API timeout without changing their forecasting formulas.
+
+Migration `075_unified_account_ledgers.sql` adds read-only customer and supplier account overview/ledger RPCs. Apply it only after a production backup, then run `working/verification/075_unified_account_ledgers.sql`; the verification compares derived balances with the existing authoritative sources and rolls back without changing data.

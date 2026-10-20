@@ -8,6 +8,8 @@ export default StyleSheet.create({
   title: { color: '#FFF', fontSize: 23, fontWeight: '900', marginTop: 2 }, content: { flex: 1 }, contentContainer: { padding: 14, paddingBottom: 40 },
   startHint: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', paddingVertical: 30 }, startArrow: { color: '#0F766E', fontSize: 18, fontWeight: '900', marginRight: 7 }, startText: { color: '#64748B', fontSize: 13, fontWeight: '600' },
   loading: { alignItems: 'center', flexDirection: 'row', justifyContent: 'center', padding: 30 }, loadingText: { color: '#64748B', marginLeft: 9 },
+  accountTabs: { backgroundColor: '#E2E8F0', borderRadius: 11, flexDirection: 'row', marginBottom: 12, marginTop: 12, padding: 3 }, accountTab: { alignItems: 'center', borderRadius: 8, flex: 1, paddingVertical: 9 }, accountTabOn: { backgroundColor: '#FFF' }, accountTabText: { color: '#64748B', fontSize: 11, fontWeight: '800' }, accountTabTextOn: { color: '#0F766E' },
+  allAccountsButton: { alignSelf: 'flex-start', marginTop: 11, paddingVertical: 4 }, allAccountsText: { color: '#0F766E', fontSize: 12, fontWeight: '800' },
   balanceCard: { backgroundColor: '#FFF7ED', borderColor: '#FED7AA', borderRadius: 16, borderWidth: 1, marginTop: 12, padding: 15 },
   creditCard: { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }, clearCard: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
   balanceLabel: { color: '#9A3412', fontSize: 9, fontWeight: '900', letterSpacing: 0.9 }, balanceValue: { color: '#9A3412', fontSize: 28, fontWeight: '900', marginTop: 4 },
