@@ -11,10 +11,19 @@ type Props = {
   onEdit: () => void;
   onBill: (purchases: Purchase[]) => void;
   onDelete: () => void;
+  onViewBill: (billId: number) => void;
+  onEditBill: (billId: number) => void;
+  onDeleteBill: (billId: number) => void;
+  busyBillId?: number | null;
 };
 
-export default function PurchaseGroupCard({ group, collapsed, onToggle, onEdit, onBill, onDelete }: Props) {
+export default function PurchaseGroupCard({
+  group, collapsed, onToggle, onEdit, onBill, onDelete,
+  onViewBill, onEditBill, onDeleteBill, busyBillId,
+}: Props) {
   const unbilled = group.purchases.filter((purchase) => purchase.billing_status === 'unbilled');
+  const billId = group.purchases.find((purchase) => purchase.billed_in_bill_id)?.billed_in_bill_id;
+  const billBusy = Boolean(billId && busyBillId === billId);
   const totalCrates = group.purchases.reduce((sum, purchase) => sum + purchase.quantity_crates, 0);
   const totalKg = group.purchases.reduce((sum, purchase) => sum + Number(purchase.quantity_kg), 0);
 
@@ -54,6 +63,19 @@ export default function PurchaseGroupCard({ group, collapsed, onToggle, onEdit, 
             <TouchableOpacity style={styles.billButton} onPress={() => onBill(unbilled)}>
               <Text style={styles.billButtonText}>Create bill</Text>
             </TouchableOpacity>
+          ) : null}
+          {unbilled.length === 0 && billId ? (
+            <>
+              <TouchableOpacity style={styles.editGroupButton} disabled={billBusy} onPress={() => onViewBill(billId)}>
+                <Text style={styles.editGroupButtonText}>View / print</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.editGroupButton} disabled={billBusy} onPress={() => onEditBill(billId)}>
+                <Text style={styles.editGroupButtonText}>{billBusy ? 'Opening…' : 'Edit bill'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.deleteBillButton} disabled={billBusy} onPress={() => onDeleteBill(billId)}>
+                <Text style={styles.deleteText}>Delete</Text>
+              </TouchableOpacity>
+            </>
           ) : null}
         </View>
       </View>

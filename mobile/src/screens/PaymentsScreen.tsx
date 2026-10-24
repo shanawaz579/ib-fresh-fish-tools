@@ -10,7 +10,7 @@ import PaymentVoidModal from '../features/payments/PaymentVoidModal';
 import { type PaymentMethod, useCustomerPayments } from '../features/payments/useCustomerPayments';
 import type { RootStackParamList } from '../navigation/AppNavigator';
 import type { Bill, Payment } from '../types';
-import { formatBusinessDate } from '../utils/date';
+import { formatBusinessDate, toLocalDateString } from '../utils/date';
 import styles from '../styles/PaymentsScreen.styles';
 import { useBusinessConfig } from '../context/BusinessConfigContext';
 import AccountOverviewList from '../components/AccountOverviewList';
@@ -38,7 +38,12 @@ export default function PaymentsScreen() {
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate('Home')}><Text style={styles.backIcon}>‹</Text></TouchableOpacity>
         <View><Text style={styles.eyebrow}>BILLS & RECEIPTS</Text><Text style={styles.title}>Customer accounts</Text></View>
       </View>
-      <DateNavigator date={payment.date} onPrevious={payment.goToPreviousDay} onNext={payment.goToNextDay} onToday={payment.goToToday} accentColor="#0F766E" />
+      {!payment.selectedCustomerId ? (
+        <View>
+          <Text style={styles.dateContextLabel}>ACCOUNT POSITION AS OF</Text>
+          <DateNavigator date={payment.date} onPrevious={payment.goToPreviousDay} onNext={payment.goToNextDay} onToday={payment.goToToday} accentColor="#0F766E" />
+        </View>
+      ) : null}
 
       <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer} keyboardShouldPersistTaps="handled">
         {payment.selectedCustomerId ? <PaymentCustomerSelector customers={payment.customers} selected={payment.selectedCustomer} onSelect={payment.selectCustomer} /> : null}
@@ -70,7 +75,15 @@ export default function PaymentsScreen() {
             </View>
 
             <View style={styles.formCard}>
-              <View style={styles.formHeading}><View style={styles.stepBadge}><Text style={styles.stepText}>{configuration.preferences.currency_symbol}</Text></View><View><Text style={styles.formTitle}>Record payment</Text><Text style={styles.formSubtitle}>Receipt date: {formatBusinessDate(payment.date)}</Text></View></View>
+              <View style={styles.formHeading}><View style={styles.stepBadge}><Text style={styles.stepText}>{configuration.preferences.currency_symbol}</Text></View><View><Text style={styles.formTitle}>Record payment</Text><Text style={styles.formSubtitle}>Choose the date this money was received</Text></View></View>
+
+              <Text style={styles.receiptDateLabel}>RECEIPT DATE *</Text>
+              <View style={styles.receiptDatePicker}>
+                <TouchableOpacity accessibilityLabel="Previous receipt date" style={styles.receiptDateArrow} onPress={payment.goToPreviousDay}><Text style={styles.receiptDateArrowText}>←</Text></TouchableOpacity>
+                <Text style={styles.receiptDateValue}>{formatBusinessDate(payment.date)}</Text>
+                <TouchableOpacity accessibilityLabel="Next receipt date" disabled={payment.date >= toLocalDateString()} style={[styles.receiptDateArrow, payment.date >= toLocalDateString() && styles.receiptDateArrowDisabled]} onPress={payment.goToNextDay}><Text style={styles.receiptDateArrowText}>→</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.receiptTodayButton} onPress={payment.goToToday}><Text style={styles.receiptTodayText}>Today</Text></TouchableOpacity>
+              </View>
 
               <Text style={styles.fieldLabel}>AMOUNT RECEIVED *</Text>
               <View style={styles.amountWrap}><Text style={styles.currency}>{configuration.preferences.currency_symbol}</Text><TextInput style={styles.amountInput} value={payment.amount} onChangeText={payment.setAmount} placeholder="0" keyboardType="decimal-pad" autoFocus /></View>

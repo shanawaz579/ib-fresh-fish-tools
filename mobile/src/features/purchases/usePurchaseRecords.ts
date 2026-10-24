@@ -340,7 +340,13 @@ export function usePurchaseRecords() {
   const groups = useMemo<PurchaseGroup[]>(() => {
     const grouped = new Map<string, PurchaseGroup>();
     for (const purchase of purchases) {
-      const key = `${purchase.supplier_id}:${purchase.farmer_id}:${purchase.location ?? ''}`;
+      // Keep each generated bill separate from unbilled work and from other bills.
+      // This prevents an edit/delete action from accidentally targeting purchases
+      // that merely share the same supplier, farmer and location.
+      const billingKey = purchase.billing_status === 'billed'
+        ? `bill:${purchase.billed_in_bill_id ?? purchase.id}`
+        : 'unbilled';
+      const key = `${purchase.supplier_id}:${purchase.farmer_id}:${purchase.location ?? ''}:${billingKey}`;
       const existing = grouped.get(key);
       if (existing) existing.purchases.push(purchase);
       else grouped.set(key, {

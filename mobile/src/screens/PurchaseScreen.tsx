@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   RefreshControl,
   ScrollView,
   Text,
@@ -11,11 +12,14 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import DateNavigator from '../components/DateNavigator';
+import BillCorrectionModal from '../components/BillCorrectionModal';
 import PurchaseEntryForm from '../features/purchases/PurchaseEntryForm';
 import PurchaseGroupCard from '../features/purchases/PurchaseGroupCard';
 import { usePurchaseRecords } from '../features/purchases/usePurchaseRecords';
 import PendingBillsModal, { type PendingBillGroup } from '../features/billing/PendingBillsModal';
 import type { RootStackParamList } from '../navigation/AppNavigator';
+import { getPurchaseBillDetails, releasePurchaseBillForCorrection } from '../api/stock';
+import type { PurchaseBillDetails, PurchaseBillLine } from '../domain/purchaseBillDetails';
 import styles from '../styles/PurchaseScreen.styles';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
@@ -27,6 +31,69 @@ export default function PurchaseScreen() {
   const [formOffset, setFormOffset] = useState(0);
   const [pendingOpen, setPendingOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState<number | null>(null);
+  const [busyBillId, setBusyBillId] = useState<number | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PurchaseBillDetails | null>(null);
+
+  const editBill = async (billId: number) => {
+    setBusyBillId(billId);
+    try {
+      const details = await getPurchaseBillDetails(billId);
+      const purchases = details.items.map((item: PurchaseBillLine) => ({
+        id: item.purchase_id,
+        supplier_id: details.supplier_id,
+        supplier_type: details.supplier_type,
+        fish_variety_id: item.fish_variety_id,
+        fish_variety_name: item.fish_variety_name,
+        quantity_crates: item.quantity_crates,
+        quantity_kg: item.quantity_kg,
+        default_kg_per_crate: item.quantity_crates > 0
+          ? (Number(item.actual_weight) - Number(item.quantity_kg)) / item.quantity_crates
+          : undefined,
+        purchase_date: details.bill_date,
+        billing_status: 'billed' as const,
+      }));
+      navigation.navigate('PurchaseBillGeneration', {
+        supplier_id: details.supplier_id,
+        supplier_name: details.supplier_name,
+        farmer_name: details.secondary_name,
+        location: details.location,
+        purchases,
+        date: details.bill_date,
+        correction: { reason: '', bill: details },
+      });
+    } catch (error) {
+      Alert.alert('Unable to edit bill', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setBusyBillId(null);
+    }
+  };
+
+  const chooseBillToDelete = async (billId: number) => {
+    setBusyBillId(billId);
+    try {
+      setDeleteTarget(await getPurchaseBillDetails(billId));
+    } catch (error) {
+      Alert.alert('Unable to open bill', error instanceof Error ? error.message : 'Please try again.');
+    } finally {
+      setBusyBillId(null);
+    }
+  };
+
+  const deleteBill = async (reason: string) => {
+    if (!deleteTarget) return;
+    setBusyBillId(deleteTarget.id);
+    try {
+      await releasePurchaseBillForCorrection(deleteTarget.id, reason);
+      setDeleteTarget(null);
+      await purchase.refresh();
+      Alert.alert('Bill deleted', 'The purchases are unbilled again. The original bill remains in correction history.');
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Please try again.';
+      Alert.alert(message.includes('Void active supplier payments') ? 'Payment must be voided first' : 'Unable to delete bill', message);
+    } finally {
+      setBusyBillId(null);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -123,6 +190,10 @@ export default function PurchaseScreen() {
               purchases,
               date: purchase.date,
             })}
+            busyBillId={busyBillId}
+            onViewBill={(billId) => navigation.navigate('PurchaseBillDetails', { billId })}
+            onEditBill={(billId) => { void editBill(billId); }}
+            onDeleteBill={(billId) => { void chooseBillToDelete(billId); }}
           />
         ))}
       </ScrollView>
@@ -144,6 +215,16 @@ export default function PurchaseScreen() {
             date: group.date,
           });
         }}
+      />
+
+      <BillCorrectionModal
+        visible={Boolean(deleteTarget)}
+        billNumber={deleteTarget?.bill_number}
+        documentLabel="purchase bill"
+        action="delete"
+        saving={Boolean(deleteTarget && busyBillId === deleteTarget.id)}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={(reason) => { void deleteBill(reason); }}
       />
 
     </View>
